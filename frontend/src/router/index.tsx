@@ -4,6 +4,7 @@ import RegisterPage from '@/pages/auth/RegisterPage'
 import TeamSelectPage from '@/pages/auth/TeamSelectPage'
 import AppLayout from '@/components/layout/AppLayout'
 import DashboardPage from '@/pages/dashboard/DashboardPage'
+import WorkRequestsPage from '@/pages/work-request/WorkRequestsPage'
 
 const router = createBrowserRouter([
   {
@@ -26,8 +27,8 @@ const router = createBrowserRouter([
     element: <AppLayout />,
     children: [
       { path: '/dashboard', element: <DashboardPage /> },
+      { path: '/work-requests', element: <WorkRequestsPage /> },
       // TODO: 추가 라우트
-      // { path: '/work-requests', element: <WorkRequestsPage /> },
       // { path: '/work-requests/new', element: <WorkRequestFormPage /> },
       // { path: '/tech-tasks', element: <TechTasksPage /> },
       // { path: '/test-scenarios', element: <TestScenariosPage /> },
