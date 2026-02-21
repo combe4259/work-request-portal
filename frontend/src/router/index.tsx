@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 import LoginPage from '@/pages/auth/LoginPage'
 import RegisterPage from '@/pages/auth/RegisterPage'
+import TeamSelectPage from '@/pages/auth/TeamSelectPage'
 
 const router = createBrowserRouter([
   {
@@ -15,8 +16,11 @@ const router = createBrowserRouter([
     path: '/register',
     element: <RegisterPage />,
   },
+  {
+    path: '/team-select',
+    element: <TeamSelectPage />,
+  },
   // TODO: 추가 라우트
-  // { path: '/team-select', element: <TeamSelectPage /> },
   // { path: '/dashboard', element: <DashboardPage /> },
 ])
 
