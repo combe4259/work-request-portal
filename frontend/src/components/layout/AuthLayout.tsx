@@ -1,3 +1,5 @@
+import shinhanLogo from '@/assets/shinhan-ci.png'
+
 interface AuthLayoutProps {
   children: React.ReactNode
 }
@@ -16,10 +18,11 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
         {/* Logo */}
         <div className="relative z-10">
           <div className="flex items-center gap-3 mb-12">
-            <div className="w-9 h-9 bg-brand/20 border border-white/20 rounded-lg flex items-center justify-center">
-              <PortalIcon />
+            <img src={shinhanLogo} alt="신한투자증권" className="w-10 h-10 rounded-lg flex-shrink-0" />
+            <div>
+              <p className="text-white/55 text-[11px] font-medium leading-none mb-1">신한투자증권 PDA</p>
+              <p className="text-white text-[14px] font-bold leading-none">IT 업무요청 포털</p>
             </div>
-            <span className="text-white/70 text-sm font-medium tracking-wide">IT 업무요청 포털</span>
           </div>
 
           <h1 className="text-white text-3xl font-bold leading-snug mb-4">
@@ -54,11 +57,12 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
       <div className="flex-1 flex items-center justify-center bg-white px-6 py-12 overflow-y-auto">
         <div className="w-full max-w-[380px]">
           {/* Mobile logo */}
-          <div className="flex items-center gap-2 mb-8 lg:hidden">
-            <div className="w-8 h-8 bg-brand-sidebar rounded-lg flex items-center justify-center">
-              <PortalIcon />
+          <div className="flex items-center gap-2.5 mb-8 lg:hidden">
+            <img src={shinhanLogo} alt="신한투자증권" className="w-8 h-8 rounded-lg flex-shrink-0" />
+            <div>
+              <p className="text-brand-sidebar/60 text-[10px] font-medium leading-none mb-0.5">신한투자증권 PDA</p>
+              <p className="text-brand-sidebar text-[13px] font-bold leading-none">IT 업무요청 포털</p>
             </div>
-            <span className="text-brand-sidebar font-semibold text-sm">IT 업무요청 포털</span>
           </div>
 
           {children}
@@ -74,13 +78,3 @@ const FEATURES = [
   { label: '팀 협업', desc: '회의록, 지식 베이스, 공유 리소스' },
 ]
 
-function PortalIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-      <rect x="2" y="4" width="11" height="13" rx="1.5" stroke="white" strokeWidth="1.4" />
-      <rect x="5" y="2" width="11" height="13" rx="1.5" stroke="white" strokeWidth="1.4" strokeOpacity="0.5" />
-      <line x1="5" y1="8" x2="10" y2="8" stroke="white" strokeWidth="1.3" strokeLinecap="round" />
-      <line x1="5" y1="11" x2="10" y2="11" stroke="white" strokeWidth="1.3" strokeLinecap="round" />
-    </svg>
-  )
-}

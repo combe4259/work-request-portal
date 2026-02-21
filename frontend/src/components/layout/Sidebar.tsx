@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { Separator } from '@/components/ui/separator'
 import { useAuthStore } from '@/stores/authStore'
+import shinhanLogo from '@/assets/shinhan-ci.png'
 
 interface NavItem {
   label: string
@@ -67,33 +68,24 @@ export default function Sidebar() {
 
       {/* 로고 */}
       <div className="px-5 pt-5 pb-4 relative z-10">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-brand/20 border border-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
-            <PortalIcon />
-          </div>
+        <div className="flex items-center gap-3">
+          <img src={shinhanLogo} alt="신한투자증권" className="w-9 h-9 rounded-lg flex-shrink-0" />
           <div>
-            <p className="text-[10px] font-semibold text-white/50 tracking-widest uppercase leading-none mb-0.5">
-              IT Work Portal
+            <p className="text-[11px] font-semibold text-white/60 leading-none mb-1">
+              신한투자증권 PDA
             </p>
-            <p className="text-[13px] font-bold text-white leading-none">업무요청 포털</p>
+            <p className="text-[13px] font-bold text-white leading-none">IT 업무요청 포털</p>
           </div>
         </div>
       </div>
 
       {/* 팀/유저 카드 */}
       <div className="mx-3 mb-3 px-3 py-2.5 bg-white/[0.07] border border-white/[0.08] rounded-lg relative z-10">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-brand flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-            {initials}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-white text-[13px] font-semibold truncate">{user?.name ?? '사용자'}</p>
-            <p className="text-white/40 text-[11px] truncate">
-              {currentTeam?.name ?? '팀 미선택'} · {ROLE_LABELS[user?.role ?? 'DEVELOPER']}
-            </p>
-          </div>
-          <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
-        </div>
+        <p className="text-white/50 text-[11px] truncate mb-0.5">{currentTeam?.name ?? '팀 미선택'}</p>
+        <p className="text-white text-[13px] font-semibold truncate">
+          <span className="font-normal text-white/50">{ROLE_LABELS[user?.role ?? 'DEVELOPER']}: </span>
+          {user?.name ?? '사용자'}
+        </p>
       </div>
 
       {/* 네비게이션 */}
@@ -172,17 +164,6 @@ const ROLE_LABELS: Record<string, string> = {
 }
 
 // ── SVG 아이콘 ────────────────────────────────────────
-function PortalIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <rect x="1" y="3" width="9" height="11" rx="1.5" stroke="white" strokeWidth="1.3" />
-      <rect x="4" y="1" width="9" height="11" rx="1.5" stroke="white" strokeWidth="1.3" strokeOpacity="0.4" />
-      <line x1="4" y1="7" x2="8" y2="7" stroke="white" strokeWidth="1.2" strokeLinecap="round" />
-      <line x1="4" y1="10" x2="8" y2="10" stroke="white" strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
-  )
-}
-
 function DashboardIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
