@@ -2,6 +2,8 @@ import { createBrowserRouter, Navigate } from 'react-router-dom'
 import LoginPage from '@/pages/auth/LoginPage'
 import RegisterPage from '@/pages/auth/RegisterPage'
 import TeamSelectPage from '@/pages/auth/TeamSelectPage'
+import AppLayout from '@/components/layout/AppLayout'
+import DashboardPage from '@/pages/dashboard/DashboardPage'
 
 const router = createBrowserRouter([
   {
@@ -20,8 +22,25 @@ const router = createBrowserRouter([
     path: '/team-select',
     element: <TeamSelectPage />,
   },
-  // TODO: 추가 라우트
-  // { path: '/dashboard', element: <DashboardPage /> },
+  {
+    element: <AppLayout />,
+    children: [
+      { path: '/dashboard', element: <DashboardPage /> },
+      // TODO: 추가 라우트
+      // { path: '/work-requests', element: <WorkRequestsPage /> },
+      // { path: '/work-requests/new', element: <WorkRequestFormPage /> },
+      // { path: '/dev-requests', element: <DevRequestsPage /> },
+      // { path: '/test-scenarios', element: <TestScenariosPage /> },
+      // { path: '/defects', element: <DefectsPage /> },
+      // { path: '/deployments', element: <DeploymentsPage /> },
+      // { path: '/knowledge-base', element: <KnowledgeBasePage /> },
+      // { path: '/meeting-notes', element: <MeetingNotesPage /> },
+      // { path: '/ideas', element: <IdeasPage /> },
+      // { path: '/resources', element: <ResourcesPage /> },
+      // { path: '/statistics', element: <StatisticsPage /> },
+      // { path: '/settings', element: <SettingsPage /> },
+    ],
+  },
 ])
 
 export default router
