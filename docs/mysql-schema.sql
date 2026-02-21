@@ -425,15 +425,15 @@ CREATE TABLE shared_resources (
 -- =====================================================
 CREATE TABLE document_sequences (
     prefix      VARCHAR(5) NOT NULL,
-    year        CHAR(4)    NOT NULL,
     last_seq    INT        NOT NULL DEFAULT 0,
-    PRIMARY KEY (prefix, year)
+    PRIMARY KEY (prefix)
 );
 
-INSERT INTO document_sequences (prefix, year, last_seq) VALUES
-    ('WR', '2026', 0),
-    ('TS', '2026', 0),
-    ('DF', '2026', 0),
-    ('DP', '2026', 0);
+-- 문서번호 형식: WR-001, TS-001, DF-001, DP-001
+INSERT INTO document_sequences (prefix, last_seq) VALUES
+    ('WR', 0),
+    ('TS', 0),
+    ('DF', 0),
+    ('DP', 0);
 
 SET FOREIGN_KEY_CHECKS = 1;
