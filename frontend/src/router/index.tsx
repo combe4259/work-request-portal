@@ -29,7 +29,7 @@ const router = createBrowserRouter([
       // TODO: 추가 라우트
       // { path: '/work-requests', element: <WorkRequestsPage /> },
       // { path: '/work-requests/new', element: <WorkRequestFormPage /> },
-      // { path: '/dev-requests', element: <DevRequestsPage /> },
+      // { path: '/tech-tasks', element: <TechTasksPage /> },
       // { path: '/test-scenarios', element: <TestScenariosPage /> },
       // { path: '/defects', element: <DefectsPage /> },
       // { path: '/deployments', element: <DeploymentsPage /> },

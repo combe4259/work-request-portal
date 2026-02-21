@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button'
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard': '대시보드',
   '/work-requests': '업무요청',
-  '/dev-requests': '개발자 업무요청',
+  '/tech-tasks': '기술과제',
   '/test-scenarios': '테스트 시나리오',
   '/defects': '결함 목록',
   '/deployments': '배포 관리',

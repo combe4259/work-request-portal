@@ -21,7 +21,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: '대시보드', path: '/dashboard', icon: <DashboardIcon /> },
       { label: '업무요청', path: '/work-requests', icon: <RequestIcon />, badge: 51 },
-      { label: '개발자 업무요청', path: '/dev-requests', icon: <DevRequestIcon /> },
+      { label: '기술과제', path: '/tech-tasks', icon: <DevRequestIcon /> },
     ],
   },
   {
@@ -58,7 +58,6 @@ export default function Sidebar() {
     navigate('/login')
   }
 
-  const initials = user?.name?.slice(0, 1) ?? '?'
 
   return (
     <aside className="w-[240px] min-w-[240px] h-screen bg-brand-sidebar flex flex-col overflow-hidden relative">

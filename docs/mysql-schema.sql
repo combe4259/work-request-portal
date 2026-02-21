@@ -429,9 +429,10 @@ CREATE TABLE document_sequences (
     PRIMARY KEY (prefix)
 );
 
--- 문서번호 형식: WR-001, TS-001, DF-001, DP-001
+-- 문서번호 형식: WR-001(업무요청), TK-001(기술과제), TS-001(테스트시나리오), DF-001(결함), DP-001(배포)
 INSERT INTO document_sequences (prefix, last_seq) VALUES
     ('WR', 0),
+    ('TK', 0),
     ('TS', 0),
     ('DF', 0),
     ('DP', 0);
