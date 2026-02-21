@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IT 업무요청 포털 — 대시보드</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --sidebar-bg: #1E3A8A;
+    --sidebar-hover: rgba(255,255,255,0.08);
+    --sidebar-active: rgba(255,255,255,0.15);
+    --sidebar-active-bar: #60A5FA;
+    --page-bg: #EEF2FF;
+    --surface: #FFFFFF;
+    --surface-2: #F8FAFF;
+    --border: #E0E7FF;
+    --border-light: #F0F4FF;
+    --primary: #1D4ED8;
+    --primary-light: #DBEAFE;
+    --primary-mid: #3B82F6;
+    --text-1: #0F172A;
+    --text-2: #334155;
+    --text-3: #64748B;
+    --text-4: #94A3B8;
+    --shadow-sm: 0 1px 3px rgba(30,58,138,0.06), 0 1px 2px rgba(30,58,138,0.04);
+    --shadow-md: 0 4px 16px rgba(30,58,138,0.08), 0 2px 6px rgba(30,58,138,0.05);
+    --shadow-lg: 0 8px 32px rgba(30,58,138,0.12), 0 4px 12px rgba(30,58,138,0.06);
+    --radius: 12px;
+    --radius-sm: 8px;
+    --radius-xs: 6px;
+    --font: 'Noto Sans KR', sans-serif;
+    --mono: 'JetBrains Mono', monospace;
+  }
+
+  body {
+    font-family: var(--font);
+    background: var(--page-bg);
+    color: var(--text-1);
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ─── SIDEBAR ─── */
+  .sidebar {
+    width: 232px;
+    min-width: 232px;
+    background: linear-gradient(180deg, #1E3A8A 0%, #1E40AF 60%, #1D4ED8 100%);
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    position: relative;
+    overflow: hidden;
+  }
+  .sidebar::before {
+    content: '';
+    position: absolute;
+    top: -80px; right: -60px;
+    width: 220px; height: 220px;
+    background: radial-gradient(circle, rgba(96,165,250,0.15) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .sidebar::after {
+    content: '';
+    position: absolute;
+    bottom: 60px; left: -40px;
+    width: 180px; height: 180px;
+    background: radial-gradient(circle, rgba(59,130,246,0.1) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .sidebar-logo {
+    padding: 20px 20px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .logo-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+  }
+  .logo-icon {
+    width: 32px; height: 32px;
+    background: linear-gradient(135deg, #60A5FA, #3B82F6);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    box-shadow: 0 2px 8px rgba(59,130,246,0.4);
+  }
+  .logo-text {
+    display: flex; flex-direction: column;
+  }
+  .logo-text span:first-child {
+    font-size: 11px; font-weight: 600; color: #93C5FD; letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .logo-text span:last-child {
+    font-size: 13px; font-weight: 700; color: #FFFFFF; line-height: 1.2;
+  }
+
+  .sidebar-user {
+    margin: 14px 14px 10px;
+    padding: 10px 12px;
+    background: rgba(255,255,255,0.07);
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(255,255,255,0.08);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .user-avatar {
+    width: 34px; height: 34px;
+    background: linear-gradient(135deg, #60A5FA, #818CF8);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; color: white;
+    flex-shrink: 0;
+  }
+  .user-info { flex: 1; min-width: 0; }
+  .user-name { font-size: 13px; font-weight: 600; color: #FFFFFF; }
+  .user-role { font-size: 11px; color: #93C5FD; margin-top: 1px; }
+  .user-status {
+    width: 8px; height: 8px;
+    background: #34D399; border-radius: 50%;
+    box-shadow: 0 0 0 2px rgba(52,211,153,0.3);
+  }
+
+  .nav-section {
+    padding: 8px 0;
+    flex: 1;
+  }
+  .nav-label {
+    font-size: 10px; font-weight: 600; color: #60A5FA;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 10px 20px 6px;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 20px;
+    cursor: pointer;
+    transition: all 0.15s;
+    position: relative;
+    color: rgba(255,255,255,0.7);
+    font-size: 13.5px; font-weight: 500;
+    border-radius: 0;
+    margin: 1px 10px;
+    border-radius: var(--radius-xs);
+  }
+  .nav-item:hover { background: var(--sidebar-hover); color: #FFFFFF; }
+  .nav-item.active {
+    background: var(--sidebar-active);
+    color: #FFFFFF;
+    font-weight: 600;
+  }
+  .nav-item.active::before {
+    content: '';
+    position: absolute;
+    left: -10px; top: 50%; transform: translateY(-50%);
+    width: 3px; height: 20px;
+    background: var(--sidebar-active-bar);
+    border-radius: 0 3px 3px 0;
+  }
+  .nav-icon {
+    width: 18px; height: 18px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px;
+    flex-shrink: 0;
+  }
+  .nav-badge {
+    margin-left: auto;
+    background: #EF4444;
+    color: white;
+    font-size: 10px; font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 10px;
+    min-width: 18px; text-align: center;
+  }
+  .nav-badge.blue { background: #3B82F6; }
+
+  .nav-divider {
+    height: 1px; background: rgba(255,255,255,0.07);
+    margin: 8px 20px;
+  }
+
+  .sidebar-footer {
+    padding: 12px 14px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+  }
+  .sidebar-footer-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 10px;
+    color: rgba(255,255,255,0.55);
+    font-size: 12.5px; cursor: pointer;
+    border-radius: var(--radius-xs);
+    transition: all 0.15s;
+  }
+  .sidebar-footer-item:hover { color: rgba(255,255,255,0.9); background: var(--sidebar-hover); }
+
+  /* ─── MAIN ─── */
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ─── TOPBAR ─── */
+  .topbar {
+    height: 58px;
+    min-height: 58px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center;
+    padding: 0 24px;
+    gap: 12px;
+    box-shadow: 0 1px 4px rgba(30,58,138,0.05);
+  }
+  .topbar-title {
+    flex: 1;
+  }
+  .topbar-title h1 {
+    font-size: 17px; font-weight: 700; color: var(--text-1);
+  }
+  .breadcrumb {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 11.5px; color: var(--text-4); margin-top: 2px;
+  }
+  .breadcrumb span { color: var(--text-3); }
+  .breadcrumb .sep { color: var(--text-4); }
+  .breadcrumb .current { color: var(--primary); font-weight: 500; }
+
+  .topbar-actions { display: flex; align-items: center; gap: 8px; }
+
+  .btn-new {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    font-size: 13px; font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: var(--font);
+    box-shadow: 0 2px 8px rgba(29,78,216,0.3);
+  }
+  .btn-new:hover { background: #1E40AF; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(29,78,216,0.35); }
+
+  .icon-btn {
+    width: 36px; height: 36px;
+    border-radius: var(--radius-sm);
+    display: flex; align-items: center; justify-content: center;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    font-size: 16px;
+    position: relative;
+    transition: all 0.15s;
+  }
+  .icon-btn:hover { background: var(--primary-light); border-color: #BFDBFE; }
+  .notif-dot {
+    position: absolute; top: 6px; right: 6px;
+    width: 8px; height: 8px;
+    background: #EF4444; border-radius: 50%;
+    border: 2px solid white;
+    animation: pulse-dot 2s infinite;
+  }
+  @keyframes pulse-dot {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
+    50% { box-shadow: 0 0 0 4px rgba(239,68,68,0); }
+  }
+  .topbar-avatar {
+    width: 34px; height: 34px;
+    background: linear-gradient(135deg, #3B82F6, #818CF8);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; color: white;
+    cursor: pointer;
+    border: 2px solid #DBEAFE;
+    transition: all 0.15s;
+  }
+  .topbar-avatar:hover { border-color: var(--primary-mid); }
+
+  /* ─── CONTENT ─── */
+  .content {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    padding: 20px;
+    gap: 18px;
+  }
+
+  .content-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow: hidden;
+    min-width: 0;
+  }
+
+  /* ─── KPI CARDS ─── */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+  .kpi-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+    display: flex; align-items: flex-start; gap: 14px;
+    transition: all 0.2s;
+    cursor: default;
+  }
+  .kpi-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+  .kpi-icon-wrap {
+    width: 44px; height: 44px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+  .kpi-icon-wrap.blue   { background: #DBEAFE; }
+  .kpi-icon-wrap.indigo { background: #E0E7FF; }
+  .kpi-icon-wrap.green  { background: #D1FAE5; }
+  .kpi-icon-wrap.red    { background: #FEE2E2; }
+  .kpi-body { flex: 1; }
+  .kpi-label { font-size: 12px; color: var(--text-3); font-weight: 500; margin-bottom: 5px; }
+  .kpi-value { font-size: 28px; font-weight: 800; color: var(--text-1); line-height: 1; }
+  .kpi-value.blue   { color: #1D4ED8; }
+  .kpi-value.indigo { color: #4338CA; }
+  .kpi-value.green  { color: #059669; }
+  .kpi-value.red    { color: #DC2626; }
+  .kpi-sub { font-size: 11.5px; color: var(--text-4); margin-top: 5px; display: flex; align-items: center; gap: 4px; }
+  .kpi-sub .up { color: #10B981; }
+  .kpi-sub .dn { color: #EF4444; }
+
+  /* ─── TABLE PANEL ─── */
+  .table-panel {
+    background: var(--surface);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    flex: 1;
+  }
+
+  .table-header {
+    padding: 16px 20px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .table-header-top {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .table-title { font-size: 15px; font-weight: 700; color: var(--text-1); }
+  .table-count { font-size: 13px; color: var(--text-3); margin-left: 6px; font-weight: 400; }
+
+  .table-actions { display: flex; align-items: center; gap: 8px; }
+  .search-box {
+    display: flex; align-items: center; gap: 7px;
+    padding: 6px 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 12.5px; color: var(--text-3);
+    width: 200px;
+    cursor: text;
+  }
+  .filter-btn {
+    display: flex; align-items: center; gap: 5px;
+    padding: 6px 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 12.5px; color: var(--text-2); font-weight: 500;
+    cursor: pointer; transition: all 0.15s;
+    font-family: var(--font);
+  }
+  .filter-btn:hover { border-color: #BFDBFE; background: var(--primary-light); }
+
+  .tabs {
+    display: flex; gap: 0;
+  }
+  .tab {
+    padding: 9px 18px;
+    font-size: 13px; font-weight: 500;
+    color: var(--text-3);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .tab:hover { color: var(--primary); }
+  .tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 700; }
+  .tab-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px;
+    background: var(--primary-light);
+    color: var(--primary);
+    font-size: 10px; font-weight: 700;
+    border-radius: 10px;
+    margin-left: 5px;
+  }
+
+  .table-wrap { overflow: auto; flex: 1; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    padding: 11px 14px;
+    text-align: left;
+    font-size: 11.5px; font-weight: 600;
+    color: var(--text-3);
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    position: sticky; top: 0; z-index: 1;
+  }
+  thead th:first-child { padding-left: 20px; }
+  thead th:last-child  { padding-right: 20px; }
+
+  tbody tr {
+    border-bottom: 1px solid var(--border-light);
+    transition: background 0.1s;
+    cursor: pointer;
+  }
+  tbody tr:hover { background: #F8FAFF; }
+  tbody tr:last-child { border-bottom: none; }
+
+  td {
+    padding: 12px 14px;
+    font-size: 13px; color: var(--text-2);
+    vertical-align: middle;
+  }
+  td:first-child { padding-left: 20px; }
+  td:last-child  { padding-right: 20px; }
+
+  .doc-no {
+    font-family: var(--mono);
+    font-size: 12px; font-weight: 600;
+    color: var(--primary);
+    white-space: nowrap;
+  }
+
+  .row-title {
+    font-size: 13px; font-weight: 500; color: var(--text-1);
+    max-width: 280px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .row-title-sub { font-size: 11px; color: var(--text-4); margin-top: 2px; }
+
+  /* badges */
+  .badge {
+    display: inline-flex; align-items: center;
+    padding: 3px 9px;
+    border-radius: 20px;
+    font-size: 11px; font-weight: 600;
+    white-space: nowrap;
+    letter-spacing: 0.01em;
+  }
+  .badge-type-it     { background: #DBEAFE; color: #1D4ED8; }
+  .badge-type-dev    { background: #EDE9FE; color: #5B21B6; }
+  .badge-type-ref    { background: #CCFBF1; color: #0F766E; }
+
+  .badge-pri-urgent  { background: #FEE2E2; color: #B91C1C; }
+  .badge-pri-high    { background: #FEF3C7; color: #92400E; }
+  .badge-pri-medium  { background: #F0FDF4; color: #15803D; }
+  .badge-pri-low     { background: #F1F5F9; color: #475569; }
+
+  .badge-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11.5px; font-weight: 600;
+    white-space: nowrap;
+  }
+  .badge-status::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .s-received     { background: #F1F5F9; color: #475569; }
+  .s-received::before { background: #94A3B8; }
+  .s-reviewing    { background: #FEF9C3; color: #854D0E; }
+  .s-reviewing::before { background: #CA8A04; }
+  .s-planning     { background: #EDE9FE; color: #5B21B6; }
+  .s-planning::before { background: #7C3AED; }
+  .s-development  { background: #DBEAFE; color: #1E40AF; }
+  .s-development::before { background: #2563EB; }
+  .s-testing      { background: #F0FDFB; color: #0F766E; }
+  .s-testing::before { background: #0D9488; }
+  .s-deploy-ready { background: #FFF7ED; color: #9A3412; }
+  .s-deploy-ready::before { background: #EA580C; }
+  .s-completed    { background: #D1FAE5; color: #065F46; }
+  .s-completed::before { background: #10B981; }
+
+  .assignee-cell {
+    display: flex; align-items: center; gap: 7px;
+    white-space: nowrap;
+  }
+  .mini-avatar {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #60A5FA, #818CF8);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700; color: white;
+    flex-shrink: 0;
+  }
+  .mini-avatar.green { background: linear-gradient(135deg, #34D399, #10B981); }
+  .mini-avatar.purple { background: linear-gradient(135deg, #A78BFA, #7C3AED); }
+  .mini-avatar.orange { background: linear-gradient(135deg, #FBBF24, #F59E0B); }
+  .mini-avatar.unassigned { background: var(--border); color: var(--text-4); }
+  .assignee-name { font-size: 13px; color: var(--text-2); }
+
+  .deadline-cell { font-size: 12.5px; color: var(--text-3); white-space: nowrap; font-family: var(--mono); }
+  .deadline-cell.urgent { color: #DC2626; font-weight: 600; }
+  .deadline-cell.soon   { color: #D97706; font-weight: 600; }
+
+  /* ─── RIGHT PANEL ─── */
+  .right-panel {
+    width: 280px;
+    min-width: 280px;
+    display: flex; flex-direction: column;
+    gap: 14px;
+    overflow-y: auto;
+  }
+
+  .panel-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+  }
+  .panel-card-head {
+    padding: 14px 16px 12px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid var(--border-light);
+  }
+  .panel-card-head h3 {
+    font-size: 13px; font-weight: 700; color: var(--text-1);
+  }
+  .panel-link {
+    font-size: 11.5px; color: var(--primary); font-weight: 500; cursor: pointer;
+  }
+  .panel-link:hover { text-decoration: underline; }
+
+  /* CALENDAR */
+  .calendar { padding: 14px 16px; }
+  .cal-nav {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .cal-month { font-size: 13px; font-weight: 700; color: var(--text-1); }
+  .cal-arrow {
+    width: 24px; height: 24px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 6px; cursor: pointer; color: var(--text-3);
+    font-size: 13px;
+    transition: all 0.15s;
+  }
+  .cal-arrow:hover { background: var(--border); color: var(--text-1); }
+
+  .cal-days-header {
+    display: grid; grid-template-columns: repeat(7, 1fr);
+    margin-bottom: 6px;
+  }
+  .cal-day-label {
+    text-align: center; font-size: 10.5px; font-weight: 600;
+    color: var(--text-4); padding: 2px 0;
+  }
+  .cal-day-label:first-child { color: #EF4444; }
+  .cal-day-label:last-child  { color: #3B82F6; }
+
+  .cal-grid {
+    display: grid; grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+  }
+  .cal-cell {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 4px 2px; min-height: 30px;
+    border-radius: 6px; cursor: pointer;
+    font-size: 12px; color: var(--text-2); font-weight: 400;
+    transition: all 0.12s;
+    position: relative;
+  }
+  .cal-cell:hover { background: var(--border-light); }
+  .cal-cell.today { background: var(--primary); color: white; font-weight: 700; }
+  .cal-cell.today:hover { background: #1E40AF; }
+  .cal-cell.other { color: var(--text-4); }
+  .cal-cell.has-event::after {
+    content: '';
+    position: absolute; bottom: 4px;
+    width: 4px; height: 4px;
+    background: var(--primary-mid);
+    border-radius: 50%;
+  }
+  .cal-cell.today.has-event::after { background: rgba(255,255,255,0.8); }
+  .cal-cell.deadline::after { background: #F59E0B; }
+  .cal-cell.sunday { color: #EF4444; }
+  .cal-cell.saturday { color: #3B82F6; }
+  .cal-cell.today { color: white; }
+
+  /* STATS */
+  .stats-body { padding: 14px 16px; }
+  .stats-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+  }
+  .stat-item {
+    background: var(--surface-2);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    border: 1px solid var(--border-light);
+  }
+  .stat-period {
+    font-size: 10.5px; font-weight: 600; color: var(--text-4);
+    text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px;
+  }
+  .stat-metric {
+    font-size: 21px; font-weight: 800; color: var(--text-1); line-height: 1;
+    margin-bottom: 3px;
+  }
+  .stat-metric span { font-size: 12px; font-weight: 500; color: var(--text-3); }
+  .stat-label { font-size: 11px; color: var(--text-3); }
+  .stat-sub {
+    display: flex; align-items: center; gap: 4px;
+    margin-top: 6px; padding-top: 6px;
+    border-top: 1px solid var(--border-light);
+    font-size: 11px; color: var(--text-3);
+  }
+  .stat-num { font-weight: 600; color: var(--text-2); }
+
+  /* NOTIFICATIONS */
+  .notif-list { }
+  .notif-item {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 11px 16px;
+    border-bottom: 1px solid var(--border-light);
+    cursor: pointer; transition: background 0.1s;
+  }
+  .notif-item:hover { background: var(--surface-2); }
+  .notif-item:last-child { border-bottom: none; }
+  .notif-item.unread { background: #F0F7FF; }
+  .notif-item.unread:hover { background: #E8F2FF; }
+  .notif-icon-wrap {
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; flex-shrink: 0; margin-top: 1px;
+  }
+  .ni-status   { background: #DBEAFE; }
+  .ni-assign   { background: #EDE9FE; }
+  .ni-defect   { background: #FEE2E2; }
+  .ni-deploy   { background: #D1FAE5; }
+  .notif-content { flex: 1; min-width: 0; }
+  .notif-title {
+    font-size: 12.5px; font-weight: 500; color: var(--text-1);
+    line-height: 1.4;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .notif-item.unread .notif-title { font-weight: 600; }
+  .notif-meta { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+  .notif-wr   { font-family: var(--mono); font-size: 10.5px; color: var(--primary); font-weight: 500; }
+  .notif-time { font-size: 11px; color: var(--text-4); }
+  .unread-dot {
+    width: 7px; height: 7px;
+    background: var(--primary); border-radius: 50%;
+    flex-shrink: 0; margin-top: 5px;
+  }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+  ::-webkit-scrollbar-thumb:hover { background: #CBD5E1; }
+
+  /* ─── ANIMATIONS ─── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .kpi-card  { animation: fadeUp 0.3s ease both; }
+  .kpi-card:nth-child(1) { animation-delay: 0.05s; }
+  .kpi-card:nth-child(2) { animation-delay: 0.10s; }
+  .kpi-card:nth-child(3) { animation-delay: 0.15s; }
+  .kpi-card:nth-child(4) { animation-delay: 0.20s; }
+  .table-panel { animation: fadeUp 0.3s 0.2s ease both; }
+  .panel-card  { animation: fadeUp 0.3s ease both; }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-badge">
+      <div class="logo-icon">💼</div>
+      <div class="logo-text">
+        <span>IT Work Portal</span>
+        <span>업무요청 포털</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="sidebar-user">
+    <div class="user-avatar">김</div>
+    <div class="user-info">
+      <div class="user-name">김개발</div>
+      <div class="user-role">플랫폼개발부 · PM</div>
+    </div>
+    <div class="user-status"></div>
+  </div>
+
+  <nav class="nav-section">
+    <div class="nav-label">메인</div>
+    <div class="nav-item active">
+      <span class="nav-icon">🏠</span> 대시보드
+    </div>
+    <div class="nav-item">
+      <span class="nav-icon">📋</span> 업무요청
+      <span class="nav-badge blue">51</span>
+    </div>
+    <div class="nav-item">
+      <span class="nav-icon">💻</span> 개발자 업무요청
+    </div>
+
+    <div class="nav-divider"></div>
+    <div class="nav-label">개발 사이클</div>
+    <div class="nav-item">
+      <span class="nav-icon">🧪</span> 테스트 시나리오
+      <span class="nav-badge">3</span>
+    </div>
+    <div class="nav-item">
+      <span class="nav-icon">🐛</span> 결함 목록
+      <span class="nav-badge">7</span>
+    </div>
+    <div class="nav-item">
+      <span class="nav-icon">🚀</span> 배포 관리
+    </div>
+
+    <div class="nav-divider"></div>
+    <div class="nav-label">분석</div>
+    <div class="nav-item">
+      <span class="nav-icon">📊</span> 통계
+    </div>
+  </nav>
+
+  <div class="sidebar-footer">
+    <div class="sidebar-footer-item">⚙️ &nbsp;설정</div>
+    <div class="sidebar-footer-item">🚪 &nbsp;로그아웃</div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<div class="main">
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="topbar-title">
+      <h1>대시보드</h1>
+      <div class="breadcrumb">
+        <span>홈</span>
+        <span class="sep">›</span>
+        <span class="current">대시보드</span>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <div class="icon-btn" title="검색">🔍</div>
+      <div class="icon-btn" title="알림">
+        🔔
+        <div class="notif-dot"></div>
+      </div>
+      <button class="btn-new">＋ 업무요청 등록</button>
+      <div class="topbar-avatar" title="김개발">김</div>
+    </div>
+  </header>
+
+  <!-- CONTENT -->
+  <div class="content">
+    <div class="content-main">
+
+      <!-- KPI CARDS -->
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-icon-wrap blue">📌</div>
+          <div class="kpi-body">
+            <div class="kpi-label">나의 할일</div>
+            <div class="kpi-value blue">12</div>
+            <div class="kpi-sub">접수 3건 · 진행 9건</div>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon-wrap indigo">⚡</div>
+          <div class="kpi-body">
+            <div class="kpi-label">전체 진행중</div>
+            <div class="kpi-value indigo">8</div>
+            <div class="kpi-sub"><span class="up">▲ 2</span>&nbsp;지난주 대비</div>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon-wrap green">✅</div>
+          <div class="kpi-body">
+            <div class="kpi-label">이번주 완료</div>
+            <div class="kpi-value green">5</div>
+            <div class="kpi-sub"><span class="up">▲ 2</span>&nbsp;지난주(3건)</div>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon-wrap red">⏰</div>
+          <div class="kpi-body">
+            <div class="kpi-label">마감 임박</div>
+            <div class="kpi-value red">3</div>
+            <div class="kpi-sub">D-3 이내 마감</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TABLE PANEL -->
+      <div class="table-panel">
+        <div class="table-header">
+          <div class="table-header-top">
+            <div>
+              <span class="table-title">업무요청 목록</span>
+              <span class="table-count">총 51건</span>
+            </div>
+            <div class="table-actions">
+              <div class="search-box">🔍 &nbsp;검색...</div>
+              <button class="filter-btn">☰ &nbsp;필터</button>
+            </div>
+          </div>
+          <div class="tabs">
+            <div class="tab active">전체 <span class="tab-badge">51</span></div>
+            <div class="tab">내 할일 <span class="tab-badge">12</span></div>
+            <div class="tab">팀별</div>
+            <div class="tab">마감임박</div>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>문서번호</th>
+                <th>제목</th>
+                <th>유형</th>
+                <th>우선순위</th>
+                <th>상태</th>
+                <th>담당자</th>
+                <th>마감일</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="doc-no">WR-2026-0051</span></td>
+                <td>
+                  <div class="row-title">카카오페이 신규 결제수단 연동 개발</div>
+                  <div class="row-title-sub">요청자: 박운영 · 2026-02-19</div>
+                </td>
+                <td><span class="badge badge-type-dev">개발요청</span></td>
+                <td><span class="badge badge-pri-urgent">긴급</span></td>
+                <td><span class="badge-status s-deploy-ready">배포대기</span></td>
+                <td>
+                  <div class="assignee-cell">
+                    <div class="mini-avatar">김</div>
+                    <span class="assignee-name">김개발</span>
+                  </div>
+                </td>
+                <td><span class="deadline-cell urgent">2026-02-22</span></td>
+              </tr>
+              <tr>
+                <td><span class="doc-no">WR-2026-0050</span></td>
+                <td>
+                  <div class="row-title">모바일 앱 푸시 알림 미수신 현상 수정</div>
+                  <div class="row-title-sub">요청자: 이팀장 · 2026-02-18</div>
+                </td>
+                <td><span class="badge badge-type-dev">개발요청</span></td>
+                <td><span class="badge badge-pri-high">높음</span></td>
+                <td><span class="badge-status s-testing">테스트중</span></td>
+                <td>
+                  <div class="assignee-cell">
+                    <div class="mini-avatar green">이</div>
+                    <span class="assignee-name">이테스터</span>
+                  </div>
+                </td>
+                <td><span class="deadline-cell soon">2026-02-24</span></td>
+              </tr>
+              <tr>
+                <td><span class="doc-no">WR-2026-0049</span></td>
+                <td>
+                  <div class="row-title">[GA4] 전환 이벤트 태깅 수정 및 검증</div>
+                  <div class="row-title-sub">요청자: 최마케팅 · 2026-02-17</div>
+                </td>
+                <td><span class="badge badge-type-it">IT요청</span></td>
+                <td><span class="badge badge-pri-high">높음</span></td>
+                <td><span class="badge-status s-development">개발진행</span></td>
+                <td>
+                  <div class="assignee-cell">
+                    <div class="mini-avatar purple">박</div>
+                    <span class="assignee-name">박개발</span>
+                  </div>
+                </td>
+                <td><span class="deadline-cell">2026-02-28</span></td>
+              </tr>
+              <tr>
+                <td><span class="doc-no">WR-2026-0048</span></td>
+                <td>
+                  <div class="row-title">정산 배치 오류 원인 분석 및 수정 요청</div>
+                  <div class="row-title-sub">요청자: 김운영 · 2026-02-14</div>
+                </td>
+                <td><span class="badge badge-type-dev">개발요청</span></td>
+                <td><span class="badge badge-pri-urgent">긴급</span></td>
+                <td><span class="badge-status s-reviewing">검토중</span></td>
+                <td>
+                  <div class="assignee-cell">
+                    <div class="mini-avatar unassigned">-</div>
+                    <span class="assignee-name" style="color:var(--text-4)">미배정</span>
+                  </div>
+                </td>
+                <td><span class="deadline-cell soon">2026-02-25</span></td>
+              </tr>
+              <tr>
+                <td><span class="doc-no">WR-2026-0047</span></td>
+                <td>
+                  <div class="row-title">관리자 페이지 메뉴 권한 관리 개선</div>
+                  <div class="row-title-sub">요청자: 박PM · 2026-02-12</div>
+                </td>
+                <td><span class="badge badge-type-it">IT요청</span></td>
+                <td><span class="badge badge-pri-medium">보통</span></td>
+                <td><span class="badge-status s-planning">계획서 작성</span></td>
+                <td>
+                  <div class="assignee-cell">
+                    <div class="mini-avatar orange">정</div>
+                    <span class="assignee-name">정개발</span>
+                  </div>
+                </td>
+                <td><span class="deadline-cell">2026-03-07</span></td>
+              </tr>
+              <tr>
+                <td><span class="doc-no">WR-2026-0046</span></td>
+                <td>
+                  <div class="row-title">API 응답속도 개선 (p95 기준 500ms → 200ms)</div>
+                  <div class="row-title-sub">요청자: 이CTO · 2026-02-10</div>
+                </td>
+                <td><span class="badge badge-type-ref">참조작업</span></td>
+                <td><span class="badge badge-pri-medium">보통</span></td>
+                <td><span class="badge-status s-completed">완료</span></td>
+                <td>
+                  <div class="assignee-cell">
+                    <div class="mini-avatar green">이</div>
+                    <span class="assignee-name">이개발</span>
+                  </div>
+                </td>
+                <td><span class="deadline-cell" style="color:var(--text-4);text-decoration:line-through">2026-02-19</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL -->
+    <aside class="right-panel">
+
+      <!-- CALENDAR -->
+      <div class="panel-card" style="animation-delay:0.1s">
+        <div class="panel-card-head">
+          <h3>📅 캘린더</h3>
+          <span class="panel-link">전체보기</span>
+        </div>
+        <div class="calendar">
+          <div class="cal-nav">
+            <div class="cal-arrow">‹</div>
+            <span class="cal-month">2026년 2월</span>
+            <div class="cal-arrow">›</div>
+          </div>
+          <div class="cal-days-header">
+            <div class="cal-day-label">일</div><div class="cal-day-label">월</div>
+            <div class="cal-day-label">화</div><div class="cal-day-label">수</div>
+            <div class="cal-day-label">목</div><div class="cal-day-label">금</div>
+            <div class="cal-day-label">토</div>
+          </div>
+          <div class="cal-grid">
+            <!-- Week 1: Feb starts Sunday -->
+            <div class="cal-cell sunday has-event">1</div>
+            <div class="cal-cell">2</div>
+            <div class="cal-cell">3</div>
+            <div class="cal-cell has-event">4</div>
+            <div class="cal-cell">5</div>
+            <div class="cal-cell has-event">6</div>
+            <div class="cal-cell saturday">7</div>
+            <!-- Week 2 -->
+            <div class="cal-cell sunday">8</div>
+            <div class="cal-cell">9</div>
+            <div class="cal-cell has-event">10</div>
+            <div class="cal-cell">11</div>
+            <div class="cal-cell">12</div>
+            <div class="cal-cell has-event">13</div>
+            <div class="cal-cell saturday">14</div>
+            <!-- Week 3 -->
+            <div class="cal-cell sunday">15</div>
+            <div class="cal-cell">16</div>
+            <div class="cal-cell">17</div>
+            <div class="cal-cell has-event">18</div>
+            <div class="cal-cell deadline has-event">19</div>
+            <div class="cal-cell">20</div>
+            <div class="cal-cell saturday today has-event">21</div>
+            <!-- Week 4 -->
+            <div class="cal-cell sunday">22</div>
+            <div class="cal-cell deadline has-event">23</div>
+            <div class="cal-cell deadline has-event">24</div>
+            <div class="cal-cell deadline has-event">25</div>
+            <div class="cal-cell">26</div>
+            <div class="cal-cell">27</div>
+            <div class="cal-cell saturday has-event">28</div>
+          </div>
+          <div style="display:flex;gap:12px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border-light)">
+            <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-3)">
+              <span style="width:7px;height:7px;background:#3B82F6;border-radius:50%;display:inline-block"></span> 업무요청
+            </div>
+            <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-3)">
+              <span style="width:7px;height:7px;background:#F59E0B;border-radius:50%;display:inline-block"></span> 마감일
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STATS -->
+      <div class="panel-card" style="animation-delay:0.15s">
+        <div class="panel-card-head">
+          <h3>📈 업무 현황</h3>
+        </div>
+        <div class="stats-body">
+          <div class="stats-row">
+            <div class="stat-item">
+              <div class="stat-period">이번 주</div>
+              <div class="stat-metric">46<span>시간</span></div>
+              <div class="stat-label">평균 처리 시간</div>
+              <div class="stat-sub">
+                처리 <span class="stat-num">5</span>건
+              </div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-period">지난 주</div>
+              <div class="stat-metric">38<span>시간</span></div>
+              <div class="stat-label">평균 처리 시간</div>
+              <div class="stat-sub">
+                처리 <span class="stat-num">3</span>건
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- NOTIFICATIONS -->
+      <div class="panel-card" style="animation-delay:0.2s">
+        <div class="panel-card-head">
+          <h3>🔔 최근 알림</h3>
+          <span class="panel-link">모두 읽음</span>
+        </div>
+        <div class="notif-list">
+          <div class="notif-item unread">
+            <div class="notif-icon-wrap ni-status">🔄</div>
+            <div class="notif-content">
+              <div class="notif-title">카카오페이 결제 연동 상태가 <b>배포대기</b>로 변경되었습니다</div>
+              <div class="notif-meta">
+                <span class="notif-wr">WR-2026-0051</span>
+                <span class="notif-time">14분 전</span>
+              </div>
+            </div>
+            <div class="unread-dot"></div>
+          </div>
+          <div class="notif-item unread">
+            <div class="notif-icon-wrap ni-defect">🐛</div>
+            <div class="notif-content">
+              <div class="notif-title">새 결함이 등록되었습니다 — 로그인 후 화면 렌더링 오류</div>
+              <div class="notif-meta">
+                <span class="notif-wr">DF-2026-0007</span>
+                <span class="notif-time">1시간 전</span>
+              </div>
+            </div>
+            <div class="unread-dot"></div>
+          </div>
+          <div class="notif-item">
+            <div class="notif-icon-wrap ni-assign">👤</div>
+            <div class="notif-content">
+              <div class="notif-title">정산 배치 오류 요청이 회원님께 배정되었습니다</div>
+              <div class="notif-meta">
+                <span class="notif-wr">WR-2026-0048</span>
+                <span class="notif-time">3시간 전</span>
+              </div>
+            </div>
+          </div>
+          <div class="notif-item">
+            <div class="notif-icon-wrap ni-deploy">🚀</div>
+            <div class="notif-content">
+              <div class="notif-title">API 응답속도 개선 PROD 배포가 완료되었습니다</div>
+              <div class="notif-meta">
+                <span class="notif-wr">DP-2026-0012</span>
+                <span class="notif-time">어제 22:01</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </aside>
+  </div>
+</div>
+
+<script>
+  // Tab switching
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+    });
+  });
+  // Row hover
+  document.querySelectorAll('tbody tr').forEach(row => {
+    row.addEventListener('click', () => {
+      document.querySelectorAll('tbody tr').forEach(r => r.style.background = '');
+      row.style.background = '#EFF6FF';
+    });
+  });
+</script>
+</body>
+</html>
