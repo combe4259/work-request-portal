@@ -30,6 +30,7 @@ import MeetingNoteDetailPage from '@/pages/meeting-note/MeetingNoteDetailPage'
 import StatisticsPage from '@/pages/statistics/StatisticsPage'
 import ResourcesPage from '@/pages/resource/ResourcesPage'
 import ResourceFormPage from '@/pages/resource/ResourceFormPage'
+import SettingsPage from '@/pages/settings/SettingsPage'
 
 const router = createBrowserRouter([
   {
@@ -79,7 +80,7 @@ const router = createBrowserRouter([
       { path: '/resources', element: <ResourcesPage /> },
       { path: '/resources/new', element: <ResourceFormPage /> },
       { path: '/resources/:id/edit', element: <ResourceFormPage /> },
-      // { path: '/settings', element: <SettingsPage /> },
+      { path: '/settings', element: <SettingsPage /> },
     ],
   },
 ])

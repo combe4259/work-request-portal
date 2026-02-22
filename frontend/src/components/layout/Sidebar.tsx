@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { Separator } from '@/components/ui/separator'
 import { useAuthStore } from '@/stores/authStore'
+import { useProfileStore, AVATAR_COLOR_HEX } from '@/stores/profileStore'
 import shinhanLogo from '@/assets/shinhan-ci.png'
 
 interface NavItem {
@@ -50,8 +51,11 @@ const NAV_SECTIONS: NavSection[] = [
 ]
 
 export default function Sidebar() {
-  const { user, currentTeam, logout } = useAuthStore()
+  const { user, logout } = useAuthStore()
+  const { displayName, role, avatarColor, photoUrl } = useProfileStore()
   const navigate = useNavigate()
+  const colorHex = AVATAR_COLOR_HEX[avatarColor] ?? AVATAR_COLOR_HEX['brand']
+  const initials = (displayName || user?.name)?.slice(0, 1) ?? '?'
 
   const handleLogout = () => {
     logout()
@@ -79,12 +83,20 @@ export default function Sidebar() {
       </div>
 
       {/* 팀/유저 카드 */}
-      <div className="mx-3 mb-3 px-3 py-2.5 bg-white/[0.07] border border-white/[0.08] rounded-lg relative z-10">
-        <p className="text-white/50 text-[11px] truncate mb-0.5">{currentTeam?.name ?? '팀 미선택'}</p>
-        <p className="text-white text-[13px] font-semibold truncate">
-          <span className="font-normal text-white/50">{ROLE_LABELS[user?.role ?? 'DEVELOPER']}: </span>
-          {user?.name ?? '사용자'}
-        </p>
+      <div className="mx-3 mb-3 px-3 py-2.5 bg-white/[0.07] border border-white/[0.08] rounded-lg relative z-10 flex items-center gap-2.5">
+        <div className="w-8 h-8 rounded-lg flex-shrink-0 overflow-hidden">
+          {photoUrl ? (
+            <img src={photoUrl} alt="프로필" className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-white text-[13px] font-bold" style={{ backgroundColor: colorHex }}>
+              {initials}
+            </div>
+          )}
+        </div>
+        <div className="min-w-0">
+          <p className="text-white text-[13px] font-semibold truncate">{displayName || user?.name || '사용자'}</p>
+          <p className="text-white/50 text-[11px] truncate">{role || ROLE_LABELS[user?.role ?? 'DEVELOPER']}</p>
+        </div>
       </div>
 
       {/* 네비게이션 */}

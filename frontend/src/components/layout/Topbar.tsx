@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
+import { useProfileStore, AVATAR_COLOR_HEX } from '@/stores/profileStore'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -66,11 +67,13 @@ export default function Topbar() {
   const location = useLocation()
   const navigate = useNavigate()
   const { user, currentTeam, logout } = useAuthStore()
+  const { displayName, role, avatarColor, photoUrl } = useProfileStore()
   const [notifOpen, setNotifOpen] = useState(false)
 
   const pageTitle = PAGE_TITLES[location.pathname] ?? '페이지'
   const unreadCount = MOCK_NOTIFICATIONS.length
-  const initials = user?.name?.slice(0, 1) ?? '?'
+  const initials = (displayName || user?.name)?.slice(0, 1) ?? '?'
+  const colorHex = AVATAR_COLOR_HEX[avatarColor] ?? AVATAR_COLOR_HEX['brand']
 
   const handleLogout = () => {
     logout()
@@ -145,12 +148,18 @@ export default function Topbar() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="flex items-center gap-2 pl-1.5 pr-2.5 py-1 rounded-lg hover:bg-gray-100 transition-colors">
-              <div className="w-7 h-7 rounded-full bg-brand flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                {initials}
+              <div className="w-7 h-7 rounded-full flex-shrink-0 overflow-hidden">
+                {photoUrl ? (
+                  <img src={photoUrl} alt="프로필" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: colorHex }}>
+                    {initials}
+                  </div>
+                )}
               </div>
               <div className="text-left hidden sm:block">
-                <p className="text-xs font-semibold text-gray-800 leading-none mb-0.5">{user?.name ?? '사용자'}</p>
-                <p className="text-[10px] text-gray-400 leading-none">{ROLE_LABELS[user?.role ?? 'DEVELOPER']}</p>
+                <p className="text-xs font-semibold text-gray-800 leading-none mb-0.5">{displayName || user?.name || '사용자'}</p>
+                <p className="text-[10px] text-gray-400 leading-none">{role || ROLE_LABELS[user?.role ?? 'DEVELOPER']}</p>
               </div>
               <ChevronDownIcon />
             </button>
