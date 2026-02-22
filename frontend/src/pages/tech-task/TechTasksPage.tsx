@@ -1,34 +1,50 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { TypeBadge, PriorityBadge, StatusBadge } from '@/components/work-request/Badges'
+import { PriorityBadge, StatusBadge } from '@/components/work-request/Badges'
 import { FilterSelect, SortTh, Pagination, DeadlineCell, type SortDir } from '@/components/common/TableControls'
 import { PlusIcon, SearchIcon } from '@/components/common/Icons'
-import type { WorkRequest, RequestType, Priority, Status } from '@/types/work-request'
+import type { TechTask, TechTaskType, Priority, Status } from '@/types/tech-task'
 
 // ── 샘플 데이터 ───────────────────────────────────────
-const SAMPLE_DATA: WorkRequest[] = [
-  { id: '1',  docNo: 'WR-051', title: '모바일 PDA 화면 레이아웃 개선 요청',        type: '기능개선', priority: '높음', status: '개발중',   assignee: '김개발',   deadline: '2026-02-25' },
-  { id: '2',  docNo: 'WR-050', title: '신규 계좌 개설 프로세스 자동화',            type: '신규개발', priority: '긴급', status: '검토중',   assignee: '이설계',   deadline: '2026-02-22' },
-  { id: '3',  docNo: 'WR-049', title: '잔고 조회 API 응답 지연 버그 수정',         type: '버그수정', priority: '긴급', status: '테스트중', assignee: '박테스터', deadline: '2026-02-21' },
-  { id: '4',  docNo: 'WR-048', title: 'AWS S3 스토리지 용량 확장',               type: '인프라',   priority: '보통', status: '완료',    assignee: '최인프라', deadline: '2026-02-18' },
-  { id: '5',  docNo: 'WR-047', title: '로그인 세션 만료 시간 정책 변경',           type: '기능개선', priority: '낮음', status: '접수대기', assignee: '미배정',   deadline: '2026-03-05' },
-  { id: '6',  docNo: 'WR-046', title: '주문 내역 엑셀 다운로드 기능 추가',         type: '신규개발', priority: '보통', status: '개발중',   assignee: '김개발',   deadline: '2026-02-28' },
-  { id: '7',  docNo: 'WR-045', title: '고객 알림 푸시 발송 로직 개선',             type: '기능개선', priority: '높음', status: '검토중',   assignee: '이설계',   deadline: '2026-03-03' },
-  { id: '8',  docNo: 'WR-044', title: '배포 파이프라인 CI/CD 구성',               type: '인프라',   priority: '보통', status: '완료',    assignee: '최인프라', deadline: '2026-02-14' },
-  { id: '9',  docNo: 'WR-043', title: '결제 모듈 PG사 연동 오류 수정',            type: '버그수정', priority: '긴급', status: '완료',    assignee: '박테스터', deadline: '2026-02-12' },
-  { id: '10', docNo: 'WR-042', title: '관리자 대시보드 권한 분리',                type: '신규개발', priority: '보통', status: '개발중',   assignee: '김개발',   deadline: '2026-03-10' },
-  { id: '11', docNo: 'WR-041', title: '거래 내역 조회 페이지 성능 개선',           type: '기능개선', priority: '높음', status: '접수대기', assignee: '미배정',   deadline: '2026-03-07' },
-  { id: '12', docNo: 'WR-040', title: '사용자 비밀번호 재설정 이메일 발송 오류',    type: '버그수정', priority: '보통', status: '반려',    assignee: '박테스터', deadline: '2026-02-10' },
+const SAMPLE_DATA: TechTask[] = [
+  { id: '1',  docNo: 'TK-021', title: '계좌 조회 서비스 레이어 리팩토링',         type: '리팩토링', priority: '보통', status: '개발중',   assignee: '김개발',   deadline: '2026-03-07' },
+  { id: '2',  docNo: 'TK-020', title: 'N+1 쿼리 문제 해결 — 잔고 조회 API',     type: '성능개선', priority: '높음', status: '검토중',   assignee: '이설계',   deadline: '2026-02-28' },
+  { id: '3',  docNo: 'TK-019', title: 'JWT 토큰 갱신 로직 보안 취약점 패치',     type: '보안',     priority: '긴급', status: '완료',    assignee: '박테스터', deadline: '2026-02-18' },
+  { id: '4',  docNo: 'TK-018', title: '레거시 XML 파서 → JSON 파서 전환',       type: '기술부채', priority: '낮음', status: '접수대기', assignee: '미배정',   deadline: '2026-04-01' },
+  { id: '5',  docNo: 'TK-017', title: '결제 모듈 단위 테스트 커버리지 80% 달성', type: '테스트',   priority: '보통', status: '개발중',   assignee: '박테스터', deadline: '2026-03-14' },
+  { id: '6',  docNo: 'TK-016', title: 'Redis 캐시 TTL 정책 재설계',             type: '성능개선', priority: '보통', status: '검토중',   assignee: '최인프라', deadline: '2026-03-05' },
+  { id: '7',  docNo: 'TK-015', title: '공통 에러 핸들러 모듈화',               type: '리팩토링', priority: '낮음', status: '완료',    assignee: '김개발',   deadline: '2026-02-14' },
+  { id: '8',  docNo: 'TK-014', title: 'SQL Injection 방어 로직 전수 점검',      type: '보안',     priority: '긴급', status: '완료',    assignee: '박테스터', deadline: '2026-02-10' },
+  { id: '9',  docNo: 'TK-013', title: 'API 응답 DTO 불필요 필드 정리',          type: '기술부채', priority: '낮음', status: '접수대기', assignee: '미배정',   deadline: '2026-04-15' },
+  { id: '10', docNo: 'TK-012', title: '배치 스케줄러 성능 최적화',              type: '성능개선', priority: '높음', status: '개발중',   assignee: '이설계',   deadline: '2026-02-26' },
 ]
 
 const PAGE_SIZE = 10
 
 type SortKey = 'docNo' | 'deadline'
 
-export default function WorkRequestsPage() {
+// ── 유형 배지 (기술과제 전용) ──────────────────────────
+const TECH_TYPE_STYLES: Record<TechTaskType, string> = {
+  '리팩토링': 'bg-slate-100 text-slate-600',
+  '기술부채': 'bg-orange-50 text-orange-600',
+  '성능개선': 'bg-cyan-50 text-cyan-700',
+  '보안':     'bg-red-50 text-red-600',
+  '테스트':   'bg-emerald-50 text-emerald-700',
+  '기타':     'bg-gray-100 text-gray-500',
+}
+
+function TechTypeBadge({ type }: { type: TechTaskType }) {
+  return (
+    <span className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-medium ${TECH_TYPE_STYLES[type]}`}>
+      {type}
+    </span>
+  )
+}
+
+export default function TechTasksPage() {
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
-  const [filterType, setFilterType] = useState<RequestType | '전체'>('전체')
+  const [filterType, setFilterType] = useState<TechTaskType | '전체'>('전체')
   const [filterPriority, setFilterPriority] = useState<Priority | '전체'>('전체')
   const [filterStatus, setFilterStatus] = useState<Status | '전체'>('전체')
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: 'docNo', dir: 'desc' })
@@ -64,18 +80,18 @@ export default function WorkRequestsPage() {
 
   return (
     <div className="p-6 space-y-4">
-      {/* 페이지 헤더 */}
+      {/* 헤더 */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-[18px] font-bold text-gray-900">업무요청</h1>
+          <h1 className="text-[18px] font-bold text-gray-900">기술과제</h1>
           <p className="text-[12px] text-gray-400 mt-0.5">총 {filtered.length}건</p>
         </div>
         <button
-          onClick={() => navigate('/work-requests/new')}
+          onClick={() => navigate('/tech-tasks/new')}
           className="flex items-center gap-1.5 h-8 px-3 bg-brand hover:bg-brand-hover text-white text-[13px] font-semibold rounded-lg transition-colors"
         >
           <PlusIcon />
-          업무요청 등록
+          기술과제 등록
         </button>
       </div>
 
@@ -91,7 +107,7 @@ export default function WorkRequestsPage() {
             className="w-full h-8 pl-8 pr-3 text-[13px] border border-gray-200 rounded-lg focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand/20 bg-gray-50"
           />
         </div>
-        <FilterSelect value={filterType} onChange={(v) => { setFilterType(v as RequestType | '전체'); setPage(1) }} options={['전체', '기능개선', '신규개발', '버그수정', '인프라', '기타']} placeholder="유형" />
+        <FilterSelect value={filterType} onChange={(v) => { setFilterType(v as TechTaskType | '전체'); setPage(1) }} options={['전체', '리팩토링', '기술부채', '성능개선', '보안', '테스트', '기타']} placeholder="유형" />
         <FilterSelect value={filterPriority} onChange={(v) => { setFilterPriority(v as Priority | '전체'); setPage(1) }} options={['전체', '긴급', '높음', '보통', '낮음']} placeholder="우선순위" />
         <FilterSelect value={filterStatus} onChange={(v) => { setFilterStatus(v as Status | '전체'); setPage(1) }} options={['전체', '접수대기', '검토중', '개발중', '테스트중', '완료', '반려']} placeholder="상태" />
         {isFiltered && (
@@ -122,21 +138,21 @@ export default function WorkRequestsPage() {
                   <td colSpan={7} className="px-4 py-12 text-center text-[13px] text-gray-400">검색 결과가 없습니다</td>
                 </tr>
               ) : (
-                paginated.map((req) => (
+                paginated.map((task) => (
                   <tr
-                    key={req.id}
-                    onClick={() => navigate(`/work-requests/${req.id}`)}
+                    key={task.id}
+                    onClick={() => navigate(`/tech-tasks/${task.id}`)}
                     className="hover:bg-blue-50/30 transition-colors cursor-pointer group"
                   >
-                    <td className="px-4 py-3 font-mono text-[11px] text-gray-400 whitespace-nowrap">{req.docNo}</td>
+                    <td className="px-4 py-3 font-mono text-[11px] text-gray-400 whitespace-nowrap">{task.docNo}</td>
                     <td className="px-4 py-3 max-w-[260px]">
-                      <span className="text-[13px] text-gray-800 font-medium truncate block group-hover:text-brand transition-colors">{req.title}</span>
+                      <span className="text-[13px] text-gray-800 font-medium truncate block group-hover:text-brand transition-colors">{task.title}</span>
                     </td>
-                    <td className="px-3 py-3 whitespace-nowrap"><TypeBadge type={req.type} /></td>
-                    <td className="px-3 py-3 whitespace-nowrap"><PriorityBadge priority={req.priority} /></td>
-                    <td className="px-3 py-3 whitespace-nowrap"><StatusBadge status={req.status} /></td>
-                    <td className="px-3 py-3 whitespace-nowrap"><span className="text-[12px] text-gray-600">{req.assignee}</span></td>
-                    <td className="px-3 py-3 whitespace-nowrap"><DeadlineCell date={req.deadline} /></td>
+                    <td className="px-3 py-3 whitespace-nowrap"><TechTypeBadge type={task.type} /></td>
+                    <td className="px-3 py-3 whitespace-nowrap"><PriorityBadge priority={task.priority} /></td>
+                    <td className="px-3 py-3 whitespace-nowrap"><StatusBadge status={task.status} /></td>
+                    <td className="px-3 py-3 whitespace-nowrap"><span className="text-[12px] text-gray-600">{task.assignee}</span></td>
+                    <td className="px-3 py-3 whitespace-nowrap"><DeadlineCell date={task.deadline} /></td>
                   </tr>
                 ))
               )}
