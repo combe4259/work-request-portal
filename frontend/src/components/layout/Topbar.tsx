@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { useProfileStore, AVATAR_COLOR_HEX } from '@/stores/profileStore'
+import { ROLE_LABELS } from '@/lib/constants'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -55,13 +56,6 @@ const MOCK_NOTIFICATIONS = [
     time: '3시간 전',
   },
 ]
-
-const ROLE_LABELS: Record<string, string> = {
-  PM: 'PM',
-  TEAM_LEAD: '팀장',
-  DEVELOPER: '개발자',
-  REQUESTER: '요청자',
-}
 
 export default function Topbar() {
   const location = useLocation()

@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { FormField } from '@/components/common/FormField'
+import { inputCls, textareaCls, selectCls } from '@/lib/formStyles'
+import { ASSIGNEES } from '@/lib/constants'
 
 // ── 스키마 ──────────────────────────────────────────
 const schema = z.object({
@@ -17,8 +20,6 @@ const schema = z.object({
 })
 
 type FormValues = z.infer<typeof schema>
-
-const ASSIGNEES = ['미배정', '김개발', '이설계', '박테스터', '최인프라']
 
 const ALL_DOCS = [
   { docNo: 'TS-018', title: '모바일 PDA 레이아웃 반응형 검증' },
@@ -348,36 +349,6 @@ export default function DefectFormPage() {
     </div>
   )
 }
-
-// ── 폼 필드 래퍼 ─────────────────────────────────────
-function FormField({ label, required, error, children }: { label: string; required?: boolean; error?: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1.5">
-      <label className="text-[12px] font-semibold text-gray-600 block">
-        {label}
-        {required && <span className="ml-1 text-red-400">*</span>}
-      </label>
-      {children}
-      {error && <p className="text-[11px] text-red-500">{error}</p>}
-    </div>
-  )
-}
-
-// ── 스타일 헬퍼 ──────────────────────────────────────
-const inputCls = (hasError: boolean) =>
-  `w-full h-9 px-3 text-[13px] border rounded-lg focus:outline-none focus:ring-1 transition-colors ${
-    hasError ? 'border-red-300 focus:border-red-400 focus:ring-red-100' : 'border-gray-200 focus:border-brand focus:ring-brand/20'
-  }`
-
-const textareaCls = (hasError: boolean) =>
-  `w-full px-3 py-2.5 text-[13px] border rounded-lg focus:outline-none focus:ring-1 transition-colors ${
-    hasError ? 'border-red-300 focus:border-red-400 focus:ring-red-100' : 'border-gray-200 focus:border-brand focus:ring-brand/20'
-  }`
-
-const selectCls = (hasError: boolean) =>
-  `w-full h-9 px-3 text-[13px] border rounded-lg focus:outline-none focus:ring-1 transition-colors appearance-none cursor-pointer bg-white ${
-    hasError ? 'border-red-300 focus:border-red-400 focus:ring-red-100' : 'border-gray-200 focus:border-brand focus:ring-brand/20'
-  }`
 
 function formatFileSize(bytes: number) {
   if (bytes < 1024) return `${bytes}B`

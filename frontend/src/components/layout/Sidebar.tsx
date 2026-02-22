@@ -2,6 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { Separator } from '@/components/ui/separator'
 import { useAuthStore } from '@/stores/authStore'
 import { useProfileStore, AVATAR_COLOR_HEX } from '@/stores/profileStore'
+import { ROLE_LABELS } from '@/lib/constants'
 import shinhanLogo from '@/assets/shinhan-ci.png'
 
 interface NavItem {
@@ -164,14 +165,6 @@ export default function Sidebar() {
       </div>
     </aside>
   )
-}
-
-// ── 역할 레이블 ────────────────────────────────────────
-const ROLE_LABELS: Record<string, string> = {
-  PM: 'PM',
-  TEAM_LEAD: '팀장',
-  DEVELOPER: '개발자',
-  REQUESTER: '요청자',
 }
 
 // ── SVG 아이콘 ────────────────────────────────────────
