@@ -4,6 +4,9 @@ import KpiCard from '@/components/dashboard/KpiCard'
 import { TypeBadge, PriorityBadge, StatusBadge } from '@/components/work-request/Badges'
 import type { WorkRequest } from '@/types/work-request'
 
+// ── 달력 이벤트 타입 ──────────────────────────────────
+type CalEvent = { day: number; docNo: string; title: string; priority: WorkRequest['priority'] }
+
 // ── 타입 ─────────────────────────────────────────────
 type TabKey = 'all' | 'mine' | 'team'
 
@@ -78,8 +81,14 @@ const NOTIFICATIONS = [
   { id: 4, type: 'complete', text: 'WR-044 배포가 완료되었습니다', time: '3시간 전' },
 ]
 
-// 2026년 2월 이벤트 날짜
-const EVENT_DATES = new Set([3, 7, 10, 14, 17, 18, 21, 25, 28])
+// 2026년 2월 마감 일정 (SAMPLE_REQUESTS에서 파생)
+const CAL_EVENTS: CalEvent[] = [
+  { day: 18, docNo: 'WR-048', title: 'AWS S3 스토리지 용량 확장',          priority: '보통' },
+  { day: 21, docNo: 'WR-049', title: '잔고 조회 API 응답 지연 버그 수정',   priority: '긴급' },
+  { day: 22, docNo: 'WR-050', title: '신규 계좌 개설 프로세스 자동화',      priority: '긴급' },
+  { day: 25, docNo: 'WR-051', title: '모바일 PDA 화면 레이아웃 개선 요청', priority: '높음' },
+  { day: 28, docNo: 'WR-046', title: '주문 내역 엑셀 다운로드 기능 추가',   priority: '보통' },
+]
 
 // ── 메인 컴포넌트 ────────────────────────────────────
 export default function DashboardPage() {
@@ -198,7 +207,7 @@ export default function DashboardPage() {
         {/* 우측 패널 */}
         <div className="w-[268px] flex-shrink-0 space-y-4">
           {/* 미니 캘린더 */}
-          <MiniCalendar />
+          <MiniCalendar events={CAL_EVENTS} />
 
           {/* 알림 피드 */}
           <div className="bg-white rounded-xl shadow-[0_2px_12px_rgba(30,58,138,0.07)] border border-blue-50 p-4">
@@ -224,34 +233,46 @@ export default function DashboardPage() {
 }
 
 // ── 미니 캘린더 ────────────────────────────────────────
-function MiniCalendar() {
+const PRIORITY_DOT: Record<WorkRequest['priority'], string> = {
+  '긴급': 'bg-red-500',
+  '높음': 'bg-orange-400',
+  '보통': 'bg-blue-400',
+  '낮음': 'bg-gray-300',
+}
+
+function MiniCalendar({ events }: { events: CalEvent[] }) {
   const today = 21
   const year = 2026
   const month = 2
-  const firstDay = 0 // 2026-02-01은 일요일
+  const firstDay = 0
   const daysInMonth = 28
+  const [selectedDay, setSelectedDay] = useState<number | null>(null)
+
+  const byDay: Record<number, CalEvent[]> = {}
+  events.forEach((e) => {
+    if (!byDay[e.day]) byDay[e.day] = []
+    byDay[e.day].push(e)
+  })
 
   const cells: (number | null)[] = [
     ...Array(firstDay).fill(null),
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
   ]
 
+  const selectedEvents = selectedDay ? (byDay[selectedDay] ?? []) : []
+  const upcoming = events.filter((e) => e.day >= today)
+
   return (
     <div className="bg-white rounded-xl shadow-[0_2px_12px_rgba(30,58,138,0.07)] border border-blue-50 p-4">
+      {/* 헤더 */}
       <div className="flex items-center justify-between mb-3">
-        <p className="text-[12px] font-semibold text-gray-700">
-          {year}년 {month}월
-        </p>
+        <p className="text-[12px] font-semibold text-gray-700">{year}년 {month}월</p>
         <div className="flex gap-1">
           <button className="w-5 h-5 rounded flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors">
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-              <path d="M6.5 2L3.5 5L6.5 8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M6.5 2L3.5 5L6.5 8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </button>
           <button className="w-5 h-5 rounded flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors">
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-              <path d="M3.5 2L6.5 5L3.5 8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M3.5 2L6.5 5L3.5 8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </button>
         </div>
       </div>
@@ -259,12 +280,7 @@ function MiniCalendar() {
       {/* 요일 헤더 */}
       <div className="grid grid-cols-7 mb-1">
         {['일', '월', '화', '수', '목', '금', '토'].map((d, i) => (
-          <div
-            key={d}
-            className={`text-center text-[10px] font-semibold py-1 ${
-              i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-gray-400'
-            }`}
-          >
+          <div key={d} className={`text-center text-[10px] font-semibold py-1 ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-gray-400'}`}>
             {d}
           </div>
         ))}
@@ -275,7 +291,8 @@ function MiniCalendar() {
         {cells.map((day, idx) => {
           if (!day) return <div key={`empty-${idx}`} />
           const isToday = day === today
-          const hasEvent = EVENT_DATES.has(day)
+          const isSelected = day === selectedDay
+          const dayEvents = byDay[day] ?? []
           const col = idx % 7
           const isSun = col === 0
           const isSat = col === 6
@@ -283,20 +300,61 @@ function MiniCalendar() {
           return (
             <div key={day} className="flex flex-col items-center py-0.5">
               <button
+                onClick={() => setSelectedDay(isSelected ? null : day)}
                 className={`w-6 h-6 rounded-full text-[11px] font-medium flex items-center justify-center transition-colors ${
                   isToday
                     ? 'bg-brand text-white font-bold'
+                    : isSelected
+                    ? 'bg-brand/10 text-brand font-semibold ring-1 ring-brand/30'
                     : 'hover:bg-gray-100 ' + (isSun ? 'text-red-400' : isSat ? 'text-blue-500' : 'text-gray-700')
                 }`}
               >
                 {day}
               </button>
-              {hasEvent && !isToday && (
-                <div className="w-1 h-1 rounded-full bg-brand/50 mt-0.5" />
+              {/* 우선순위별 컬러 점 */}
+              {dayEvents.length > 0 && (
+                <div className="flex gap-0.5 mt-0.5">
+                  {dayEvents.slice(0, 3).map((e, i) => (
+                    <span key={i} className={`w-1.5 h-1.5 rounded-full ${isToday ? 'bg-white/70' : PRIORITY_DOT[e.priority]}`} />
+                  ))}
+                </div>
               )}
             </div>
           )
         })}
+      </div>
+
+      {/* 선택된 날짜 이벤트 OR 다가오는 마감 */}
+      <div className="mt-3 pt-3 border-t border-gray-100">
+        {selectedDay && selectedEvents.length > 0 ? (
+          <>
+            <p className="text-[10px] font-semibold text-gray-400 mb-2">{month}/{selectedDay} 마감</p>
+            <div className="space-y-1.5">
+              {selectedEvents.map((e) => (
+                <div key={e.docNo} className="flex items-center gap-2">
+                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${PRIORITY_DOT[e.priority]}`} />
+                  <span className="font-mono text-[10px] text-gray-400 flex-shrink-0">{e.docNo}</span>
+                  <span className="text-[11px] text-gray-600 truncate">{e.title}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : selectedDay && selectedEvents.length === 0 ? (
+          <p className="text-[11px] text-gray-400 text-center py-1">{month}/{selectedDay}에 마감 일정이 없습니다</p>
+        ) : (
+          <>
+            <p className="text-[10px] font-semibold text-gray-400 mb-2">다가오는 마감</p>
+            <div className="space-y-1.5">
+              {upcoming.map((e) => (
+                <div key={e.docNo} className="flex items-center gap-2">
+                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${PRIORITY_DOT[e.priority]}`} />
+                  <span className="text-[10px] text-gray-400 flex-shrink-0 font-medium">{month}/{e.day}</span>
+                  <span className="text-[11px] text-gray-600 truncate">{e.title}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
