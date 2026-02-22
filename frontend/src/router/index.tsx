@@ -16,6 +16,7 @@ import DefectsPage from '@/pages/defect/DefectsPage'
 import DefectFormPage from '@/pages/defect/DefectFormPage'
 import DeploymentsPage from '@/pages/deployment/DeploymentsPage'
 import DeploymentFormPage from '@/pages/deployment/DeploymentFormPage'
+import DeploymentDetailPage from '@/pages/deployment/DeploymentDetailPage'
 import KnowledgeBasePage from '@/pages/knowledge-base/KnowledgeBasePage'
 import KnowledgeBaseFormPage from '@/pages/knowledge-base/KnowledgeBaseFormPage'
 import KnowledgeBaseDetailPage from '@/pages/knowledge-base/KnowledgeBaseDetailPage'
@@ -53,6 +54,7 @@ const router = createBrowserRouter([
       { path: '/defects/new', element: <DefectFormPage /> },
       { path: '/deployments', element: <DeploymentsPage /> },
       { path: '/deployments/new', element: <DeploymentFormPage /> },
+      { path: '/deployments/:id', element: <DeploymentDetailPage /> },
       { path: '/knowledge-base', element: <KnowledgeBasePage /> },
       { path: '/knowledge-base/new', element: <KnowledgeBaseFormPage /> },
       { path: '/knowledge-base/:id', element: <KnowledgeBaseDetailPage /> },
