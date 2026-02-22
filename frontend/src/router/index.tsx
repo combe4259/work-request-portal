@@ -17,6 +17,7 @@ import DefectFormPage from '@/pages/defect/DefectFormPage'
 import DeploymentsPage from '@/pages/deployment/DeploymentsPage'
 import DeploymentFormPage from '@/pages/deployment/DeploymentFormPage'
 import KnowledgeBasePage from '@/pages/knowledge-base/KnowledgeBasePage'
+import KnowledgeBaseFormPage from '@/pages/knowledge-base/KnowledgeBaseFormPage'
 
 const router = createBrowserRouter([
   {
@@ -52,6 +53,7 @@ const router = createBrowserRouter([
       { path: '/deployments', element: <DeploymentsPage /> },
       { path: '/deployments/new', element: <DeploymentFormPage /> },
       { path: '/knowledge-base', element: <KnowledgeBasePage /> },
+      { path: '/knowledge-base/new', element: <KnowledgeBaseFormPage /> },
       // { path: '/meeting-notes', element: <MeetingNotesPage /> },
       // { path: '/ideas', element: <IdeasPage /> },
       // { path: '/resources', element: <ResourcesPage /> },
