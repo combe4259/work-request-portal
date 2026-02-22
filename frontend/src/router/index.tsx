@@ -27,6 +27,7 @@ import IdeaFormPage from '@/pages/idea/IdeaFormPage'
 import IdeaDetailPage from '@/pages/idea/IdeaDetailPage'
 import MeetingNotesPage from '@/pages/meeting-note/MeetingNotesPage'
 import MeetingNoteDetailPage from '@/pages/meeting-note/MeetingNoteDetailPage'
+import StatisticsPage from '@/pages/statistics/StatisticsPage'
 
 const router = createBrowserRouter([
   {
@@ -72,8 +73,8 @@ const router = createBrowserRouter([
       { path: '/ideas', element: <IdeasPage /> },
       { path: '/ideas/new', element: <IdeaFormPage /> },
       { path: '/ideas/:id', element: <IdeaDetailPage /> },
+      { path: '/statistics', element: <StatisticsPage /> },
       // { path: '/resources', element: <ResourcesPage /> },
-      // { path: '/statistics', element: <StatisticsPage /> },
       // { path: '/settings', element: <SettingsPage /> },
     ],
   },
