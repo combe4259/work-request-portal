@@ -198,15 +198,6 @@ export default function DashboardPage() {
           {/* 미니 캘린더 */}
           <MiniCalendar />
 
-          {/* 업무 현황 */}
-          <div className="bg-white rounded-xl shadow-[0_2px_12px_rgba(30,58,138,0.07)] border border-blue-50 p-4">
-            <p className="text-[12px] font-semibold text-gray-700 mb-3">업무 현황</p>
-            <div className="grid grid-cols-2 gap-2">
-              <StatBox label="이번주 처리" value="5건" sub="평균 1.8일" color="blue" />
-              <StatBox label="지난주 처리" value="8건" sub="평균 2.1일" color="gray" />
-            </div>
-          </div>
-
           {/* 알림 피드 */}
           <div className="bg-white rounded-xl shadow-[0_2px_12px_rgba(30,58,138,0.07)] border border-blue-50 p-4">
             <p className="text-[12px] font-semibold text-gray-700 mb-3">최근 알림</p>
@@ -309,16 +300,6 @@ function MiniCalendar() {
   )
 }
 
-// ── 업무현황 박스 ─────────────────────────────────────
-function StatBox({ label, value, sub, color }: { label: string; value: string; sub: string; color: 'blue' | 'gray' }) {
-  return (
-    <div className={`rounded-lg p-3 ${color === 'blue' ? 'bg-brand/5 border border-brand/10' : 'bg-gray-50 border border-gray-100'}`}>
-      <p className="text-[10px] text-gray-400 mb-1">{label}</p>
-      <p className={`text-[18px] font-bold leading-none mb-0.5 ${color === 'blue' ? 'text-brand' : 'text-gray-600'}`}>{value}</p>
-      <p className="text-[10px] text-gray-400">{sub}</p>
-    </div>
-  )
-}
 
 // ── 마감일 뱃지 ──────────────────────────────────────
 function DeadlineBadge({ date }: { date: string }) {
