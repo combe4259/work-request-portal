@@ -12,6 +12,7 @@ import TechTaskDetailPage from '@/pages/tech-task/TechTaskDetailPage'
 import TechTaskFormPage from '@/pages/tech-task/TechTaskFormPage'
 import TestScenariosPage from '@/pages/test-scenario/TestScenariosPage'
 import TestScenarioFormPage from '@/pages/test-scenario/TestScenarioFormPage'
+import DefectsPage from '@/pages/defect/DefectsPage'
 
 const router = createBrowserRouter([
   {
@@ -42,8 +43,7 @@ const router = createBrowserRouter([
       { path: '/tech-tasks/:id', element: <TechTaskDetailPage /> },
       { path: '/test-scenarios', element: <TestScenariosPage /> },
       { path: '/test-scenarios/new', element: <TestScenarioFormPage /> },
-      // { path: '/defects', element: <DefectsPage /> },
-      // { path: '/defects', element: <DefectsPage /> },
+      { path: '/defects', element: <DefectsPage /> },
       // { path: '/deployments', element: <DeploymentsPage /> },
       // { path: '/knowledge-base', element: <KnowledgeBasePage /> },
       // { path: '/meeting-notes', element: <MeetingNotesPage /> },
