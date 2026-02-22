@@ -12,6 +12,7 @@ import TechTaskDetailPage from '@/pages/tech-task/TechTaskDetailPage'
 import TechTaskFormPage from '@/pages/tech-task/TechTaskFormPage'
 import TestScenariosPage from '@/pages/test-scenario/TestScenariosPage'
 import TestScenarioFormPage from '@/pages/test-scenario/TestScenarioFormPage'
+import TestScenarioDetailPage from '@/pages/test-scenario/TestScenarioDetailPage'
 import DefectsPage from '@/pages/defect/DefectsPage'
 import DefectFormPage from '@/pages/defect/DefectFormPage'
 import DefectDetailPage from '@/pages/defect/DefectDetailPage'
@@ -51,6 +52,7 @@ const router = createBrowserRouter([
       { path: '/tech-tasks/:id', element: <TechTaskDetailPage /> },
       { path: '/test-scenarios', element: <TestScenariosPage /> },
       { path: '/test-scenarios/new', element: <TestScenarioFormPage /> },
+      { path: '/test-scenarios/:id', element: <TestScenarioDetailPage /> },
       { path: '/defects', element: <DefectsPage /> },
       { path: '/defects/new', element: <DefectFormPage /> },
       { path: '/defects/:id', element: <DefectDetailPage /> },
