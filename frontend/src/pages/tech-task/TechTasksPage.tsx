@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { PriorityBadge, StatusBadge } from '@/components/work-request/Badges'
 import { FilterSelect, SortTh, Pagination, DeadlineCell, type SortDir } from '@/components/common/TableControls'
 import { PlusIcon, SearchIcon } from '@/components/common/Icons'
+import { TechTypeBadge } from '@/components/tech-task/Badges'
 import type { TechTask, TechTaskType, Priority, Status } from '@/types/tech-task'
 
 // ── 샘플 데이터 ───────────────────────────────────────
@@ -22,24 +23,6 @@ const SAMPLE_DATA: TechTask[] = [
 const PAGE_SIZE = 10
 
 type SortKey = 'docNo' | 'deadline'
-
-// ── 유형 배지 (기술과제 전용) ──────────────────────────
-const TECH_TYPE_STYLES: Record<TechTaskType, string> = {
-  '리팩토링': 'bg-slate-100 text-slate-600',
-  '기술부채': 'bg-orange-50 text-orange-600',
-  '성능개선': 'bg-cyan-50 text-cyan-700',
-  '보안':     'bg-red-50 text-red-600',
-  '테스트':   'bg-emerald-50 text-emerald-700',
-  '기타':     'bg-gray-100 text-gray-500',
-}
-
-function TechTypeBadge({ type }: { type: TechTaskType }) {
-  return (
-    <span className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-medium ${TECH_TYPE_STYLES[type]}`}>
-      {type}
-    </span>
-  )
-}
 
 export default function TechTasksPage() {
   const navigate = useNavigate()

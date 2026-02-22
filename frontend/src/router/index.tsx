@@ -7,6 +7,8 @@ import DashboardPage from '@/pages/dashboard/DashboardPage'
 import WorkRequestsPage from '@/pages/work-request/WorkRequestsPage'
 import WorkRequestFormPage from '@/pages/work-request/WorkRequestFormPage'
 import WorkRequestDetailPage from '@/pages/work-request/WorkRequestDetailPage'
+import TechTasksPage from '@/pages/tech-task/TechTasksPage'
+import TechTaskDetailPage from '@/pages/tech-task/TechTaskDetailPage'
 
 const router = createBrowserRouter([
   {
@@ -32,7 +34,8 @@ const router = createBrowserRouter([
       { path: '/work-requests', element: <WorkRequestsPage /> },
       { path: '/work-requests/new', element: <WorkRequestFormPage /> },
       { path: '/work-requests/:id', element: <WorkRequestDetailPage /> },
-      // { path: '/tech-tasks', element: <TechTasksPage /> },
+      { path: '/tech-tasks', element: <TechTasksPage /> },
+      { path: '/tech-tasks/:id', element: <TechTaskDetailPage /> },
       // { path: '/test-scenarios', element: <TestScenariosPage /> },
       // { path: '/defects', element: <DefectsPage /> },
       // { path: '/deployments', element: <DeploymentsPage /> },
