@@ -14,6 +14,7 @@ import TestScenariosPage from '@/pages/test-scenario/TestScenariosPage'
 import TestScenarioFormPage from '@/pages/test-scenario/TestScenarioFormPage'
 import DefectsPage from '@/pages/defect/DefectsPage'
 import DefectFormPage from '@/pages/defect/DefectFormPage'
+import DefectDetailPage from '@/pages/defect/DefectDetailPage'
 import DeploymentsPage from '@/pages/deployment/DeploymentsPage'
 import DeploymentFormPage from '@/pages/deployment/DeploymentFormPage'
 import DeploymentDetailPage from '@/pages/deployment/DeploymentDetailPage'
@@ -52,6 +53,7 @@ const router = createBrowserRouter([
       { path: '/test-scenarios/new', element: <TestScenarioFormPage /> },
       { path: '/defects', element: <DefectsPage /> },
       { path: '/defects/new', element: <DefectFormPage /> },
+      { path: '/defects/:id', element: <DefectDetailPage /> },
       { path: '/deployments', element: <DeploymentsPage /> },
       { path: '/deployments/new', element: <DeploymentFormPage /> },
       { path: '/deployments/:id', element: <DeploymentDetailPage /> },
