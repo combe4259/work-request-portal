@@ -14,6 +14,7 @@ import TestScenariosPage from '@/pages/test-scenario/TestScenariosPage'
 import TestScenarioFormPage from '@/pages/test-scenario/TestScenarioFormPage'
 import DefectsPage from '@/pages/defect/DefectsPage'
 import DefectFormPage from '@/pages/defect/DefectFormPage'
+import DeploymentsPage from '@/pages/deployment/DeploymentsPage'
 
 const router = createBrowserRouter([
   {
@@ -46,7 +47,7 @@ const router = createBrowserRouter([
       { path: '/test-scenarios/new', element: <TestScenarioFormPage /> },
       { path: '/defects', element: <DefectsPage /> },
       { path: '/defects/new', element: <DefectFormPage /> },
-      // { path: '/deployments', element: <DeploymentsPage /> },
+      { path: '/deployments', element: <DeploymentsPage /> },
       // { path: '/knowledge-base', element: <KnowledgeBasePage /> },
       // { path: '/meeting-notes', element: <MeetingNotesPage /> },
       // { path: '/ideas', element: <IdeasPage /> },
