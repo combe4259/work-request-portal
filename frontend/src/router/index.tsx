@@ -6,6 +6,7 @@ import AppLayout from '@/components/layout/AppLayout'
 import DashboardPage from '@/pages/dashboard/DashboardPage'
 import WorkRequestsPage from '@/pages/work-request/WorkRequestsPage'
 import WorkRequestFormPage from '@/pages/work-request/WorkRequestFormPage'
+import WorkRequestDetailPage from '@/pages/work-request/WorkRequestDetailPage'
 
 const router = createBrowserRouter([
   {
@@ -30,6 +31,7 @@ const router = createBrowserRouter([
       { path: '/dashboard', element: <DashboardPage /> },
       { path: '/work-requests', element: <WorkRequestsPage /> },
       { path: '/work-requests/new', element: <WorkRequestFormPage /> },
+      { path: '/work-requests/:id', element: <WorkRequestDetailPage /> },
       // { path: '/tech-tasks', element: <TechTasksPage /> },
       // { path: '/test-scenarios', element: <TestScenariosPage /> },
       // { path: '/defects', element: <DefectsPage /> },
