@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import KpiCard from '@/components/dashboard/KpiCard'
 import { TypeBadge, PriorityBadge, StatusBadge } from '@/components/work-request/Badges'
 import type { WorkRequest } from '@/types/work-request'
@@ -82,6 +83,7 @@ const EVENT_DATES = new Set([3, 7, 10, 14, 17, 18, 21, 25, 28])
 
 // ── 메인 컴포넌트 ────────────────────────────────────
 export default function DashboardPage() {
+  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<TabKey>('all')
 
   return (
@@ -162,7 +164,7 @@ export default function DashboardPage() {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {SAMPLE_REQUESTS.map((req) => (
-                  <tr key={req.id} className="hover:bg-blue-50/30 transition-colors cursor-pointer group">
+                  <tr key={req.id} onClick={() => navigate(`/work-requests/${req.id}`)} className="hover:bg-blue-50/30 transition-colors cursor-pointer group">
                     <td className="px-4 py-3 font-mono text-[11px] text-gray-400 whitespace-nowrap">
                       {req.docNo}
                     </td>
