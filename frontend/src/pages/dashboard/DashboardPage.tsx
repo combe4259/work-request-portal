@@ -325,7 +325,7 @@ function MiniCalendar({ events }: { events: CalEvent[] }) {
       </div>
 
       {/* 선택된 날짜 이벤트 OR 다가오는 마감 */}
-      <div className="mt-3 pt-3 border-t border-gray-100">
+      <div className="mt-3 pt-3 border-t border-gray-100 min-h-[88px]">
         {selectedDay && selectedEvents.length > 0 ? (
           <>
             <p className="text-[10px] font-semibold text-gray-400 mb-2">{month}/{selectedDay} 마감</p>

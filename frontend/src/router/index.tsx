@@ -26,11 +26,13 @@ import IdeasPage from '@/pages/idea/IdeasPage'
 import IdeaFormPage from '@/pages/idea/IdeaFormPage'
 import IdeaDetailPage from '@/pages/idea/IdeaDetailPage'
 import MeetingNotesPage from '@/pages/meeting-note/MeetingNotesPage'
+import MeetingNoteFormPage from '@/pages/meeting-note/MeetingNoteFormPage'
 import MeetingNoteDetailPage from '@/pages/meeting-note/MeetingNoteDetailPage'
 import StatisticsPage from '@/pages/statistics/StatisticsPage'
 import ResourcesPage from '@/pages/resource/ResourcesPage'
 import ResourceFormPage from '@/pages/resource/ResourceFormPage'
 import SettingsPage from '@/pages/settings/SettingsPage'
+import SettingsTeamPage from '@/pages/settings/SettingsTeamPage'
 
 const router = createBrowserRouter([
   {
@@ -72,6 +74,7 @@ const router = createBrowserRouter([
       { path: '/knowledge-base/new', element: <KnowledgeBaseFormPage /> },
       { path: '/knowledge-base/:id', element: <KnowledgeBaseDetailPage /> },
       { path: '/meeting-notes', element: <MeetingNotesPage /> },
+      { path: '/meeting-notes/new', element: <MeetingNoteFormPage /> },
       { path: '/meeting-notes/:id', element: <MeetingNoteDetailPage /> },
       { path: '/ideas', element: <IdeasPage /> },
       { path: '/ideas/new', element: <IdeaFormPage /> },
@@ -81,6 +84,7 @@ const router = createBrowserRouter([
       { path: '/resources/new', element: <ResourceFormPage /> },
       { path: '/resources/:id/edit', element: <ResourceFormPage /> },
       { path: '/settings', element: <SettingsPage /> },
+      { path: '/settings/team', element: <SettingsTeamPage /> },
     ],
   },
 ])

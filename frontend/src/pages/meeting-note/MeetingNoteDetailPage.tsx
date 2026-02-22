@@ -55,19 +55,6 @@ const MOCK_DOC: MeetingDoc = {
   ],
 }
 
-const BLANK_DOC: MeetingDoc = {
-  docNo: 'MN-NEW',
-  title: '',
-  date: new Date().toISOString().split('T')[0],
-  location: '',
-  facilitator: '',
-  agenda: [],
-  content: '',
-  decisions: [],
-  actionItems: [],
-  relatedDocs: [],
-}
-
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 가상 참여자 (TODO: WebSocket presence로 교체)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -100,14 +87,13 @@ const ALL_DOCS = [
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export default function MeetingNoteDetailPage() {
   const navigate = useNavigate()
-  const { id } = useParams<{ id: string }>()
-  const isNew = id === 'new'
+  const { id: _id } = useParams<{ id: string }>()
 
   // ── 문서 상태 ─────────────────────────────────
-  const [doc, setDoc] = useState<MeetingDoc>(isNew ? BLANK_DOC : MOCK_DOC)
+  const [doc, setDoc] = useState<MeetingDoc>(MOCK_DOC)
 
   // ── 자동 저장 ─────────────────────────────────
-  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>(isNew ? 'unsaved' : 'saved')
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   const scheduleSave = useCallback((_patch: Partial<MeetingDoc>) => {
@@ -272,7 +258,7 @@ export default function MeetingNoteDetailPage() {
             </div>
 
             {/* 참여자 (TODO: WebSocket presence) */}
-            {!isNew && (
+            {(
               <div className="flex items-center gap-2">
                 <div className="flex items-center -space-x-1.5">
                   {FAKE_COLLABORATORS.map((c, i) => (
