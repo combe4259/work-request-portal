@@ -22,10 +22,11 @@ const SAMPLE_DATA: Defect[] = [
 ]
 
 const PAGE_SIZE = 10
-type SortKey = 'docNo' | 'deadline' | 'severity'
+type SortKey = 'docNo' | 'deadline' | 'severity' | 'status'
 
 // 심각도 정렬 순서
 const SEVERITY_ORDER: Record<Severity, number> = { '치명적': 0, '높음': 1, '보통': 2, '낮음': 3 }
+const STATUS_ORDER_DF: Record<string, number> = { '분석중': 0, '수정중': 1, '검증중': 2, '접수': 3, '재현불가': 4, '보류': 5, '완료': 6 }
 
 export default function DefectsPage() {
   const navigate = useNavigate()
@@ -47,6 +48,7 @@ export default function DefectsPage() {
   const sorted = [...filtered].sort((a, b) => {
     const v = sort.dir === 'asc' ? 1 : -1
     if (sort.key === 'severity') return (SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]) * v
+    if (sort.key === 'status') return ((STATUS_ORDER_DF[a.status] ?? 9) - (STATUS_ORDER_DF[b.status] ?? 9)) * v
     if (sort.key === 'docNo') return a.docNo > b.docNo ? v : -v
     return a.deadline > b.deadline ? v : -v
   })
@@ -91,16 +93,20 @@ export default function DefectsPage() {
       {/* 심각도 요약 바 */}
       <div className="grid grid-cols-4 gap-3">
         {[
-          { label: '미해결',  value: openCount,     cls: 'text-gray-700',    dot: 'bg-gray-400' },
-          { label: '치명적',  value: criticalCount,  cls: 'text-red-600',     dot: 'bg-red-500' },
-          { label: '수정중',  value: fixingCount,    cls: 'text-amber-600',   dot: 'bg-amber-400' },
-          { label: '완료',    value: doneCount,      cls: 'text-emerald-600', dot: 'bg-emerald-400' },
+          { label: '미해결', value: openCount,    cls: 'text-gray-700',    dot: 'bg-gray-400',   onClick: () => { setFilterStatus('전체'); setFilterSeverity('전체'); setPage(1) } },
+          { label: '치명적', value: criticalCount, cls: 'text-red-600',     dot: 'bg-red-500',    onClick: () => { setFilterSeverity('치명적' as Severity); setPage(1) } },
+          { label: '수정중', value: fixingCount,   cls: 'text-amber-600',   dot: 'bg-amber-400',  onClick: () => { setFilterStatus('수정중' as DefectStatus); setPage(1) } },
+          { label: '완료',   value: doneCount,     cls: 'text-emerald-600', dot: 'bg-emerald-400', onClick: () => { setFilterStatus('완료' as DefectStatus); setPage(1) } },
         ].map((s) => (
-          <div key={s.label} className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] px-4 py-3 flex items-center gap-3">
+          <button
+            key={s.label}
+            onClick={s.onClick}
+            className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] px-4 py-3 flex items-center gap-3 w-full text-left hover:border-brand/30 hover:shadow-[0_4px_16px_rgba(30,58,138,0.1)] transition-all"
+          >
             <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${s.dot}`} />
             <span className="text-[12px] text-gray-400 flex-1">{s.label}</span>
             <span className={`text-[20px] font-bold tabular-nums ${s.cls}`}>{s.value}</span>
-          </div>
+          </button>
         ))}
       </div>
 
@@ -136,7 +142,7 @@ export default function DefectsPage() {
                 <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-400 tracking-wide">제목</th>
                 <th className="text-left px-3 py-3 text-[11px] font-semibold text-gray-400 tracking-wide whitespace-nowrap">유형</th>
                 <SortTh label="심각도" sortKey="severity" current={sort} onSort={handleSort} />
-                <th className="text-left px-3 py-3 text-[11px] font-semibold text-gray-400 tracking-wide whitespace-nowrap">상태</th>
+                <SortTh label="상태" sortKey="status" current={sort} onSort={handleSort} />
                 <th className="text-left px-3 py-3 text-[11px] font-semibold text-gray-400 tracking-wide whitespace-nowrap">발견자</th>
                 <th className="text-left px-3 py-3 text-[11px] font-semibold text-gray-400 tracking-wide whitespace-nowrap">담당자</th>
                 <th className="text-left px-3 py-3 text-[11px] font-semibold text-gray-400 tracking-wide whitespace-nowrap">연관문서</th>

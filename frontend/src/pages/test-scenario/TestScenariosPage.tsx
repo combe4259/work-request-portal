@@ -23,7 +23,10 @@ const SAMPLE_DATA: TestScenario[] = [
 ]
 
 const PAGE_SIZE = 10
-type SortKey = 'docNo' | 'deadline'
+type SortKey = 'docNo' | 'deadline' | 'priority' | 'status'
+
+const PRIORITY_ORDER: Record<string, number> = { '긴급': 0, '높음': 1, '보통': 2, '낮음': 3 }
+const STATUS_ORDER_TS: Record<string, number> = { '실행중': 0, '검토중': 1, '승인됨': 2, '실패': 3, '작성중': 4, '통과': 5, '보류': 6 }
 
 export default function TestScenariosPage() {
   const navigate = useNavigate()
@@ -45,6 +48,8 @@ export default function TestScenariosPage() {
   const sorted = [...filtered].sort((a, b) => {
     const v = sort.dir === 'asc' ? 1 : -1
     if (sort.key === 'docNo') return a.docNo > b.docNo ? v : -v
+    if (sort.key === 'priority') return ((PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9)) * v
+    if (sort.key === 'status') return ((STATUS_ORDER_TS[a.status] ?? 9) - (STATUS_ORDER_TS[b.status] ?? 9)) * v
     return a.deadline > b.deadline ? v : -v
   })
 
@@ -88,12 +93,18 @@ export default function TestScenariosPage() {
       {/* 상태 요약 바 */}
       <div className="grid grid-cols-4 gap-3">
         {[
-          { label: '전체', value: totalCount,  cls: 'text-gray-700',    bar: 'bg-gray-200' },
-          { label: '실행중', value: runCount,  cls: 'text-amber-600',   bar: 'bg-amber-400' },
-          { label: '통과',  value: passCount,  cls: 'text-emerald-600', bar: 'bg-emerald-400' },
-          { label: '실패',  value: failCount,  cls: 'text-red-500',     bar: 'bg-red-400' },
+          { label: '전체',  value: totalCount, cls: 'text-gray-700',    bar: 'bg-gray-200',    status: '전체'  },
+          { label: '실행중', value: runCount,  cls: 'text-amber-600',   bar: 'bg-amber-400',   status: '실행중' },
+          { label: '통과',  value: passCount,  cls: 'text-emerald-600', bar: 'bg-emerald-400', status: '통과'  },
+          { label: '실패',  value: failCount,  cls: 'text-red-500',     bar: 'bg-red-400',     status: '실패'  },
         ].map((s) => (
-          <div key={s.label} className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] px-4 py-3">
+          <button
+            key={s.label}
+            onClick={() => { setFilterStatus(s.status as TestStatus | '전체'); setPage(1) }}
+            className={`bg-white rounded-xl border shadow-[0_2px_8px_rgba(30,58,138,0.05)] px-4 py-3 text-left w-full transition-all ${
+              filterStatus === s.status ? 'border-brand ring-1 ring-brand/20' : 'border-blue-50 hover:border-brand/30 hover:shadow-[0_4px_16px_rgba(30,58,138,0.1)]'
+            }`}
+          >
             <div className="flex items-center justify-between mb-2">
               <span className="text-[11px] font-semibold text-gray-400">{s.label}</span>
               <span className={`text-[18px] font-bold ${s.cls}`}>{s.value}</span>
@@ -101,7 +112,7 @@ export default function TestScenariosPage() {
             <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
               <div className={`h-full ${s.bar} rounded-full`} style={{ width: `${totalCount ? (s.value / totalCount) * 100 : 0}%` }} />
             </div>
-          </div>
+          </button>
         ))}
       </div>
 
@@ -136,8 +147,8 @@ export default function TestScenariosPage() {
                 <SortTh label="문서번호" sortKey="docNo" current={sort} onSort={handleSort} />
                 <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-400 tracking-wide">제목</th>
                 <th className="text-left px-3 py-3 text-[11px] font-semibold text-gray-400 tracking-wide whitespace-nowrap">유형</th>
-                <th className="text-left px-3 py-3 text-[11px] font-semibold text-gray-400 tracking-wide whitespace-nowrap">우선순위</th>
-                <th className="text-left px-3 py-3 text-[11px] font-semibold text-gray-400 tracking-wide whitespace-nowrap">상태</th>
+                <SortTh label="우선순위" sortKey="priority" current={sort} onSort={handleSort} />
+                <SortTh label="상태" sortKey="status" current={sort} onSort={handleSort} />
                 <th className="text-left px-3 py-3 text-[11px] font-semibold text-gray-400 tracking-wide whitespace-nowrap">연관문서</th>
                 <th className="text-left px-3 py-3 text-[11px] font-semibold text-gray-400 tracking-wide whitespace-nowrap">담당자</th>
                 <SortTh label="마감일" sortKey="deadline" current={sort} onSort={handleSort} />

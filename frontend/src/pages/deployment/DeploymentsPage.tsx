@@ -22,7 +22,9 @@ const SAMPLE_DATA: Deployment[] = [
 ]
 
 const PAGE_SIZE = 10
-type SortKey = 'docNo' | 'deployDate'
+type SortKey = 'docNo' | 'deployDate' | 'status'
+
+const STATUS_ORDER_DP: Record<string, number> = { '진행중': 0, '대기': 1, '완료': 2, '실패': 3, '롤백': 4 }
 
 const today = new Date('2026-02-22')
 const nextWeek = new Date('2026-02-22')
@@ -48,6 +50,7 @@ export default function DeploymentsPage() {
   const sorted = [...filtered].sort((a, b) => {
     const v = sort.dir === 'asc' ? 1 : -1
     if (sort.key === 'docNo') return a.docNo > b.docNo ? v : -v
+    if (sort.key === 'status') return ((STATUS_ORDER_DP[a.status] ?? 9) - (STATUS_ORDER_DP[b.status] ?? 9)) * v
     return a.deployDate > b.deployDate ? v : -v
   })
 
@@ -94,16 +97,20 @@ export default function DeploymentsPage() {
       {/* 요약 바 */}
       <div className="grid grid-cols-4 gap-3">
         {[
-          { label: '이번주 예정', value: upcomingCount,  cls: 'text-brand',       dot: 'bg-brand' },
-          { label: '진행중',     value: inProgressCount, cls: 'text-blue-500',    dot: 'bg-blue-400' },
-          { label: '운영 완료',  value: prodCount,       cls: 'text-emerald-600', dot: 'bg-emerald-400' },
-          { label: '실패/롤백',  value: failCount,       cls: 'text-red-500',     dot: 'bg-red-400' },
+          { label: '이번주 예정', value: upcomingCount,  cls: 'text-brand',       dot: 'bg-brand',        onClick: () => { setFilterStatus('대기' as DeployStatus); setPage(1) } },
+          { label: '진행중',     value: inProgressCount, cls: 'text-blue-500',    dot: 'bg-blue-400',     onClick: () => { setFilterStatus('진행중' as DeployStatus); setPage(1) } },
+          { label: '운영 완료',  value: prodCount,       cls: 'text-emerald-600', dot: 'bg-emerald-400',  onClick: () => { setFilterStatus('완료' as DeployStatus); setFilterEnv('운영' as DeployEnv); setPage(1) } },
+          { label: '실패/롤백',  value: failCount,       cls: 'text-red-500',     dot: 'bg-red-400',      onClick: () => { setFilterStatus('실패' as DeployStatus); setPage(1) } },
         ].map((s) => (
-          <div key={s.label} className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] px-4 py-3 flex items-center gap-3">
+          <button
+            key={s.label}
+            onClick={s.onClick}
+            className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] px-4 py-3 flex items-center gap-3 w-full text-left hover:border-brand/30 hover:shadow-[0_4px_16px_rgba(30,58,138,0.1)] transition-all"
+          >
             <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${s.dot}`} />
             <span className="text-[12px] text-gray-400 flex-1">{s.label}</span>
             <span className={`text-[20px] font-bold tabular-nums ${s.cls}`}>{s.value}</span>
-          </div>
+          </button>
         ))}
       </div>
 
@@ -140,7 +147,7 @@ export default function DeploymentsPage() {
                 <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-400 tracking-wide">제목</th>
                 <th className="text-left px-3 py-3 text-[11px] font-semibold text-gray-400 tracking-wide whitespace-nowrap">유형</th>
                 <th className="text-left px-3 py-3 text-[11px] font-semibold text-gray-400 tracking-wide whitespace-nowrap">환경</th>
-                <th className="text-left px-3 py-3 text-[11px] font-semibold text-gray-400 tracking-wide whitespace-nowrap">상태</th>
+                <SortTh label="상태" sortKey="status" current={sort} onSort={handleSort} />
                 <th className="text-left px-3 py-3 text-[11px] font-semibold text-gray-400 tracking-wide whitespace-nowrap">담당자</th>
                 <SortTh label="배포 예정일" sortKey="deployDate" current={sort} onSort={handleSort} />
               </tr>
