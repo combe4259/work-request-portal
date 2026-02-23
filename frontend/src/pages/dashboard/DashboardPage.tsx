@@ -11,9 +11,11 @@ type CalEvent = { day: number; docNo: string; title: string; priority: WorkReque
 // ── 타입 ─────────────────────────────────────────────
 type TabKey = 'all' | 'mine' | 'team'
 type KpiKey = 'todo' | 'inProgress' | 'done' | 'urgent'
-type DashSortKey = 'priority' | 'deadline'
+type DashSortKey = 'priority' | 'deadline' | 'type' | 'status'
 
 const PRIORITY_ORDER_DASH: Record<string, number> = { '긴급': 0, '높음': 1, '보통': 2, '낮음': 3 }
+const TYPE_ORDER_DASH: Record<string, number> = { '신규개발': 0, '기능개선': 1, '버그수정': 2, '인프라': 3, '기타': 4 }
+const STATUS_ORDER_DASH: Record<string, number> = { '테스트중': 0, '개발중': 1, '검토중': 2, '접수대기': 3, '완료': 4 }
 
 // ── 샘플 데이터 ───────────────────────────────────────
 const SAMPLE_REQUESTS: WorkRequest[] = [
@@ -115,6 +117,8 @@ export default function DashboardPage() {
   const sortedRequests = [...SAMPLE_REQUESTS].sort((a, b) => {
     const v = sort.dir === 'asc' ? 1 : -1
     if (sort.key === 'priority') return ((PRIORITY_ORDER_DASH[a.priority] ?? 9) - (PRIORITY_ORDER_DASH[b.priority] ?? 9)) * v
+    if (sort.key === 'type') return ((TYPE_ORDER_DASH[a.type] ?? 9) - (TYPE_ORDER_DASH[b.type] ?? 9)) * v
+    if (sort.key === 'status') return ((STATUS_ORDER_DASH[a.status] ?? 9) - (STATUS_ORDER_DASH[b.status] ?? 9)) * v
     return (a.deadline > b.deadline ? 1 : -1) * v
   })
 
@@ -209,9 +213,9 @@ export default function DashboardPage() {
                 <tr className="bg-gray-50/70">
                   <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-gray-400 tracking-wide whitespace-nowrap">문서번호</th>
                   <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-gray-400 tracking-wide">제목</th>
-                  <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-gray-400 tracking-wide whitespace-nowrap">유형</th>
+                  <SortTh label="유형" sortKey="type" current={sort} onSort={handleDashSort} />
                   <SortTh label="우선순위" sortKey="priority" current={sort} onSort={handleDashSort} />
-                  <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-gray-400 tracking-wide whitespace-nowrap">상태</th>
+                  <SortTh label="상태" sortKey="status" current={sort} onSort={handleDashSort} />
                   <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-gray-400 tracking-wide whitespace-nowrap">담당자</th>
                   <SortTh label="마감일" sortKey="deadline" current={sort} onSort={handleDashSort} />
                 </tr>
