@@ -1,122 +1,141 @@
-# Redis Key Design
-> 세션/JWT, 실시간 알림 Pub/Sub, 스케줄링, 캐시
+# Redis Key Design (Schema Synced)
+> 기준: `docs/mysql-schema.sql` (2026-02-23)
+
+Redis는 인증 토큰 무효화, 실시간 알림 전달, 마감 스케줄 조회, 대시보드 캐시를 담당한다.
+원본 데이터는 MySQL이며 Redis는 파생/임시 데이터를 저장한다.
 
 ---
 
-## 1. JWT 블랙리스트 (로그아웃 토큰 무효화)
+## 1. JWT 블랙리스트
 
-```
-Key    : jwt:blacklist:{jti}
-Type   : STRING
-Value  : "1"
-TTL    : 토큰 만료시간과 동일 (ex. 3600s)
+```text
+Key   : jwt:blacklist:{jti}
+Type  : STRING
+Value : "1"
+TTL   : 액세스 토큰 남은 만료 시간
 ```
 
-```
-# 로그아웃 시 저장
+```text
+# 로그아웃
 SET jwt:blacklist:abc123xyz "1" EX 3600
 
-# 요청마다 검증
-EXISTS jwt:blacklist:abc123xyz   → 1이면 만료된 토큰
+# 요청 검증
+EXISTS jwt:blacklist:abc123xyz  -> 1이면 거부
 ```
 
 ---
 
-## 2. 사용자 세션 / 캐시
+## 2. 사용자 세션 캐시
 
-```
-Key    : session:user:{userId}
-Type   : HASH
-TTL    : 1800s (30분, 활동 시 갱신)
-```
-
-```
-HSET session:user:42
-    name        "김개발"
-    email       "dev@company.com"
-    role        "DEVELOPER"
-    teamId      "3"
-    teamName    "플랫폼개발부"
+```text
+Key : session:user:{userId}
+Type: HASH
+TTL : 1800s (활동 시 갱신)
 ```
 
-> DB 조회 없이 JWT 검증 후 유저 정보 바로 사용 가능
+```text
+HSET session:user:42 \
+  name "김개발" \
+  email "dev@company.com" \
+  role "DEVELOPER" \
+  teamId "3" \
+  teamRole "MEMBER"
+```
 
 ---
 
 ## 3. 실시간 알림 Pub/Sub
 
-```
-Channel : notifications:{userId}
-```
-
-```
-# Spring에서 이벤트 발생 시 Publish
-PUBLISH notifications:42 '{"type":"STATUS_CHANGED","title":"WR-2026-0001 상태 변경","refId":1}'
-
-# React WebSocket(STOMP) 또는 SSE로 구독 중인 클라이언트에 전달
+```text
+Channel: notifications:user:{userId}
 ```
 
-**알림 흐름**
+```text
+PUBLISH notifications:user:42 '{
+  "notificationId": 501,
+  "type": "상태변경",
+  "title": "WR-001 상태가 변경되었습니다",
+  "refType": "WORK_REQUEST",
+  "refId": 101,
+  "createdAt": "2026-02-23T10:00:00Z"
+}'
 ```
-이벤트 발생 (상태변경 등)
-    ├── MySQL notifications 테이블에 INSERT  (영구 저장, 벨 아이콘)
-    ├── Redis PUBLISH → WebSocket으로 실시간 Push  (즉시 알림 팝업)
-    └── Slack Webhook 전송 → MongoDB에 로그
+
+알림 저장 흐름
+```text
+도메인 이벤트 발생
+  -> MySQL notifications INSERT (영구 저장)
+  -> Redis publish (즉시 UI 반영)
+  -> Slack Webhook + MongoDB slack_notification_logs
 ```
 
 ---
 
-## 4. 마감 임박 스케줄링 (Sorted Set)
+## 4. 마감 임박 스케줄링
 
-```
-Key    : deadlines:work_requests
+기존 `work_requests` 전용 키 대신 팀 단위 통합 ZSET을 사용한다.
+
+```text
+Key    : deadlines:team:{teamId}
 Type   : ZSET
-Score  : deadline UNIX timestamp
-Member : workRequestId
+Score  : 마감일 UTC timestamp (00:00 기준)
+Member : {REF_TYPE}:{REF_ID}
 ```
 
-```
-# 업무요청 등록 / 마감일 변경 시
-ZADD deadlines:work_requests 1740960000 "101"   # 2026-03-03 마감
+`REF_TYPE` 예시
+- `WORK_REQUEST`
+- `TECH_TASK`
+- `TEST_SCENARIO`
+- `DEFECT`
 
-# Spring Scheduler (매일 09:00)
-# D-3, D-1 해당 요청 조회
-ZRANGEBYSCORE deadlines:work_requests {now} {now + 3days}
-```
+```text
+# 등록/수정
+ZADD deadlines:team:3 1772496000 "WORK_REQUEST:101"
+ZADD deadlines:team:3 1772582400 "TECH_TASK:21"
+ZADD deadlines:team:3 1772668800 "TEST_SCENARIO:17"
+ZADD deadlines:team:3 1772755200 "DEFECT:34"
 
-> 매번 MySQL `WHERE deadline BETWEEN` 쿼리 치는 것보다 가볍고 정확
+# 일정 변경 시 갱신
+ZREM deadlines:team:3 "WORK_REQUEST:101"
+ZADD deadlines:team:3 1772841600 "WORK_REQUEST:101"
 
----
-
-## 5. 대시보드 카운터 캐시
-
-```
-Key    : dashboard:stats:{userId}
-Type   : HASH
-TTL    : 300s (5분)
-```
-
-```
-HSET dashboard:stats:42
-    myTasks         "12"
-    inProgress      "8"
-    completedWeek   "5"
-    unreadNotif     "3"
-
-# 상태 변경 이벤트 발생 시 해당 키 삭제 (Cache Invalidation)
-DEL dashboard:stats:42
+# 스케줄러 (매일 09:00) D-3 조회
+ZRANGEBYSCORE deadlines:team:3 {now} {now_plus_3days}
 ```
 
 ---
 
-## Key 네이밍 컨벤션
+## 5. 대시보드 요약 캐시
 
+```text
+Key : dashboard:summary:{userId}:{teamId}
+Type: HASH
+TTL : 300s
 ```
-{도메인}:{엔티티}:{식별자}
+
+```text
+HSET dashboard:summary:42:3 \
+  myWorkRequests "12" \
+  myTechTasks "8" \
+  activeDefects "5" \
+  upcomingDeployments "2" \
+  unreadNotifications "3" \
+  computedAt "2026-02-23T10:05:00Z"
+
+# 상태/배정/알림 변경 시 무효화
+DEL dashboard:summary:42:3
+```
+
+---
+
+## 6. 키 네이밍 규칙
+
+```text
+{domain}:{entity}:{scope...}
 
 jwt:blacklist:{jti}
 session:user:{userId}
-notifications:{userId}
-deadlines:work_requests
-dashboard:stats:{userId}
+notifications:user:{userId}
+deadlines:team:{teamId}
+dashboard:summary:{userId}:{teamId}
 ```
