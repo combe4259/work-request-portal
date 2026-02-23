@@ -13,6 +13,10 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 
+interface TopbarProps {
+  onOpenSidebar?: () => void
+}
+
 // 경로 → 페이지 타이틀 매핑
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard': '대시보드',
@@ -57,7 +61,7 @@ const MOCK_NOTIFICATIONS = [
   },
 ]
 
-export default function Topbar() {
+export default function Topbar({ onOpenSidebar }: TopbarProps) {
   const location = useLocation()
   const navigate = useNavigate()
   const { user, currentTeam, logout } = useAuthStore()
@@ -75,7 +79,16 @@ export default function Topbar() {
   }
 
   return (
-    <header className="h-14 bg-white border-b border-gray-100 flex items-center px-6 gap-4 flex-shrink-0">
+    <header className="h-14 bg-white border-b border-gray-100 flex items-center px-3 sm:px-6 gap-3 sm:gap-4 flex-shrink-0">
+      <button
+        type="button"
+        aria-label="사이드바 열기"
+        onClick={onOpenSidebar}
+        className="lg:hidden h-8 w-8 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-brand/30"
+      >
+        <MenuIcon />
+      </button>
+
       {/* 페이지 타이틀 */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 text-sm text-gray-400">
@@ -90,6 +103,7 @@ export default function Topbar() {
         {/* 업무요청 등록 버튼 */}
         <Button
           size="sm"
+          type="button"
           className="h-8 bg-brand hover:bg-brand-hover text-white text-xs font-semibold px-3 gap-1.5"
           onClick={() => navigate('/work-requests/new')}
         >
@@ -100,7 +114,11 @@ export default function Topbar() {
         {/* 알림 벨 */}
         <DropdownMenu open={notifOpen} onOpenChange={setNotifOpen}>
           <DropdownMenuTrigger asChild>
-            <button className="relative w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
+            <button
+              type="button"
+              aria-label="알림 열기"
+              className="relative w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-brand/30"
+            >
               <BellIcon />
               {unreadCount > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-brand text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none">
@@ -112,11 +130,14 @@ export default function Topbar() {
           <DropdownMenuContent align="end" className="w-80 p-0">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
               <span className="text-sm font-semibold text-gray-800">알림</span>
-              <button className="text-xs text-brand hover:underline">모두 읽음</button>
+              <button type="button" className="text-xs text-brand hover:underline">
+                모두 읽음
+              </button>
             </div>
             <div className="max-h-64 overflow-y-auto">
               {MOCK_NOTIFICATIONS.map((notif) => (
                 <button
+                  type="button"
                   key={notif.id}
                   className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left border-b border-gray-50 last:border-0"
                 >
@@ -131,7 +152,7 @@ export default function Topbar() {
               ))}
             </div>
             <div className="px-4 py-2.5 border-t border-gray-100">
-              <button className="w-full text-xs text-center text-brand hover:underline">
+              <button type="button" className="w-full text-xs text-center text-brand hover:underline">
                 전체 알림 보기
               </button>
             </div>
@@ -141,7 +162,7 @@ export default function Topbar() {
         {/* 프로필 드롭다운 */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-2 pl-1.5 pr-2.5 py-1 rounded-lg hover:bg-gray-100 transition-colors">
+            <button type="button" className="flex items-center gap-2 pl-1.5 pr-2.5 py-1 rounded-lg hover:bg-gray-100 transition-colors">
               <div className="w-7 h-7 rounded-full flex-shrink-0 overflow-hidden">
                 {photoUrl ? (
                   <img src={photoUrl} alt="프로필" className="w-full h-full object-cover" />
@@ -192,6 +213,14 @@ function ChevronIcon() {
   return (
     <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
       <path d="M4.5 3L7.5 6L4.5 9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function MenuIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <path d="M2 3.5H12M2 7H12M2 10.5H12" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
     </svg>
   )
 }

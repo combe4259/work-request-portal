@@ -1,8 +1,9 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { TypeBadge, PriorityBadge, StatusBadge } from '@/components/work-request/Badges'
 import { FilterSelect, SortTh, Pagination, DeadlineCell, type SortDir } from '@/components/common/TableControls'
 import { PlusIcon, SearchIcon } from '@/components/common/Icons'
+import { EmptyState, ErrorState, LoadingState } from '@/components/common/AsyncState'
 import type { WorkRequest, RequestType, Priority, Status } from '@/types/work-request'
 
 // ── 샘플 데이터 ───────────────────────────────────────
@@ -27,12 +28,22 @@ type SortKey = 'docNo' | 'deadline'
 
 export default function WorkRequestsPage() {
   const navigate = useNavigate()
+  const [isLoading, setIsLoading] = useState(true)
+  const [isError, setIsError] = useState(false)
   const [search, setSearch] = useState('')
   const [filterType, setFilterType] = useState<RequestType | '전체'>('전체')
   const [filterPriority, setFilterPriority] = useState<Priority | '전체'>('전체')
   const [filterStatus, setFilterStatus] = useState<Status | '전체'>('전체')
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: 'docNo', dir: 'desc' })
   const [page, setPage] = useState(1)
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false)
+      setIsError(false)
+    }, 250)
+    return () => clearTimeout(timer)
+  }, [])
 
   const filtered = SAMPLE_DATA.filter((r) => {
     const matchSearch = search === '' || r.title.includes(search) || r.docNo.includes(search)
@@ -61,9 +72,16 @@ export default function WorkRequestsPage() {
   }
 
   const isFiltered = search || filterType !== '전체' || filterPriority !== '전체' || filterStatus !== '전체'
+  const isEmpty = !isLoading && !isError && paginated.length === 0
+
+  const handleRetry = () => {
+    setIsError(false)
+    setIsLoading(true)
+    window.setTimeout(() => setIsLoading(false), 250)
+  }
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-4 sm:p-6 space-y-4">
       {/* 페이지 헤더 */}
       <div className="flex items-center justify-between">
         <div>
@@ -80,7 +98,7 @@ export default function WorkRequestsPage() {
       </div>
 
       {/* 필터 바 */}
-      <div className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] px-4 py-3 flex items-center gap-3 flex-wrap">
+      <div className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] px-3 sm:px-4 py-3 flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 min-w-[200px]">
           <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400"><SearchIcon /></span>
           <input
@@ -103,8 +121,25 @@ export default function WorkRequestsPage() {
 
       {/* 테이블 */}
       <div className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_12px_rgba(30,58,138,0.07)] overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        {isLoading ? (
+          <LoadingState title="업무요청 목록을 불러오는 중입니다" description="필터와 정렬 정보를 준비하고 있습니다." />
+        ) : isError ? (
+          <ErrorState
+            title="목록을 불러오지 못했습니다"
+            description="잠시 후 다시 시도해주세요."
+            actionLabel="다시 시도"
+            onAction={handleRetry}
+          />
+        ) : isEmpty ? (
+          <EmptyState
+            title="조건에 맞는 업무요청이 없습니다"
+            description="검색어 또는 필터 조건을 조정해보세요."
+            actionLabel="필터 초기화"
+            onAction={resetFilters}
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50/80 border-b border-gray-100">
                 <SortTh label="문서번호" sortKey="docNo" current={sort} onSort={handleSort} />
@@ -116,21 +151,25 @@ export default function WorkRequestsPage() {
                 <SortTh label="마감일" sortKey="deadline" current={sort} onSort={handleSort} />
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
-              {paginated.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-[13px] text-gray-400">검색 결과가 없습니다</td>
-                </tr>
-              ) : (
-                paginated.map((req) => (
-                  <tr
-                    key={req.id}
-                    onClick={() => navigate(`/work-requests/${req.id}`)}
-                    className="hover:bg-blue-50/30 transition-colors cursor-pointer group"
-                  >
-                    <td className="px-4 py-3 font-mono text-[11px] text-gray-400 whitespace-nowrap">{req.docNo}</td>
+              <tbody className="divide-y divide-gray-50">
+                {paginated.map((req) => (
+                  <tr key={req.id} className="hover:bg-blue-50/30 transition-colors group">
+                    <td className="px-4 py-3 font-mono text-[11px] text-gray-400 whitespace-nowrap">
+                      <Link
+                        to={`/work-requests/${req.id}`}
+                        className="inline-flex rounded focus:outline-none focus:ring-2 focus:ring-brand/30"
+                        aria-label={`${req.docNo} 상세 보기`}
+                      >
+                        {req.docNo}
+                      </Link>
+                    </td>
                     <td className="px-4 py-3 max-w-[260px]">
-                      <span className="text-[13px] text-gray-800 font-medium truncate block group-hover:text-brand transition-colors">{req.title}</span>
+                      <Link
+                        to={`/work-requests/${req.id}`}
+                        className="text-[13px] text-gray-800 font-medium truncate block group-hover:text-brand transition-colors rounded focus:outline-none focus:ring-2 focus:ring-brand/30"
+                      >
+                        {req.title}
+                      </Link>
                     </td>
                     <td className="px-3 py-3 whitespace-nowrap"><TypeBadge type={req.type} /></td>
                     <td className="px-3 py-3 whitespace-nowrap"><PriorityBadge priority={req.priority} /></td>
@@ -138,12 +177,14 @@ export default function WorkRequestsPage() {
                     <td className="px-3 py-3 whitespace-nowrap"><span className="text-[12px] text-gray-600">{req.assignee}</span></td>
                     <td className="px-3 py-3 whitespace-nowrap"><DeadlineCell date={req.deadline} /></td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-        <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {!isLoading && !isError && !isEmpty && (
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+        )}
       </div>
     </div>
   )

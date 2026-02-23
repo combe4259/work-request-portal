@@ -51,7 +51,12 @@ const NAV_SECTIONS: NavSection[] = [
   },
 ]
 
-export default function Sidebar() {
+interface SidebarProps {
+  className?: string
+  onNavigate?: () => void
+}
+
+export default function Sidebar({ className = '', onNavigate }: SidebarProps) {
   const { user, logout } = useAuthStore()
   const { displayName, role, avatarColor, photoUrl } = useProfileStore()
   const navigate = useNavigate()
@@ -60,12 +65,13 @@ export default function Sidebar() {
 
   const handleLogout = () => {
     logout()
+    onNavigate?.()
     navigate('/login')
   }
 
 
   return (
-    <aside className="w-[240px] min-w-[240px] h-screen bg-brand-sidebar flex flex-col overflow-hidden relative">
+    <aside className={`w-[240px] min-w-[240px] h-screen bg-brand-sidebar flex flex-col overflow-hidden relative ${className}`}>
       {/* 배경 장식 */}
       <div className="absolute -top-16 -right-16 w-56 h-56 rounded-full bg-white/[0.03] pointer-events-none" />
       <div className="absolute bottom-20 -left-12 w-40 h-40 rounded-full bg-white/[0.03] pointer-events-none" />
@@ -112,6 +118,7 @@ export default function Sidebar() {
               <NavLink
                 key={item.path}
                 to={item.path}
+                onClick={onNavigate}
                 className={({ isActive }) =>
                   `flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] font-medium transition-all mb-0.5 ${
                     isActive
@@ -146,6 +153,7 @@ export default function Sidebar() {
       <div className="px-3 pb-4 pt-2 border-t border-white/[0.08] relative z-10 space-y-0.5">
         <NavLink
           to="/settings"
+          onClick={onNavigate}
           className={({ isActive }) =>
             `flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] transition-all ${
               isActive ? 'bg-white/[0.12] text-white' : 'text-white/40 hover:bg-white/[0.07] hover:text-white/70'
@@ -156,7 +164,9 @@ export default function Sidebar() {
           <span>설정</span>
         </NavLink>
         <button
+          type="button"
           onClick={handleLogout}
+          aria-label="로그아웃"
           className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] text-white/40 hover:bg-white/[0.07] hover:text-white/70 transition-all"
         >
           <LogoutIcon />
