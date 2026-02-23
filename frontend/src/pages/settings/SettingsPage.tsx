@@ -151,25 +151,26 @@ export default function SettingsPage() {
     updateProfile({ displayName: data.name, email: data.email, role: data.role })
     showToast()
   }
-  const onPwSave = (_data: PwForm) => { pwForm.reset(); showToast() }
+  const onPwSave = () => { pwForm.reset(); showToast() }
 
   const selectedColorHex = AVATAR_COLOR_HEX[avatarColor] ?? AVATAR_COLOR_HEX['brand']
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       <div className="mb-5">
         <h1 className="text-[22px] font-bold text-gray-900">설정</h1>
         <p className="text-[12px] text-gray-400 mt-0.5">계정 및 시스템 환경 설정</p>
       </div>
 
-      <div className="flex gap-5 items-start">
+      <div className="flex flex-col lg:flex-row gap-5 items-start">
         {/* 좌측 탭 네비 */}
-        <div className="w-[180px] flex-shrink-0 bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] p-2">
+        <div className="w-full lg:w-[180px] flex-shrink-0 bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] p-2 overflow-x-auto">
+          <div className="flex lg:block gap-1">
           {TABS.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left transition-colors text-[13px] font-medium ${
+              className={`shrink-0 lg:w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left transition-colors text-[13px] font-medium ${
                 activeTab === tab.key
                   ? 'bg-brand/8 text-brand'
                   : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
@@ -179,6 +180,7 @@ export default function SettingsPage() {
               {tab.label}
             </button>
           ))}
+          </div>
         </div>
 
         {/* 우측 콘텐츠 */}
@@ -191,7 +193,7 @@ export default function SettingsPage() {
                 <p className="text-[13px] font-semibold text-gray-800 pb-1 border-b border-gray-100">기본 정보</p>
 
                 {/* 프로필 사진 + 아바타 색상 */}
-                <div className="flex items-center gap-5">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
                   {/* 사진 영역 */}
                   <div className="relative flex-shrink-0">
                     <button
@@ -256,7 +258,7 @@ export default function SettingsPage() {
                 </div>
 
                 {/* 이름 · 이메일 */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField label="이름" required error={profileForm.formState.errors.name?.message}>
                     <input {...profileForm.register('name')} className={inputCls(!!profileForm.formState.errors.name)} />
                   </FormField>
@@ -325,7 +327,7 @@ export default function SettingsPage() {
                   <input {...pwForm.register('current')} type="password" placeholder="현재 비밀번호 입력" className={inputCls(!!pwForm.formState.errors.current)} />
                 </FormField>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField label="새 비밀번호" required error={pwForm.formState.errors.next?.message}>
                     <input {...pwForm.register('next')} type="password" placeholder="8자 이상" className={inputCls(!!pwForm.formState.errors.next)} />
                   </FormField>

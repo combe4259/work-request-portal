@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import KpiCard from '@/components/dashboard/KpiCard'
 import { TypeBadge, PriorityBadge, StatusBadge } from '@/components/work-request/Badges'
 import { SortTh, type SortDir } from '@/components/common/TableControls'
+import { EmptyState } from '@/components/common/AsyncState'
 import type { WorkRequest } from '@/types/work-request'
 
 // ── 달력 이벤트 타입 ──────────────────────────────────
@@ -128,10 +129,10 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-4 sm:p-6 space-y-5">
       {/* KPI 카드 */}
       {activeKpi && <div className="fixed inset-0 z-40" onClick={() => setActiveKpi(null)} />}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {([
           { key: 'todo' as KpiKey,       label: '나의 할일',   value: 12, sub: '미처리 업무',        color: 'brand'   as const, icon: <TodoIcon /> },
           { key: 'inProgress' as KpiKey, label: '진행중',      value: 8,  sub: '현재 작업 중인 항목', color: 'blue'    as const, icon: <ProgressIcon /> },
@@ -179,9 +180,9 @@ export default function DashboardPage() {
       </div>
 
       {/* 본문 2열 */}
-      <div className="flex gap-4 items-start">
+      <div className="flex flex-col xl:flex-row gap-4 items-start">
         {/* 업무요청 테이블 */}
-        <div className="flex-1 min-w-0 bg-white rounded-xl shadow-[0_2px_12px_rgba(30,58,138,0.07)] border border-blue-50 overflow-hidden">
+        <div className="w-full flex-1 min-w-0 bg-white rounded-xl shadow-[0_2px_12px_rgba(30,58,138,0.07)] border border-blue-50 overflow-hidden">
           {/* 탭 헤더 */}
           <div className="flex items-center justify-between px-5 pt-4 pb-0 border-b border-gray-100">
             <div className="flex gap-1">
@@ -221,15 +222,30 @@ export default function DashboardPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {sortedRequests.map((req) => (
-                  <tr key={req.id} onClick={() => navigate(`/work-requests/${req.id}`)} className="hover:bg-blue-50/30 transition-colors cursor-pointer group">
+                {sortedRequests.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-2">
+                      <EmptyState title="표시할 업무요청이 없습니다" description="새 업무를 등록하거나 조건을 변경해보세요." />
+                    </td>
+                  </tr>
+                ) : sortedRequests.map((req) => (
+                  <tr key={req.id} className="hover:bg-blue-50/30 transition-colors group">
                     <td className="px-4 py-3 font-mono text-[11px] text-gray-400 whitespace-nowrap">
-                      {req.docNo}
+                      <Link
+                        to={`/work-requests/${req.id}`}
+                        className="inline-flex rounded focus:outline-none focus:ring-2 focus:ring-brand/30"
+                        aria-label={`${req.docNo} 상세 보기`}
+                      >
+                        {req.docNo}
+                      </Link>
                     </td>
                     <td className="px-4 py-3 max-w-[220px]">
-                      <span className="text-gray-800 text-[13px] font-medium truncate block group-hover:text-brand transition-colors">
+                      <Link
+                        to={`/work-requests/${req.id}`}
+                        className="text-gray-800 text-[13px] font-medium truncate block group-hover:text-brand transition-colors rounded focus:outline-none focus:ring-2 focus:ring-brand/30"
+                      >
                         {req.title}
-                      </span>
+                      </Link>
                     </td>
                     <td className="px-3 py-3 whitespace-nowrap">
                       <TypeBadge type={req.type} />
@@ -254,26 +270,30 @@ export default function DashboardPage() {
         </div>
 
         {/* 우측 패널 */}
-        <div className="w-[268px] flex-shrink-0 space-y-4">
+        <div className="w-full xl:w-[268px] flex-shrink-0 space-y-4">
           {/* 미니 캘린더 */}
           <MiniCalendar events={CAL_EVENTS} />
 
           {/* 알림 피드 */}
           <div className="bg-white rounded-xl shadow-[0_2px_12px_rgba(30,58,138,0.07)] border border-blue-50 p-4">
             <p className="text-[12px] font-semibold text-gray-700 mb-3">최근 알림</p>
-            <div className="space-y-2.5">
-              {NOTIFICATIONS.map((n) => (
-                <div key={n.id} className="flex items-start gap-2.5">
-                  <div className="w-6 h-6 rounded-full bg-brand/8 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <NotifIcon type={n.type} />
+            {NOTIFICATIONS.length === 0 ? (
+              <EmptyState title="새 알림이 없습니다" description="변경사항이 생기면 여기서 바로 확인할 수 있습니다." />
+            ) : (
+              <div className="space-y-2.5">
+                {NOTIFICATIONS.map((n) => (
+                  <div key={n.id} className="flex items-start gap-2.5">
+                    <div className="w-6 h-6 rounded-full bg-brand/8 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <NotifIcon type={n.type} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] text-gray-600 leading-relaxed">{n.text}</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">{n.time}</p>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[11px] text-gray-600 leading-relaxed">{n.text}</p>
-                    <p className="text-[10px] text-gray-400 mt-0.5">{n.time}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
