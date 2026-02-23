@@ -193,51 +193,52 @@ export default function WorkRequestDetailPage() {
             </Section>
           )}
 
+        </div>
+
+        {/* 오른쪽: 댓글 + 처리이력 */}
+        <div className="w-[300px] flex-shrink-0 space-y-4">
           {/* 댓글 */}
-          <Section title={`댓글 ${comments.length}`}>
-            <div className="space-y-3 mb-4">
+          <div className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] px-4 py-4">
+            <p className="text-[12px] font-semibold text-gray-700 mb-3">댓글 {comments.length}</p>
+            <div className="space-y-3 mb-3 max-h-[260px] overflow-y-auto">
               {comments.map((c) => (
-                <div key={c.id} className="flex gap-3">
-                  <div className="w-7 h-7 rounded-full bg-brand/10 flex items-center justify-center text-brand text-[11px] font-bold flex-shrink-0">
+                <div key={c.id} className="flex gap-2.5">
+                  <div className="w-6 h-6 rounded-full bg-brand/10 flex items-center justify-center text-brand text-[10px] font-bold flex-shrink-0">
                     {c.author[0]}
                   </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[12px] font-semibold text-gray-800">{c.author}</span>
-                      <span className="text-[11px] text-gray-400">{c.createdAt}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-[11px] font-semibold text-gray-800">{c.author}</span>
+                      <span className="text-[10px] text-gray-400">{c.createdAt}</span>
                     </div>
-                    <p className="text-[13px] text-gray-600 leading-relaxed">{c.content}</p>
+                    <p className="text-[12px] text-gray-600 leading-relaxed">{c.content}</p>
                   </div>
                 </div>
               ))}
             </div>
-            {/* 댓글 입력 */}
-            <div className="flex gap-2">
+            <div className="flex gap-2 pt-2 border-t border-gray-100">
               <textarea
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && e.metaKey) handleComment() }}
-                placeholder="댓글을 입력하세요 (⌘+Enter로 전송)"
+                placeholder="댓글 입력 (⌘+Enter 전송)"
                 rows={2}
-                className="flex-1 px-3 py-2 text-[13px] border border-gray-200 rounded-lg focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand/20 resize-none"
+                className="flex-1 px-2.5 py-2 text-[12px] border border-gray-200 rounded-lg focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand/20 resize-none"
               />
               <button
                 onClick={handleComment}
                 disabled={!comment.trim()}
-                className="h-fit px-3 py-2 bg-brand text-white text-[12px] font-semibold rounded-lg hover:bg-brand-hover transition-colors disabled:opacity-40 self-end"
+                className="h-fit px-2.5 py-2 bg-brand text-white text-[11px] font-semibold rounded-lg hover:bg-brand-hover transition-colors disabled:opacity-40 self-end"
               >
                 전송
               </button>
             </div>
-          </Section>
-        </div>
+          </div>
 
-        {/* 오른쪽: 히스토리 */}
-        <div className="w-[240px] flex-shrink-0">
+          {/* 처리 이력 */}
           <div className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] p-4">
             <p className="text-[12px] font-semibold text-gray-700 mb-4">처리 이력</p>
             <div className="relative">
-              {/* 수직선 */}
               <div className="absolute left-2.5 top-0 bottom-0 w-px bg-gray-100" />
               <div className="space-y-4">
                 {MOCK_HISTORY.map((h, i) => (
@@ -248,9 +249,7 @@ export default function WorkRequestDetailPage() {
                     <div className="flex-1 min-w-0 pb-1">
                       <p className="text-[11px] font-semibold text-gray-700">{h.action}</p>
                       {h.from && (
-                        <p className="text-[10px] text-gray-400 mt-0.5">
-                          {h.from} → {h.to}
-                        </p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">{h.from} → {h.to}</p>
                       )}
                       <p className="text-[10px] text-gray-400 mt-0.5">{h.actor} · {h.at.slice(5)}</p>
                     </div>
