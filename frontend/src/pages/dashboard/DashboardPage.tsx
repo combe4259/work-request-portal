@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import KpiCard from '@/components/dashboard/KpiCard'
 import { TypeBadge, PriorityBadge, StatusBadge } from '@/components/work-request/Badges'
+import { SortTh, type SortDir } from '@/components/common/TableControls'
 import type { WorkRequest } from '@/types/work-request'
 
 // ── 달력 이벤트 타입 ──────────────────────────────────
@@ -9,6 +10,10 @@ type CalEvent = { day: number; docNo: string; title: string; priority: WorkReque
 
 // ── 타입 ─────────────────────────────────────────────
 type TabKey = 'all' | 'mine' | 'team'
+type KpiKey = 'todo' | 'inProgress' | 'done' | 'urgent'
+type DashSortKey = 'priority' | 'deadline'
+
+const PRIORITY_ORDER_DASH: Record<string, number> = { '긴급': 0, '높음': 1, '보통': 2, '낮음': 3 }
 
 // ── 샘플 데이터 ───────────────────────────────────────
 const SAMPLE_REQUESTS: WorkRequest[] = [
@@ -94,39 +99,79 @@ const CAL_EVENTS: CalEvent[] = [
 export default function DashboardPage() {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<TabKey>('all')
+  const [activeKpi, setActiveKpi] = useState<KpiKey | null>(null)
+  const [sort, setSort] = useState<{ key: DashSortKey; dir: SortDir }>({ key: 'deadline', dir: 'asc' })
+
+  const kpiItems: Record<KpiKey, WorkRequest[]> = {
+    todo: SAMPLE_REQUESTS.filter(r => r.assignee !== '미배정'),
+    inProgress: SAMPLE_REQUESTS.filter(r => r.status === '개발중' || r.status === '테스트중' || r.status === '검토중'),
+    done: SAMPLE_REQUESTS.filter(r => r.status === '완료'),
+    urgent: SAMPLE_REQUESTS.filter(r => {
+      const diff = Math.ceil((new Date(r.deadline).getTime() - new Date('2026-02-21').getTime()) / 86400000)
+      return diff >= 0 && diff <= 3
+    }),
+  }
+
+  const sortedRequests = [...SAMPLE_REQUESTS].sort((a, b) => {
+    const v = sort.dir === 'asc' ? 1 : -1
+    if (sort.key === 'priority') return ((PRIORITY_ORDER_DASH[a.priority] ?? 9) - (PRIORITY_ORDER_DASH[b.priority] ?? 9)) * v
+    return (a.deadline > b.deadline ? 1 : -1) * v
+  })
+
+  const handleDashSort = (key: string) => {
+    const k = key as DashSortKey
+    setSort(prev => prev.key === k ? { key: k, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key: k, dir: 'asc' })
+  }
 
   return (
     <div className="p-6 space-y-5">
       {/* KPI 카드 */}
+      {activeKpi && <div className="fixed inset-0 z-40" onClick={() => setActiveKpi(null)} />}
       <div className="grid grid-cols-4 gap-4">
-        <KpiCard
-          label="나의 할일"
-          value={12}
-          sub="미처리 업무"
-          color="brand"
-          icon={<TodoIcon />}
-        />
-        <KpiCard
-          label="진행중"
-          value={8}
-          sub="현재 작업 중인 항목"
-          color="blue"
-          icon={<ProgressIcon />}
-        />
-        <KpiCard
-          label="이번주 완료"
-          value={5}
-          sub="2/17 — 2/21 완료"
-          color="emerald"
-          icon={<CheckIcon />}
-        />
-        <KpiCard
-          label="마감임박"
-          value={3}
-          sub="3일 이내 마감"
-          color="red"
-          icon={<DeadlineIcon />}
-        />
+        {([
+          { key: 'todo' as KpiKey,       label: '나의 할일',   value: 12, sub: '미처리 업무',        color: 'brand'   as const, icon: <TodoIcon /> },
+          { key: 'inProgress' as KpiKey, label: '진행중',      value: 8,  sub: '현재 작업 중인 항목', color: 'blue'    as const, icon: <ProgressIcon /> },
+          { key: 'done' as KpiKey,       label: '이번주 완료', value: 5,  sub: '2/17 — 2/21 완료',   color: 'emerald' as const, icon: <CheckIcon /> },
+          { key: 'urgent' as KpiKey,     label: '마감임박',    value: 3,  sub: '3일 이내 마감',       color: 'red'     as const, icon: <DeadlineIcon /> },
+        ]).map((kpi, idx) => (
+          <div key={kpi.key} className="relative">
+            <div onClick={() => setActiveKpi(prev => prev === kpi.key ? null : kpi.key)} className="cursor-pointer">
+              <KpiCard label={kpi.label} value={kpi.value} sub={kpi.sub} color={kpi.color} icon={kpi.icon} />
+            </div>
+            {activeKpi === kpi.key && (
+              <div className={`absolute top-full mt-1.5 z-50 w-72 bg-white rounded-xl border border-blue-100 shadow-[0_8px_32px_rgba(30,58,138,0.14)] overflow-hidden ${idx >= 2 ? 'right-0' : 'left-0'}`}>
+                <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
+                  <p className="text-[12px] font-semibold text-gray-700">{kpi.label}</p>
+                  <span className="text-[11px] text-brand font-bold">{kpiItems[kpi.key].length}건</span>
+                </div>
+                <div className="max-h-52 overflow-y-auto">
+                  {kpiItems[kpi.key].length === 0 ? (
+                    <p className="px-4 py-5 text-center text-[12px] text-gray-400">해당 항목이 없습니다</p>
+                  ) : (
+                    kpiItems[kpi.key].map(r => (
+                      <button
+                        key={r.id}
+                        onClick={(e) => { e.stopPropagation(); setActiveKpi(null); navigate(`/work-requests/${r.id}`) }}
+                        className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-blue-50/40 transition-colors text-left border-b border-gray-50 last:border-0"
+                      >
+                        <span className="font-mono text-[10px] text-gray-400 flex-shrink-0">{r.docNo}</span>
+                        <span className="text-[12px] text-gray-700 flex-1 truncate">{r.title}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+                <div className="px-4 py-2 border-t border-gray-100">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setActiveKpi(null); navigate('/work-requests') }}
+                    className="text-[11px] text-brand hover:underline"
+                  >
+                    전체 업무요청 보기 →
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
 
       {/* 본문 2열 */}
@@ -165,14 +210,14 @@ export default function DashboardPage() {
                   <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-gray-400 tracking-wide whitespace-nowrap">문서번호</th>
                   <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-gray-400 tracking-wide">제목</th>
                   <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-gray-400 tracking-wide whitespace-nowrap">유형</th>
-                  <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-gray-400 tracking-wide whitespace-nowrap">우선순위</th>
+                  <SortTh label="우선순위" sortKey="priority" current={sort} onSort={handleDashSort} />
                   <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-gray-400 tracking-wide whitespace-nowrap">상태</th>
                   <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-gray-400 tracking-wide whitespace-nowrap">담당자</th>
-                  <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-gray-400 tracking-wide whitespace-nowrap">마감일</th>
+                  <SortTh label="마감일" sortKey="deadline" current={sort} onSort={handleDashSort} />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {SAMPLE_REQUESTS.map((req) => (
+                {sortedRequests.map((req) => (
                   <tr key={req.id} onClick={() => navigate(`/work-requests/${req.id}`)} className="hover:bg-blue-50/30 transition-colors cursor-pointer group">
                     <td className="px-4 py-3 font-mono text-[11px] text-gray-400 whitespace-nowrap">
                       {req.docNo}
