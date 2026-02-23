@@ -1,24 +1,12 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
 import { FormField } from '@/components/common/FormField'
 import { inputCls, textareaCls, selectCls } from '@/lib/formStyles'
 import { ASSIGNEES } from '@/lib/constants'
-
-// ── 스키마 ──────────────────────────────────────────
-const schema = z.object({
-  title: z.string().min(1, '제목을 입력해주세요').max(100, '제목은 100자 이하이어야 합니다'),
-  type: z.enum(['기능개선', '신규개발', '버그수정', '인프라', '기타'] as const, { error: '유형을 선택해주세요' }),
-  priority: z.enum(['긴급', '높음', '보통', '낮음'] as const, { error: '우선순위를 선택해주세요' }),
-  deadline: z.string().min(1, '마감일을 선택해주세요'),
-  assignee: z.string().optional(),
-  background: z.string().max(500, '500자 이하이어야 합니다').optional(),
-  description: z.string().min(1, '내용을 입력해주세요').max(2000, '내용은 2000자 이하이어야 합니다'),
-})
-
-type FormValues = z.infer<typeof schema>
+import { useCreateWorkRequestMutation } from '@/features/work-request/mutations'
+import { workRequestFormSchema, type WorkRequestFormValues } from '@/features/work-request/schemas'
 
 // ── 연관 문서 샘플 ────────────────────────────────────
 const ALL_DOCS = [
@@ -33,6 +21,7 @@ const ALL_DOCS = [
 
 export default function WorkRequestFormPage() {
   const navigate = useNavigate()
+  const createWorkRequest = useCreateWorkRequestMutation()
   const [fileList, setFileList] = useState<File[]>([])
   const [relatedDocs, setRelatedDocs] = useState<{ docNo: string; title: string }[]>([])
   const [docSearch, setDocSearch] = useState('')
@@ -70,17 +59,23 @@ export default function WorkRequestFormPage() {
   const {
     register,
     handleSubmit,
-    watch,
+    control,
     formState: { errors, isSubmitting },
-  } = useForm<FormValues>({
-    resolver: zodResolver(schema),
+  } = useForm<WorkRequestFormValues>({
+    resolver: zodResolver(workRequestFormSchema),
     defaultValues: { priority: '보통', type: '기능개선' },
   })
 
-  const descValue = watch('description') ?? ''
+  const descValue = useWatch({ control, name: 'description' }) ?? ''
 
-  const onSubmit = async (_data: FormValues) => {
-    // TODO: API 연동
+  const onSubmit = async (data: WorkRequestFormValues) => {
+    await createWorkRequest.mutateAsync({
+      title: data.title,
+      type: data.type,
+      priority: data.priority,
+      deadline: data.deadline,
+      assignee: data.assignee,
+    })
     navigate('/work-requests')
   }
 
@@ -284,10 +279,10 @@ export default function WorkRequestFormPage() {
           </button>
           <button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || createWorkRequest.isPending}
             className="h-9 px-5 text-[13px] font-semibold text-white bg-brand hover:bg-brand-hover rounded-lg transition-colors disabled:opacity-60 flex items-center gap-2"
           >
-            {isSubmitting ? (
+            {isSubmitting || createWorkRequest.isPending ? (
               <>
                 <SpinnerIcon />
                 등록 중...

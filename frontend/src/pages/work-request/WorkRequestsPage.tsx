@@ -1,26 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { TypeBadge, PriorityBadge, StatusBadge } from '@/components/work-request/Badges'
 import { FilterSelect, SortTh, Pagination, DeadlineCell, type SortDir } from '@/components/common/TableControls'
 import { PlusIcon, SearchIcon } from '@/components/common/Icons'
 import { EmptyState, ErrorState, LoadingState } from '@/components/common/AsyncState'
-import type { WorkRequest, RequestType, Priority, Status } from '@/types/work-request'
-
-// ── 샘플 데이터 ───────────────────────────────────────
-const SAMPLE_DATA: WorkRequest[] = [
-  { id: '1',  docNo: 'WR-051', title: '모바일 PDA 화면 레이아웃 개선 요청',        type: '기능개선', priority: '높음', status: '개발중',   assignee: '김개발',   deadline: '2026-02-25' },
-  { id: '2',  docNo: 'WR-050', title: '신규 계좌 개설 프로세스 자동화',            type: '신규개발', priority: '긴급', status: '검토중',   assignee: '이설계',   deadline: '2026-02-22' },
-  { id: '3',  docNo: 'WR-049', title: '잔고 조회 API 응답 지연 버그 수정',         type: '버그수정', priority: '긴급', status: '테스트중', assignee: '박테스터', deadline: '2026-02-21' },
-  { id: '4',  docNo: 'WR-048', title: 'AWS S3 스토리지 용량 확장',               type: '인프라',   priority: '보통', status: '완료',    assignee: '최인프라', deadline: '2026-02-18' },
-  { id: '5',  docNo: 'WR-047', title: '로그인 세션 만료 시간 정책 변경',           type: '기능개선', priority: '낮음', status: '접수대기', assignee: '미배정',   deadline: '2026-03-05' },
-  { id: '6',  docNo: 'WR-046', title: '주문 내역 엑셀 다운로드 기능 추가',         type: '신규개발', priority: '보통', status: '개발중',   assignee: '김개발',   deadline: '2026-02-28' },
-  { id: '7',  docNo: 'WR-045', title: '고객 알림 푸시 발송 로직 개선',             type: '기능개선', priority: '높음', status: '검토중',   assignee: '이설계',   deadline: '2026-03-03' },
-  { id: '8',  docNo: 'WR-044', title: '배포 파이프라인 CI/CD 구성',               type: '인프라',   priority: '보통', status: '완료',    assignee: '최인프라', deadline: '2026-02-14' },
-  { id: '9',  docNo: 'WR-043', title: '결제 모듈 PG사 연동 오류 수정',            type: '버그수정', priority: '긴급', status: '완료',    assignee: '박테스터', deadline: '2026-02-12' },
-  { id: '10', docNo: 'WR-042', title: '관리자 대시보드 권한 분리',                type: '신규개발', priority: '보통', status: '개발중',   assignee: '김개발',   deadline: '2026-03-10' },
-  { id: '11', docNo: 'WR-041', title: '거래 내역 조회 페이지 성능 개선',           type: '기능개선', priority: '높음', status: '접수대기', assignee: '미배정',   deadline: '2026-03-07' },
-  { id: '12', docNo: 'WR-040', title: '사용자 비밀번호 재설정 이메일 발송 오류',    type: '버그수정', priority: '보통', status: '반려',    assignee: '박테스터', deadline: '2026-02-10' },
-]
+import { useWorkRequestsQuery } from '@/features/work-request/queries'
+import type { Priority, RequestType, Status } from '@/types/work-request'
 
 const PAGE_SIZE = 10
 
@@ -28,8 +13,6 @@ type SortKey = 'docNo' | 'deadline'
 
 export default function WorkRequestsPage() {
   const navigate = useNavigate()
-  const [isLoading, setIsLoading] = useState(true)
-  const [isError, setIsError] = useState(false)
   const [search, setSearch] = useState('')
   const [filterType, setFilterType] = useState<RequestType | '전체'>('전체')
   const [filterPriority, setFilterPriority] = useState<Priority | '전체'>('전체')
@@ -37,30 +20,20 @@ export default function WorkRequestsPage() {
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: 'docNo', dir: 'desc' })
   const [page, setPage] = useState(1)
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false)
-      setIsError(false)
-    }, 250)
-    return () => clearTimeout(timer)
-  }, [])
-
-  const filtered = SAMPLE_DATA.filter((r) => {
-    const matchSearch = search === '' || r.title.includes(search) || r.docNo.includes(search)
-    const matchType = filterType === '전체' || r.type === filterType
-    const matchPriority = filterPriority === '전체' || r.priority === filterPriority
-    const matchStatus = filterStatus === '전체' || r.status === filterStatus
-    return matchSearch && matchType && matchPriority && matchStatus
-  })
-
-  const sorted = [...filtered].sort((a, b) => {
-    const v = sort.dir === 'asc' ? 1 : -1
-    if (sort.key === 'docNo') return a.docNo > b.docNo ? v : -v
-    return a.deadline > b.deadline ? v : -v
-  })
-
-  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE))
-  const paginated = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const params = useMemo(
+    () => ({
+      search,
+      filterType,
+      filterPriority,
+      filterStatus,
+      sortKey: sort.key,
+      sortDir: sort.dir,
+      page,
+      pageSize: PAGE_SIZE,
+    }),
+    [filterPriority, filterStatus, filterType, page, search, sort.dir, sort.key],
+  )
+  const { data, isPending, isError, refetch } = useWorkRequestsQuery(params)
 
   const handleSort = (key: string) => {
     const k = key as SortKey
@@ -72,13 +45,7 @@ export default function WorkRequestsPage() {
   }
 
   const isFiltered = search || filterType !== '전체' || filterPriority !== '전체' || filterStatus !== '전체'
-  const isEmpty = !isLoading && !isError && paginated.length === 0
-
-  const handleRetry = () => {
-    setIsError(false)
-    setIsLoading(true)
-    window.setTimeout(() => setIsLoading(false), 250)
-  }
+  const isEmpty = !isPending && !isError && (data?.items.length ?? 0) === 0
 
   return (
     <div className="p-4 sm:p-6 space-y-4">
@@ -86,7 +53,7 @@ export default function WorkRequestsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-[18px] font-bold text-gray-900">업무요청</h1>
-          <p className="text-[12px] text-gray-400 mt-0.5">총 {filtered.length}건</p>
+          <p className="text-[12px] text-gray-400 mt-0.5">총 {data?.total ?? 0}건</p>
         </div>
         <button
           onClick={() => navigate('/work-requests/new')}
@@ -121,14 +88,14 @@ export default function WorkRequestsPage() {
 
       {/* 테이블 */}
       <div className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_12px_rgba(30,58,138,0.07)] overflow-hidden">
-        {isLoading ? (
+        {isPending ? (
           <LoadingState title="업무요청 목록을 불러오는 중입니다" description="필터와 정렬 정보를 준비하고 있습니다." />
         ) : isError ? (
           <ErrorState
             title="목록을 불러오지 못했습니다"
             description="잠시 후 다시 시도해주세요."
             actionLabel="다시 시도"
-            onAction={handleRetry}
+            onAction={() => { void refetch() }}
           />
         ) : isEmpty ? (
           <EmptyState
@@ -152,7 +119,7 @@ export default function WorkRequestsPage() {
               </tr>
             </thead>
               <tbody className="divide-y divide-gray-50">
-                {paginated.map((req) => (
+                {(data?.items ?? []).map((req) => (
                   <tr key={req.id} className="hover:bg-blue-50/30 transition-colors group">
                     <td className="px-4 py-3 font-mono text-[11px] text-gray-400 whitespace-nowrap">
                       <Link
@@ -182,8 +149,8 @@ export default function WorkRequestsPage() {
             </table>
           </div>
         )}
-        {!isLoading && !isError && !isEmpty && (
-          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+        {!isPending && !isError && !isEmpty && (
+          <Pagination page={data?.page ?? page} totalPages={data?.totalPages ?? 1} onPageChange={setPage} />
         )}
       </div>
     </div>
