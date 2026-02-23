@@ -1,24 +1,12 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
 import { FormField } from '@/components/common/FormField'
 import { inputCls, textareaCls, selectCls } from '@/lib/formStyles'
 import { ASSIGNEES } from '@/lib/constants'
-
-// ── 스키마 ──────────────────────────────────────────
-const schema = z.object({
-  title: z.string().min(1, '제목을 입력해주세요').max(100, '제목은 100자 이하이어야 합니다'),
-  type: z.enum(['리팩토링', '기술부채', '성능개선', '보안', '테스트', '기타'] as const, { error: '유형을 선택해주세요' }),
-  priority: z.enum(['긴급', '높음', '보통', '낮음'] as const, { error: '우선순위를 선택해주세요' }),
-  deadline: z.string().min(1, '마감일을 선택해주세요'),
-  assignee: z.string().optional(),
-  currentIssue: z.string().min(1, '문제 현황을 입력해주세요').max(2000),
-  solution: z.string().min(1, '개선 방안을 입력해주세요').max(2000),
-})
-
-type FormValues = z.infer<typeof schema>
+import { useCreateTechTaskMutation } from '@/features/tech-task/mutations'
+import { techTaskFormSchema, type TechTaskFormValues } from '@/features/tech-task/schemas'
 
 const ALL_DOCS = [
   { docNo: 'WR-051', title: '모바일 PDA 화면 레이아웃 개선 요청' },
@@ -30,6 +18,7 @@ const ALL_DOCS = [
 
 export default function TechTaskFormPage() {
   const navigate = useNavigate()
+  const createTechTask = useCreateTechTaskMutation()
 
   // 완료 기준
   const [dodItems, setDodItems] = useState<string[]>([])
@@ -86,18 +75,24 @@ export default function TechTaskFormPage() {
   const {
     register,
     handleSubmit,
-    watch,
+    control,
     formState: { errors, isSubmitting },
-  } = useForm<FormValues>({
-    resolver: zodResolver(schema),
+  } = useForm<TechTaskFormValues>({
+    resolver: zodResolver(techTaskFormSchema),
     defaultValues: { priority: '보통', type: '리팩토링' },
   })
 
-  const issueValue = watch('currentIssue') ?? ''
-  const solutionValue = watch('solution') ?? ''
+  const issueValue = useWatch({ control, name: 'currentIssue' }) ?? ''
+  const solutionValue = useWatch({ control, name: 'solution' }) ?? ''
 
-  const onSubmit = async (_data: FormValues) => {
-    // TODO: API 연동
+  const onSubmit = async (data: TechTaskFormValues) => {
+    await createTechTask.mutateAsync({
+      title: data.title,
+      type: data.type,
+      priority: data.priority,
+      deadline: data.deadline,
+      assignee: data.assignee,
+    })
     navigate('/tech-tasks')
   }
 
@@ -333,10 +328,10 @@ export default function TechTaskFormPage() {
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || createTechTask.isPending}
               className="h-9 px-5 text-[13px] font-semibold text-white bg-brand hover:bg-brand-hover rounded-lg transition-colors disabled:opacity-60 flex items-center gap-2"
             >
-              {isSubmitting ? <><SpinnerIcon />등록 중...</> : '등록하기'}
+              {isSubmitting || createTechTask.isPending ? <><SpinnerIcon />등록 중...</> : '등록하기'}
             </button>
           </div>
         </form>

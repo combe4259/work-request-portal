@@ -2,22 +2,11 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
 import { FormField } from '@/components/common/FormField'
 import { inputCls, textareaCls, selectCls } from '@/lib/formStyles'
 import { ASSIGNEES } from '@/lib/constants'
-
-// ── 스키마 ──────────────────────────────────────────
-const schema = z.object({
-  title: z.string().min(1, '제목을 입력해주세요').max(100),
-  type: z.enum(['기능', '회귀', '통합', 'E2E', '성능', '보안', '기타'] as const, { error: '유형을 선택해주세요' }),
-  priority: z.enum(['긴급', '높음', '보통', '낮음'] as const, { error: '우선순위를 선택해주세요' }),
-  deadline: z.string().min(1, '마감일을 선택해주세요'),
-  assignee: z.string().optional(),
-  precondition: z.string().max(1000).optional(),
-})
-
-type FormValues = z.infer<typeof schema>
+import { useCreateTestScenarioMutation } from '@/features/test-scenario/mutations'
+import { testScenarioFormSchema, type TestScenarioFormValues } from '@/features/test-scenario/schemas'
 
 interface TestStep {
   id: number
@@ -39,6 +28,7 @@ let stepIdCounter = 3
 
 export default function TestScenarioFormPage() {
   const navigate = useNavigate()
+  const createTestScenario = useCreateTestScenarioMutation()
 
   // 테스트 단계
   const [steps, setSteps] = useState<TestStep[]>([
@@ -99,13 +89,19 @@ export default function TestScenarioFormPage() {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<FormValues>({
-    resolver: zodResolver(schema),
+  } = useForm<TestScenarioFormValues>({
+    resolver: zodResolver(testScenarioFormSchema),
     defaultValues: { priority: '보통', type: '기능' },
   })
 
-  const onSubmit = async (_data: FormValues) => {
-    // TODO: API 연동
+  const onSubmit = async (data: TestScenarioFormValues) => {
+    await createTestScenario.mutateAsync({
+      title: data.title,
+      type: data.type,
+      priority: data.priority,
+      deadline: data.deadline,
+      assignee: data.assignee,
+    })
     navigate('/test-scenarios')
   }
 
@@ -348,10 +344,10 @@ export default function TestScenarioFormPage() {
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || createTestScenario.isPending}
               className="h-9 px-5 text-[13px] font-semibold text-white bg-brand hover:bg-brand-hover rounded-lg transition-colors disabled:opacity-60 flex items-center gap-2"
             >
-              {isSubmitting ? <><SpinnerIcon />등록 중...</> : '등록하기'}
+              {isSubmitting || createTestScenario.isPending ? <><SpinnerIcon />등록 중...</> : '등록하기'}
             </button>
           </div>
         </form>

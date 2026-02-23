@@ -1,24 +1,12 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { PriorityBadge, StatusBadge } from '@/components/work-request/Badges'
 import { FilterSelect, SortTh, Pagination, DeadlineCell, type SortDir } from '@/components/common/TableControls'
 import { PlusIcon, SearchIcon } from '@/components/common/Icons'
 import { TechTypeBadge } from '@/components/tech-task/Badges'
-import type { TechTask, TechTaskType, Priority, Status } from '@/types/tech-task'
-
-// ── 샘플 데이터 ───────────────────────────────────────
-const SAMPLE_DATA: TechTask[] = [
-  { id: '1',  docNo: 'TK-021', title: '계좌 조회 서비스 레이어 리팩토링',         type: '리팩토링', priority: '보통', status: '개발중',   assignee: '김개발',   deadline: '2026-03-07' },
-  { id: '2',  docNo: 'TK-020', title: 'N+1 쿼리 문제 해결 — 잔고 조회 API',     type: '성능개선', priority: '높음', status: '검토중',   assignee: '이설계',   deadline: '2026-02-28' },
-  { id: '3',  docNo: 'TK-019', title: 'JWT 토큰 갱신 로직 보안 취약점 패치',     type: '보안',     priority: '긴급', status: '완료',    assignee: '박테스터', deadline: '2026-02-18' },
-  { id: '4',  docNo: 'TK-018', title: '레거시 XML 파서 → JSON 파서 전환',       type: '기술부채', priority: '낮음', status: '접수대기', assignee: '미배정',   deadline: '2026-04-01' },
-  { id: '5',  docNo: 'TK-017', title: '결제 모듈 단위 테스트 커버리지 80% 달성', type: '테스트',   priority: '보통', status: '개발중',   assignee: '박테스터', deadline: '2026-03-14' },
-  { id: '6',  docNo: 'TK-016', title: 'Redis 캐시 TTL 정책 재설계',             type: '성능개선', priority: '보통', status: '검토중',   assignee: '최인프라', deadline: '2026-03-05' },
-  { id: '7',  docNo: 'TK-015', title: '공통 에러 핸들러 모듈화',               type: '리팩토링', priority: '낮음', status: '완료',    assignee: '김개발',   deadline: '2026-02-14' },
-  { id: '8',  docNo: 'TK-014', title: 'SQL Injection 방어 로직 전수 점검',      type: '보안',     priority: '긴급', status: '완료',    assignee: '박테스터', deadline: '2026-02-10' },
-  { id: '9',  docNo: 'TK-013', title: 'API 응답 DTO 불필요 필드 정리',          type: '기술부채', priority: '낮음', status: '접수대기', assignee: '미배정',   deadline: '2026-04-15' },
-  { id: '10', docNo: 'TK-012', title: '배치 스케줄러 성능 최적화',              type: '성능개선', priority: '높음', status: '개발중',   assignee: '이설계',   deadline: '2026-02-26' },
-]
+import { EmptyState, ErrorState, LoadingState } from '@/components/common/AsyncState'
+import { useTechTasksQuery } from '@/features/tech-task/queries'
+import type { TechTaskType, Priority, Status } from '@/types/tech-task'
 
 const PAGE_SIZE = 10
 
@@ -33,22 +21,20 @@ export default function TechTasksPage() {
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: 'docNo', dir: 'desc' })
   const [page, setPage] = useState(1)
 
-  const filtered = SAMPLE_DATA.filter((r) => {
-    const matchSearch = search === '' || r.title.includes(search) || r.docNo.includes(search)
-    const matchType = filterType === '전체' || r.type === filterType
-    const matchPriority = filterPriority === '전체' || r.priority === filterPriority
-    const matchStatus = filterStatus === '전체' || r.status === filterStatus
-    return matchSearch && matchType && matchPriority && matchStatus
-  })
-
-  const sorted = [...filtered].sort((a, b) => {
-    const v = sort.dir === 'asc' ? 1 : -1
-    if (sort.key === 'docNo') return a.docNo > b.docNo ? v : -v
-    return a.deadline > b.deadline ? v : -v
-  })
-
-  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE))
-  const paginated = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const params = useMemo(
+    () => ({
+      search,
+      filterType,
+      filterPriority,
+      filterStatus,
+      sortKey: sort.key,
+      sortDir: sort.dir,
+      page,
+      pageSize: PAGE_SIZE,
+    }),
+    [filterPriority, filterStatus, filterType, page, search, sort.dir, sort.key],
+  )
+  const { data, isPending, isError, refetch } = useTechTasksQuery(params)
 
   const handleSort = (key: string) => {
     const k = key as SortKey
@@ -61,13 +47,15 @@ export default function TechTasksPage() {
 
   const isFiltered = search || filterType !== '전체' || filterPriority !== '전체' || filterStatus !== '전체'
 
+  const isEmpty = !isPending && !isError && (data?.items.length ?? 0) === 0
+
   return (
     <div className="p-6 space-y-4">
       {/* 헤더 */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-[18px] font-bold text-gray-900">기술과제</h1>
-          <p className="text-[12px] text-gray-400 mt-0.5">총 {filtered.length}건</p>
+          <p className="text-[12px] text-gray-400 mt-0.5">총 {data?.total ?? 0}건</p>
         </div>
         <button
           onClick={() => navigate('/tech-tasks/new')}
@@ -102,8 +90,25 @@ export default function TechTasksPage() {
 
       {/* 테이블 */}
       <div className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_12px_rgba(30,58,138,0.07)] overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        {isPending ? (
+          <LoadingState title="기술과제 목록을 불러오는 중입니다" description="필터와 정렬 정보를 준비하고 있습니다." />
+        ) : isError ? (
+          <ErrorState
+            title="목록을 불러오지 못했습니다"
+            description="잠시 후 다시 시도해주세요."
+            actionLabel="다시 시도"
+            onAction={() => { void refetch() }}
+          />
+        ) : isEmpty ? (
+          <EmptyState
+            title="조건에 맞는 기술과제가 없습니다"
+            description="검색어 또는 필터 조건을 조정해보세요."
+            actionLabel="필터 초기화"
+            onAction={resetFilters}
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50/80 border-b border-gray-100">
                 <SortTh label="문서번호" sortKey="docNo" current={sort} onSort={handleSort} />
@@ -116,20 +121,24 @@ export default function TechTasksPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {paginated.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-[13px] text-gray-400">검색 결과가 없습니다</td>
-                </tr>
-              ) : (
-                paginated.map((task) => (
-                  <tr
-                    key={task.id}
-                    onClick={() => navigate(`/tech-tasks/${task.id}`)}
-                    className="hover:bg-blue-50/30 transition-colors cursor-pointer group"
-                  >
-                    <td className="px-4 py-3 font-mono text-[11px] text-gray-400 whitespace-nowrap">{task.docNo}</td>
+              {(data?.items ?? []).map((task) => (
+                  <tr key={task.id} className="hover:bg-blue-50/30 transition-colors group">
+                    <td className="px-4 py-3 font-mono text-[11px] text-gray-400 whitespace-nowrap">
+                      <Link
+                        to={`/tech-tasks/${task.id}`}
+                        className="inline-flex rounded focus:outline-none focus:ring-2 focus:ring-brand/30"
+                        aria-label={`${task.docNo} 상세 보기`}
+                      >
+                        {task.docNo}
+                      </Link>
+                    </td>
                     <td className="px-4 py-3 max-w-[260px]">
-                      <span className="text-[13px] text-gray-800 font-medium truncate block group-hover:text-brand transition-colors">{task.title}</span>
+                      <Link
+                        to={`/tech-tasks/${task.id}`}
+                        className="text-[13px] text-gray-800 font-medium truncate block group-hover:text-brand transition-colors rounded focus:outline-none focus:ring-2 focus:ring-brand/30"
+                      >
+                        {task.title}
+                      </Link>
                     </td>
                     <td className="px-3 py-3 whitespace-nowrap"><TechTypeBadge type={task.type} /></td>
                     <td className="px-3 py-3 whitespace-nowrap"><PriorityBadge priority={task.priority} /></td>
@@ -137,12 +146,14 @@ export default function TechTasksPage() {
                     <td className="px-3 py-3 whitespace-nowrap"><span className="text-[12px] text-gray-600">{task.assignee}</span></td>
                     <td className="px-3 py-3 whitespace-nowrap"><DeadlineCell date={task.deadline} /></td>
                   </tr>
-                ))
-              )}
+                ))}
             </tbody>
-          </table>
-        </div>
-        <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+            </table>
+          </div>
+        )}
+        {!isPending && !isError && !isEmpty && (
+          <Pagination page={data?.page ?? page} totalPages={data?.totalPages ?? 1} onPageChange={setPage} />
+        )}
       </div>
     </div>
   )

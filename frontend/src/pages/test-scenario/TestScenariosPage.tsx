@@ -1,32 +1,15 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { PriorityBadge } from '@/components/work-request/Badges'
 import { TestTypeBadge, TestStatusBadge } from '@/components/test-scenario/Badges'
 import { FilterSelect, SortTh, Pagination, DeadlineCell, type SortDir } from '@/components/common/TableControls'
 import { PlusIcon, SearchIcon } from '@/components/common/Icons'
-import type { TestScenario, TestScenarioType, Priority, TestStatus } from '@/types/test-scenario'
-
-// ── 샘플 데이터 ───────────────────────────────────────
-const SAMPLE_DATA: TestScenario[] = [
-  { id: '1',  docNo: 'TS-018', title: '모바일 PDA 레이아웃 반응형 검증',          type: '기능',  priority: '높음', status: '실행중', assignee: '박테스터', relatedDoc: 'WR-051', deadline: '2026-02-26' },
-  { id: '2',  docNo: 'TS-017', title: '계좌 개설 프로세스 E2E 흐름 검증',         type: 'E2E',   priority: '긴급', status: '승인됨', assignee: '박테스터', relatedDoc: 'WR-050', deadline: '2026-02-24' },
-  { id: '3',  docNo: 'TS-016', title: '잔고 조회 API 응답시간 회귀 테스트',        type: '회귀',  priority: '긴급', status: '통과',  assignee: '박테스터', relatedDoc: 'WR-049', deadline: '2026-02-20' },
-  { id: '4',  docNo: 'TS-015', title: 'S3 파일 업로드/다운로드 통합 테스트',      type: '통합',  priority: '보통', status: '통과',  assignee: '최인프라', relatedDoc: 'WR-048', deadline: '2026-02-17' },
-  { id: '5',  docNo: 'TS-014', title: '로그인 세션 만료 기능 검증',               type: '기능',  priority: '낮음', status: '작성중', assignee: '미배정',  relatedDoc: 'WR-047', deadline: '2026-03-03' },
-  { id: '6',  docNo: 'TS-013', title: '엑셀 다운로드 데이터 정합성 검증',         type: '기능',  priority: '보통', status: '검토중', assignee: '박테스터', relatedDoc: 'WR-046', deadline: '2026-02-27' },
-  { id: '7',  docNo: 'TS-012', title: 'JWT 토큰 보안 취약점 침투 테스트',         type: '보안',  priority: '긴급', status: '통과',  assignee: '박테스터', relatedDoc: 'TK-019', deadline: '2026-02-17' },
-  { id: '8',  docNo: 'TS-011', title: '잔고 조회 N+1 쿼리 성능 검증',            type: '성능',  priority: '높음', status: '실행중', assignee: '이설계',  relatedDoc: 'TK-020', deadline: '2026-02-27' },
-  { id: '9',  docNo: 'TS-010', title: '결제 모듈 PG 연동 오류 회귀 테스트',       type: '회귀',  priority: '긴급', status: '실패',  assignee: '박테스터', relatedDoc: 'WR-043', deadline: '2026-02-21' },
-  { id: '10', docNo: 'TS-009', title: '관리자 권한 분리 E2E 시나리오',            type: 'E2E',   priority: '보통', status: '작성중', assignee: '미배정',  relatedDoc: 'WR-042', deadline: '2026-03-08' },
-  { id: '11', docNo: 'TS-008', title: 'SQL Injection 방어 보안 점검',             type: '보안',  priority: '긴급', status: '통과',  assignee: '박테스터', relatedDoc: 'TK-014', deadline: '2026-02-09' },
-  { id: '12', docNo: 'TS-007', title: '거래 내역 조회 대용량 성능 테스트',         type: '성능',  priority: '높음', status: '보류',  assignee: '이설계',  relatedDoc: 'WR-041', deadline: '2026-03-06' },
-]
+import { EmptyState, ErrorState, LoadingState } from '@/components/common/AsyncState'
+import { useTestScenariosQuery } from '@/features/test-scenario/queries'
+import type { TestScenarioType, Priority, TestStatus } from '@/types/test-scenario'
 
 const PAGE_SIZE = 10
 type SortKey = 'docNo' | 'deadline' | 'priority' | 'status'
-
-const PRIORITY_ORDER: Record<string, number> = { '긴급': 0, '높음': 1, '보통': 2, '낮음': 3 }
-const STATUS_ORDER_TS: Record<string, number> = { '실행중': 0, '검토중': 1, '승인됨': 2, '실패': 3, '작성중': 4, '통과': 5, '보류': 6 }
 
 export default function TestScenariosPage() {
   const navigate = useNavigate()
@@ -37,24 +20,20 @@ export default function TestScenariosPage() {
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: 'docNo', dir: 'desc' })
   const [page, setPage] = useState(1)
 
-  const filtered = SAMPLE_DATA.filter((r) => {
-    const matchSearch = search === '' || r.title.includes(search) || r.docNo.includes(search)
-    const matchType = filterType === '전체' || r.type === filterType
-    const matchPriority = filterPriority === '전체' || r.priority === filterPriority
-    const matchStatus = filterStatus === '전체' || r.status === filterStatus
-    return matchSearch && matchType && matchPriority && matchStatus
-  })
-
-  const sorted = [...filtered].sort((a, b) => {
-    const v = sort.dir === 'asc' ? 1 : -1
-    if (sort.key === 'docNo') return a.docNo > b.docNo ? v : -v
-    if (sort.key === 'priority') return ((PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9)) * v
-    if (sort.key === 'status') return ((STATUS_ORDER_TS[a.status] ?? 9) - (STATUS_ORDER_TS[b.status] ?? 9)) * v
-    return a.deadline > b.deadline ? v : -v
-  })
-
-  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE))
-  const paginated = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const params = useMemo(
+    () => ({
+      search,
+      filterType,
+      filterPriority,
+      filterStatus,
+      sortKey: sort.key,
+      sortDir: sort.dir,
+      page,
+      pageSize: PAGE_SIZE,
+    }),
+    [filterPriority, filterStatus, filterType, page, search, sort.dir, sort.key],
+  )
+  const { data, isPending, isError, refetch } = useTestScenariosQuery(params)
 
   const handleSort = (key: string) => {
     const k = key as SortKey
@@ -66,12 +45,7 @@ export default function TestScenariosPage() {
   }
 
   const isFiltered = search || filterType !== '전체' || filterPriority !== '전체' || filterStatus !== '전체'
-
-  // 상태 요약 (상단 미니 KPI)
-  const passCount = SAMPLE_DATA.filter((r) => r.status === '통과').length
-  const failCount = SAMPLE_DATA.filter((r) => r.status === '실패').length
-  const runCount  = SAMPLE_DATA.filter((r) => r.status === '실행중').length
-  const totalCount = SAMPLE_DATA.length
+  const isEmpty = !isPending && !isError && (data?.items.length ?? 0) === 0
 
   return (
     <div className="p-6 space-y-4">
@@ -79,7 +53,7 @@ export default function TestScenariosPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-[18px] font-bold text-gray-900">테스트 시나리오</h1>
-          <p className="text-[12px] text-gray-400 mt-0.5">총 {filtered.length}건</p>
+          <p className="text-[12px] text-gray-400 mt-0.5">총 {data?.total ?? 0}건</p>
         </div>
         <button
           onClick={() => navigate('/test-scenarios/new')}
@@ -93,10 +67,10 @@ export default function TestScenariosPage() {
       {/* 상태 요약 바 */}
       <div className="grid grid-cols-4 gap-3">
         {[
-          { label: '전체',  value: totalCount, cls: 'text-gray-700',    bar: 'bg-gray-200',    status: '전체'  },
-          { label: '실행중', value: runCount,  cls: 'text-amber-600',   bar: 'bg-amber-400',   status: '실행중' },
-          { label: '통과',  value: passCount,  cls: 'text-emerald-600', bar: 'bg-emerald-400', status: '통과'  },
-          { label: '실패',  value: failCount,  cls: 'text-red-500',     bar: 'bg-red-400',     status: '실패'  },
+          { label: '전체', value: data?.summary.totalCount ?? 0, cls: 'text-gray-700', bar: 'bg-gray-200', status: '전체' },
+          { label: '실행중', value: data?.summary.runCount ?? 0, cls: 'text-amber-600', bar: 'bg-amber-400', status: '실행중' },
+          { label: '통과', value: data?.summary.passCount ?? 0, cls: 'text-emerald-600', bar: 'bg-emerald-400', status: '통과' },
+          { label: '실패', value: data?.summary.failCount ?? 0, cls: 'text-red-500', bar: 'bg-red-400', status: '실패' },
         ].map((s) => (
           <button
             key={s.label}
@@ -110,7 +84,7 @@ export default function TestScenariosPage() {
               <span className={`text-[18px] font-bold ${s.cls}`}>{s.value}</span>
             </div>
             <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
-              <div className={`h-full ${s.bar} rounded-full`} style={{ width: `${totalCount ? (s.value / totalCount) * 100 : 0}%` }} />
+              <div className={`h-full ${s.bar} rounded-full`} style={{ width: `${(data?.summary.totalCount ?? 0) ? (s.value / (data?.summary.totalCount ?? 1)) * 100 : 0}%` }} />
             </div>
           </button>
         ))}
@@ -140,8 +114,25 @@ export default function TestScenariosPage() {
 
       {/* 테이블 */}
       <div className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_12px_rgba(30,58,138,0.07)] overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        {isPending ? (
+          <LoadingState title="테스트 시나리오 목록을 불러오는 중입니다" description="필터와 정렬 정보를 준비하고 있습니다." />
+        ) : isError ? (
+          <ErrorState
+            title="목록을 불러오지 못했습니다"
+            description="잠시 후 다시 시도해주세요."
+            actionLabel="다시 시도"
+            onAction={() => { void refetch() }}
+          />
+        ) : isEmpty ? (
+          <EmptyState
+            title="조건에 맞는 테스트 시나리오가 없습니다"
+            description="검색어 또는 필터 조건을 조정해보세요."
+            actionLabel="필터 초기화"
+            onAction={resetFilters}
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50/80 border-b border-gray-100">
                 <SortTh label="문서번호" sortKey="docNo" current={sort} onSort={handleSort} />
@@ -154,21 +145,25 @@ export default function TestScenariosPage() {
                 <SortTh label="마감일" sortKey="deadline" current={sort} onSort={handleSort} />
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
-              {paginated.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-[13px] text-gray-400">검색 결과가 없습니다</td>
-                </tr>
-              ) : (
-                paginated.map((ts) => (
-                  <tr
-                    key={ts.id}
-                    onClick={() => navigate(`/test-scenarios/${ts.id}`)}
-                    className="hover:bg-blue-50/30 transition-colors cursor-pointer group"
-                  >
-                    <td className="px-4 py-3 font-mono text-[11px] text-gray-400 whitespace-nowrap">{ts.docNo}</td>
+              <tbody className="divide-y divide-gray-50">
+                {(data?.items ?? []).map((ts) => (
+                  <tr key={ts.id} className="hover:bg-blue-50/30 transition-colors group">
+                    <td className="px-4 py-3 font-mono text-[11px] text-gray-400 whitespace-nowrap">
+                      <Link
+                        to={`/test-scenarios/${ts.id}`}
+                        className="inline-flex rounded focus:outline-none focus:ring-2 focus:ring-brand/30"
+                        aria-label={`${ts.docNo} 상세 보기`}
+                      >
+                        {ts.docNo}
+                      </Link>
+                    </td>
                     <td className="px-4 py-3 max-w-[240px]">
-                      <span className="text-[13px] text-gray-800 font-medium truncate block group-hover:text-brand transition-colors">{ts.title}</span>
+                      <Link
+                        to={`/test-scenarios/${ts.id}`}
+                        className="text-[13px] text-gray-800 font-medium truncate block group-hover:text-brand transition-colors rounded focus:outline-none focus:ring-2 focus:ring-brand/30"
+                      >
+                        {ts.title}
+                      </Link>
                     </td>
                     <td className="px-3 py-3 whitespace-nowrap"><TestTypeBadge type={ts.type} /></td>
                     <td className="px-3 py-3 whitespace-nowrap"><PriorityBadge priority={ts.priority} /></td>
@@ -179,12 +174,14 @@ export default function TestScenariosPage() {
                     <td className="px-3 py-3 whitespace-nowrap"><span className="text-[12px] text-gray-600">{ts.assignee}</span></td>
                     <td className="px-3 py-3 whitespace-nowrap"><DeadlineCell date={ts.deadline} /></td>
                   </tr>
-                ))
-              )}
+                ))}
             </tbody>
-          </table>
-        </div>
-        <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+            </table>
+          </div>
+        )}
+        {!isPending && !isError && !isEmpty && (
+          <Pagination page={data?.page ?? page} totalPages={data?.totalPages ?? 1} onPageChange={setPage} />
+        )}
       </div>
     </div>
   )
