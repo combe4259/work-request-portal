@@ -22,7 +22,7 @@ export const useAuthStore = create<AuthState>()(
 
       setAuth: (user, token, teams) => {
         localStorage.setItem('accessToken', token)
-        set({ user, token, teams })
+        set({ user, token, teams, currentTeam: teams[0] ?? null })
       },
 
       setCurrentTeam: (team) => set({ currentTeam: team }),

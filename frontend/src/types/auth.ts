@@ -21,6 +21,18 @@ export interface LoginRequest {
   password: string
 }
 
+export interface SignupRequest {
+  name: string
+  email: string
+  role?: UserRole
+  password: string
+}
+
+export interface SignupResponse {
+  id: number
+  email: string
+}
+
 export interface LoginResponse {
   accessToken: string
   user: User

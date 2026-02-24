@@ -3,10 +3,13 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useNavigate } from 'react-router-dom'
+import axios from 'axios'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import AuthLayout from '@/components/layout/AuthLayout'
+import { useLoginMutation } from '@/features/auth/mutations'
+import { useAuthStore } from '@/stores/authStore'
 
 const loginSchema = z.object({
   email: z.string().min(1, '이메일을 입력해주세요').email('올바른 이메일 형식이 아닙니다'),
@@ -18,6 +21,8 @@ type LoginFormValues = z.infer<typeof loginSchema>
 export default function LoginPage() {
   const navigate = useNavigate()
   const [serverError, setServerError] = useState<string | null>(null)
+  const { setAuth, setCurrentTeam } = useAuthStore()
+  const loginMutation = useLoginMutation()
 
   const {
     register,
@@ -30,10 +35,14 @@ export default function LoginPage() {
   const onSubmit = async (_data: LoginFormValues) => {
     setServerError(null)
     try {
-      // TODO: API 연동
-      navigate('/dashboard')
-    } catch {
-      setServerError('이메일 또는 비밀번호가 올바르지 않습니다.')
+      const response = await loginMutation.mutateAsync(_data)
+      setAuth(response.user, response.accessToken, response.teams)
+      if (response.teams.length > 0) {
+        setCurrentTeam(response.teams[0])
+      }
+      navigate('/dashboard', { replace: true })
+    } catch (error) {
+      setServerError(resolveErrorMessage(error, '이메일 또는 비밀번호가 올바르지 않습니다.'))
     }
   }
 
@@ -120,6 +129,16 @@ export default function LoginPage() {
       </div>
     </AuthLayout>
   )
+}
+
+function resolveErrorMessage(error: unknown, fallback: string) {
+  if (axios.isAxiosError(error)) {
+    const message = error.response?.data?.message
+    if (typeof message === 'string' && message.trim()) {
+      return message
+    }
+  }
+  return fallback
 }
 
 function SpinnerIcon() {

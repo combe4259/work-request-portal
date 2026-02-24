@@ -33,6 +33,7 @@ import ResourcesPage from '@/pages/resource/ResourcesPage'
 import ResourceFormPage from '@/pages/resource/ResourceFormPage'
 import SettingsPage from '@/pages/settings/SettingsPage'
 import SettingsTeamPage from '@/pages/settings/SettingsTeamPage'
+import { RedirectIfAuthenticated, RequireAuth } from './RouteGuards'
 
 const router = createBrowserRouter([
   {
@@ -41,18 +42,34 @@ const router = createBrowserRouter([
   },
   {
     path: '/login',
-    element: <LoginPage />,
+    element: (
+      <RedirectIfAuthenticated>
+        <LoginPage />
+      </RedirectIfAuthenticated>
+    ),
   },
   {
     path: '/register',
-    element: <RegisterPage />,
+    element: (
+      <RedirectIfAuthenticated>
+        <RegisterPage />
+      </RedirectIfAuthenticated>
+    ),
   },
   {
     path: '/team-select',
-    element: <TeamSelectPage />,
+    element: (
+      <RequireAuth>
+        <TeamSelectPage />
+      </RequireAuth>
+    ),
   },
   {
-    element: <AppLayout />,
+    element: (
+      <RequireAuth>
+        <AppLayout />
+      </RequireAuth>
+    ),
     children: [
       { path: '/dashboard', element: <DashboardPage /> },
       { path: '/work-requests', element: <WorkRequestsPage /> },

@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useNavigate } from 'react-router-dom'
+import axios from 'axios'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,6 +15,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import AuthLayout from '@/components/layout/AuthLayout'
+import { useLoginMutation, useSignupMutation } from '@/features/auth/mutations'
+import { useAuthStore } from '@/stores/authStore'
 
 const registerSchema = z
   .object({
@@ -46,6 +49,9 @@ const ROLE_LABELS: Record<RegisterFormValues['role'], string> = {
 export default function RegisterPage() {
   const navigate = useNavigate()
   const [serverError, setServerError] = useState<string | null>(null)
+  const signupMutation = useSignupMutation()
+  const loginMutation = useLoginMutation()
+  const { setAuth, setCurrentTeam } = useAuthStore()
 
   const {
     register,
@@ -62,10 +68,26 @@ export default function RegisterPage() {
   const onSubmit = async (_data: RegisterFormValues) => {
     setServerError(null)
     try {
-      // TODO: API 연동
-      navigate('/team-select')
-    } catch {
-      setServerError('이미 사용 중인 이메일입니다.')
+      await signupMutation.mutateAsync({
+        name: _data.name,
+        email: _data.email,
+        role: _data.role,
+        password: _data.password,
+      })
+
+      const loginResponse = await loginMutation.mutateAsync({
+        email: _data.email,
+        password: _data.password,
+      })
+
+      setAuth(loginResponse.user, loginResponse.accessToken, loginResponse.teams)
+      if (loginResponse.teams.length > 0) {
+        setCurrentTeam(loginResponse.teams[0])
+      }
+
+      navigate('/dashboard', { replace: true })
+    } catch (error) {
+      setServerError(resolveErrorMessage(error, '회원가입 처리 중 오류가 발생했습니다.'))
     }
   }
 
@@ -236,6 +258,16 @@ export default function RegisterPage() {
       </div>
     </AuthLayout>
   )
+}
+
+function resolveErrorMessage(error: unknown, fallback: string) {
+  if (axios.isAxiosError(error)) {
+    const message = error.response?.data?.message
+    if (typeof message === 'string' && message.trim()) {
+      return message
+    }
+  }
+  return fallback
 }
 
 function getPasswordStrength(password: string) {
