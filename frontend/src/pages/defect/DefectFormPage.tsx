@@ -96,6 +96,11 @@ export default function DefectFormPage() {
       severity: data.severity,
       deadline: data.deadline,
       assignee: data.assignee,
+      relatedDoc: relatedDoc?.docNo,
+      environment: data.environment,
+      reproductionSteps: steps.map((s) => s.text.trim()).filter((s) => s.length > 0),
+      expectedBehavior: data.expected,
+      actualBehavior: data.actual,
     })
     navigate('/defects')
   }
