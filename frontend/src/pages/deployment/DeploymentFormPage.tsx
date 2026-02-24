@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { FormField } from '@/components/common/FormField'
 import { inputCls, textareaCls, selectCls } from '@/lib/formStyles'
+import { useCreateDeploymentMutation } from '@/features/deployment/mutations'
 
 // ── 스키마 ──────────────────────────────────────────
 const schema = z.object({
@@ -37,6 +38,7 @@ let stepIdCounter = 3
 
 export default function DeploymentFormPage() {
   const navigate = useNavigate()
+  const createDeployment = useCreateDeploymentMutation()
 
   // 포함 항목 (multi)
   const [includedDocs, setIncludedDocs] = useState<{ docNo: string; title: string }[]>([])
@@ -107,7 +109,19 @@ export default function DeploymentFormPage() {
 
   const envValue = watch('env')
 
-  const onSubmit = async (_data: FormValues) => {
+  const onSubmit = async (data: FormValues) => {
+    await createDeployment.mutateAsync({
+      title: data.title,
+      version: data.version,
+      type: data.type,
+      env: data.env,
+      deployDate: data.deployDate,
+      manager: data.manager,
+      overview: data.overview,
+      rollback: data.rollback,
+      includedDocs: includedDocs.map((doc) => doc.docNo),
+      steps: steps.map((step) => step.text.trim()).filter((step) => step.length > 0),
+    })
     navigate('/deployments')
   }
 
@@ -364,10 +378,10 @@ export default function DeploymentFormPage() {
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || createDeployment.isPending}
               className="h-9 px-5 text-[13px] font-semibold text-white bg-brand hover:bg-brand-hover rounded-lg transition-colors disabled:opacity-60 flex items-center gap-2"
             >
-              {isSubmitting ? <><SpinnerIcon />등록 중...</> : '등록하기'}
+              {isSubmitting || createDeployment.isPending ? <><SpinnerIcon />등록 중...</> : '등록하기'}
             </button>
           </div>
         </form>
