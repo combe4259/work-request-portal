@@ -1,4 +1,15 @@
 package org.example.domain.idea.dto;
 
-public record ProjectIdeaCreateRequest() {
+import java.util.List;
+
+public record ProjectIdeaCreateRequest(
+        String title,
+        String content,
+        List<String> benefits,
+        String category,
+        String status,
+        String statusNote,
+        Long teamId,
+        Long proposedBy
+) {
 }

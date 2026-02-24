@@ -1,4 +1,16 @@
 package org.example.domain.idea.dto;
 
-public record ProjectIdeaListResponse(Long id) {
+import java.time.LocalDateTime;
+
+public record ProjectIdeaListResponse(
+        Long id,
+        String ideaNo,
+        String title,
+        String content,
+        String category,
+        String status,
+        Long proposedBy,
+        long likeCount,
+        LocalDateTime createdAt
+) {
 }

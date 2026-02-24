@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { FormField } from '@/components/common/FormField'
 import { inputCls, textareaCls } from '@/lib/formStyles'
+import { useCreateIdeaMutation } from '@/features/idea/mutations'
 
 // ── 스키마 ───────────────────────────────────────────
 const schema = z.object({
@@ -26,6 +27,7 @@ const ALL_DOCS = [
 
 export default function IdeaFormPage() {
   const navigate = useNavigate()
+  const createIdea = useCreateIdeaMutation()
 
   // 기대 효과
   const [benefits, setBenefits] = useState<string[]>([])
@@ -75,7 +77,7 @@ export default function IdeaFormPage() {
     register,
     handleSubmit,
     watch,
-    formState: { errors, isSubmitting },
+    formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { category: 'UX/UI' },
@@ -83,8 +85,13 @@ export default function IdeaFormPage() {
 
   const contentValue = watch('content') ?? ''
 
-  const onSubmit = async (_data: FormValues) => {
-    // TODO: API 연동
+  const onSubmit = async (data: FormValues) => {
+    await createIdea.mutateAsync({
+      title: data.title,
+      category: data.category,
+      content: data.content,
+      benefits,
+    })
     navigate('/ideas')
   }
 
@@ -302,10 +309,10 @@ export default function IdeaFormPage() {
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={createIdea.isPending}
               className="h-9 px-5 text-[13px] font-semibold text-white bg-brand hover:bg-brand-hover rounded-lg transition-colors disabled:opacity-60 flex items-center gap-2"
             >
-              {isSubmitting ? <><SpinnerIcon />제안 중...</> : '아이디어 제안'}
+              {createIdea.isPending ? <><SpinnerIcon />제안 중...</> : '아이디어 제안'}
             </button>
           </div>
         </form>

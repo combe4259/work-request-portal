@@ -1,68 +1,79 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { CategoryBadge, IdeaStatusBadge } from '@/components/idea/Badges'
+import { EmptyState, ErrorState, LoadingState } from '@/components/common/AsyncState'
+import { useIdeaQuery } from '@/features/idea/queries'
+import { useLikeIdeaMutation, useUnlikeIdeaMutation, useUpdateIdeaStatusMutation } from '@/features/idea/mutations'
 import type { IdeaStatus } from '@/types/idea'
 
-// ── Mock 데이터 ───────────────────────────────────────
-const MOCK_DETAIL = {
-  id: '7',
-  docNo: 'ID-007',
-  title: '잔고 조회 화면 즐겨찾기 계좌 핀 기능',
-  category: 'UX/UI' as const,
-  status: '검토중' as IdeaStatus,
-  proposer: '박요청',
-  createdAt: '2026-02-15',
-  likes: 18,
-  content: `잔고 조회 화면에서 자주 확인하는 계좌를 상단에 고정(핀)할 수 있는 기능을 추가합니다.
-
-현재는 계좌 목록이 개설 순서대로 고정되어 있어, 주로 사용하는 계좌를 확인하려면 스크롤이 필요한 경우가 있습니다. 즐겨찾기 핀 기능을 통해 사용 빈도가 높은 계좌를 최상단에 노출시킬 수 있습니다.
-
-추가로 핀된 계좌의 순서를 드래그로 변경할 수 있는 기능도 함께 검토해주시면 좋겠습니다.`,
-  benefits: [
-    '주 사용 계좌 접근성 향상으로 평균 클릭 수 2회 절감 예상',
-    '계좌 수가 많은 사용자(5개 이상)의 UX 만족도 개선',
-    '드래그 순서 변경으로 개인화 경험 제공',
-  ],
-  relatedDocs: [
-    { docNo: 'WR-038', title: '잔고 조회 화면 UI 개선 요청' },
-    { docNo: 'TS-012', title: '계좌 목록 정렬 기능 테스트 시나리오' },
-  ],
-}
-
 const MOCK_COMMENTS = [
-  { id: 1, author: '이설계', content: '좋은 아이디어입니다. 핀 아이콘 위치와 개수 제한(최대 3개?)에 대한 기준도 함께 정하면 좋을 것 같습니다.', createdAt: '2026-02-16 10:20' },
-  { id: 2, author: '김개발', content: '드래그 기능은 모바일 터치 환경에서도 동작해야 하는데, React DnD 또는 dnd-kit 라이브러리 도입을 검토해볼게요.', createdAt: '2026-02-17 14:05' },
-]
-
-const MOCK_HISTORY = [
-  { action: '상태 변경', from: '제안됨', to: '검토중', actor: '이설계', at: '2026-02-16 09:00' },
-  { action: '아이디어 등록', from: '', to: '', actor: '박요청', at: '2026-02-15 17:30' },
+  { id: 1, author: '이설계', content: '좋은 아이디어입니다. 구현 범위를 조금 더 구체화하면 좋겠습니다.', createdAt: '2026-02-16 10:20' },
+  { id: 2, author: '김개발', content: '기술 검토 후 다음 스프린트 후보로 올려보겠습니다.', createdAt: '2026-02-17 14:05' },
 ]
 
 const STATUS_OPTIONS: IdeaStatus[] = ['제안됨', '검토중', '채택', '보류', '기각']
 
-const DOC_PREFIX_STYLE: Record<string, string> = {
-  WR: 'bg-blue-50 text-blue-500',
-  TK: 'bg-slate-100 text-slate-500',
-  TS: 'bg-emerald-50 text-emerald-600',
-  DF: 'bg-red-50 text-red-400',
-  DP: 'bg-orange-50 text-orange-500',
-  ID: 'bg-purple-50 text-purple-500',
-}
-
 export default function IdeaDetailPage() {
   const navigate = useNavigate()
-  const data = MOCK_DETAIL
+  const { id } = useParams<{ id: string }>()
+  const { data, isPending, isError, refetch } = useIdeaQuery(id)
+  const updateStatus = useUpdateIdeaStatusMutation()
+  const likeIdea = useLikeIdeaMutation()
+  const unlikeIdea = useUnlikeIdeaMutation()
 
-  const [status, setStatus] = useState<IdeaStatus>(data.status)
   const [statusOpen, setStatusOpen] = useState(false)
+  const [statusDraft, setStatusDraft] = useState<IdeaStatus | null>(null)
   const [liked, setLiked] = useState(false)
   const [comment, setComment] = useState('')
   const [comments, setComments] = useState(MOCK_COMMENTS)
 
+  if (isPending) {
+    return (
+      <div className="p-6">
+        <LoadingState title="아이디어를 불러오는 중입니다" description="상세 데이터를 조회하고 있습니다." />
+      </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <div className="p-6">
+        <ErrorState
+          title="아이디어를 불러오지 못했습니다"
+          description="잠시 후 다시 시도해주세요."
+          actionLabel="다시 시도"
+          onAction={() => { void refetch() }}
+        />
+      </div>
+    )
+  }
+
+  if (!data) {
+    return (
+      <div className="p-6">
+        <EmptyState title="아이디어를 찾을 수 없습니다" description="목록으로 돌아가 다시 선택해주세요." actionLabel="목록으로" onAction={() => navigate('/ideas')} />
+      </div>
+    )
+  }
+
+  const status = statusDraft ?? data.status
   const likeCount = data.likes + (liked ? 1 : 0)
 
-  const handleStatusChange = (s: IdeaStatus) => { setStatus(s); setStatusOpen(false) }
+  const handleStatusChange = async (nextStatus: IdeaStatus) => {
+    setStatusDraft(nextStatus)
+    setStatusOpen(false)
+    await updateStatus.mutateAsync({ id: data.id, status: nextStatus })
+  }
+
+  const handleLike = async () => {
+    if (liked) {
+      await unlikeIdea.mutateAsync(data.id)
+      setLiked(false)
+      return
+    }
+    await likeIdea.mutateAsync(data.id)
+    setLiked(true)
+  }
 
   const handleComment = () => {
     if (!comment.trim()) return
@@ -72,7 +83,6 @@ export default function IdeaDetailPage() {
 
   return (
     <div className="p-6">
-      {/* 헤더 */}
       <div className="flex items-start justify-between mb-5">
         <div className="flex items-start gap-3">
           <button
@@ -90,11 +100,9 @@ export default function IdeaDetailPage() {
           </div>
         </div>
 
-        {/* 우측 액션 */}
         <div className="flex items-center gap-2 flex-shrink-0">
-          {/* 좋아요 버튼 */}
           <button
-            onClick={() => setLiked((v) => !v)}
+            onClick={() => { void handleLike() }}
             className={`flex items-center gap-1.5 h-8 px-3 border rounded-lg text-[12px] font-medium transition-colors ${
               liked
                 ? 'bg-red-50 border-red-200 text-red-500'
@@ -105,7 +113,6 @@ export default function IdeaDetailPage() {
             {likeCount}
           </button>
 
-          {/* 상태 드롭다운 */}
           <div className="relative">
             <button
               onClick={() => setStatusOpen((v) => !v)}
@@ -116,13 +123,13 @@ export default function IdeaDetailPage() {
             </button>
             {statusOpen && (
               <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden w-24">
-                {STATUS_OPTIONS.map((s) => (
+                {STATUS_OPTIONS.map((item) => (
                   <button
-                    key={s}
-                    onClick={() => handleStatusChange(s)}
-                    className={`w-full px-3 py-2 text-left text-[12px] hover:bg-gray-50 transition-colors ${s === status ? 'bg-blue-50' : ''}`}
+                    key={item}
+                    onClick={() => { void handleStatusChange(item) }}
+                    className={`w-full px-3 py-2 text-left text-[12px] hover:bg-gray-50 transition-colors ${item === status ? 'bg-blue-50' : ''}`}
                   >
-                    <IdeaStatusBadge status={s} />
+                    <IdeaStatusBadge status={item} />
                   </button>
                 ))}
               </div>
@@ -131,12 +138,8 @@ export default function IdeaDetailPage() {
         </div>
       </div>
 
-      {/* 2열 레이아웃 */}
       <div className="flex gap-5 items-start">
-        {/* ── 왼쪽 메인 ─────────────────────────────── */}
         <div className="flex-1 min-w-0 space-y-4">
-
-          {/* 메타 */}
           <div className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] px-5 py-4">
             <div className="grid grid-cols-3 gap-4">
               <MetaItem label="카테고리">
@@ -147,55 +150,31 @@ export default function IdeaDetailPage() {
             </div>
           </div>
 
-          {/* 아이디어 내용 */}
           <Section title="아이디어 내용">
             <div className="bg-gray-50 rounded-lg px-4 py-3 text-[13px] text-gray-600 leading-relaxed whitespace-pre-line border border-gray-100">
               {data.content}
             </div>
           </Section>
 
-          {/* 기대 효과 */}
           <Section title="기대 효과">
-            <div className="space-y-2">
-              {data.benefits.map((item, idx) => (
-                <div key={idx} className="flex items-start gap-3">
-                  <span className="w-5 h-5 rounded-full bg-emerald-50 text-emerald-600 text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
-                    {idx + 1}
-                  </span>
-                  <span className="text-[13px] text-gray-600 leading-snug">{item}</span>
-                </div>
-              ))}
-            </div>
-          </Section>
-
-          {/* 연관 문서 */}
-          {data.relatedDocs.length > 0 && (
-            <Section title="연관 문서">
-              <div className="flex flex-wrap gap-2">
-                {data.relatedDocs.map((d) => {
-                  const prefix = d.docNo.split('-')[0]
-                  return (
-                    <button
-                      key={d.docNo}
-                      onClick={() => navigate(-1)}
-                      className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg hover:border-brand/40 hover:bg-blue-50/30 transition-colors group"
-                    >
-                      <span className={`font-mono text-[11px] px-1.5 py-0.5 rounded ${DOC_PREFIX_STYLE[prefix] ?? 'bg-gray-100 text-gray-500'}`}>
-                        {d.docNo}
-                      </span>
-                      <span className="text-[12px] text-gray-600 group-hover:text-brand transition-colors">{d.title}</span>
-                    </button>
-                  )
-                })}
+            {data.benefits.length === 0 ? (
+              <p className="text-[12px] text-gray-400">등록된 기대 효과가 없습니다.</p>
+            ) : (
+              <div className="space-y-2">
+                {data.benefits.map((item, idx) => (
+                  <div key={idx} className="flex items-start gap-3">
+                    <span className="w-5 h-5 rounded-full bg-emerald-50 text-emerald-600 text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
+                      {idx + 1}
+                    </span>
+                    <span className="text-[13px] text-gray-600 leading-snug">{item}</span>
+                  </div>
+                ))}
               </div>
-            </Section>
-          )}
-
+            )}
+          </Section>
         </div>
 
-        {/* ── 오른쪽 사이드바 ────────────────────────── */}
         <div className="w-[300px] flex-shrink-0 space-y-4">
-          {/* 댓글 */}
           <div className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] px-4 py-4">
             <p className="text-[12px] font-semibold text-gray-700 mb-3">댓글 {comments.length}</p>
             <div className="space-y-3 mb-3 max-h-[260px] overflow-y-auto">
@@ -232,37 +211,12 @@ export default function IdeaDetailPage() {
               </button>
             </div>
           </div>
-
-          {/* 처리 이력 */}
-          <div className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] p-4">
-            <p className="text-[12px] font-semibold text-gray-700 mb-4">처리 이력</p>
-            <div className="relative">
-              <div className="absolute left-2.5 top-0 bottom-0 w-px bg-gray-100" />
-              <div className="space-y-4">
-                {MOCK_HISTORY.map((h, i) => (
-                  <div key={i} className="flex gap-3 relative">
-                    <div className="w-5 h-5 rounded-full bg-white border-2 border-gray-200 flex-shrink-0 z-10 flex items-center justify-center">
-                      <div className={`w-1.5 h-1.5 rounded-full ${i === 0 ? 'bg-brand' : 'bg-gray-300'}`} />
-                    </div>
-                    <div className="flex-1 min-w-0 pb-1">
-                      <p className="text-[11px] font-semibold text-gray-700">{h.action}</p>
-                      {h.from && (
-                        <p className="text-[10px] text-gray-400 mt-0.5">{h.from} → {h.to}</p>
-                      )}
-                      <p className="text-[10px] text-gray-400 mt-0.5">{h.actor} · {h.at.slice(5)}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>
   )
 }
 
-// ── 서브 컴포넌트 ─────────────────────────────────────
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] px-5 py-4">
@@ -281,7 +235,6 @@ function MetaItem({ label, value, children }: { label: string; value?: string; c
   )
 }
 
-// ── 아이콘 ────────────────────────────────────────────
 function BackIcon() {
   return <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M9 2.5L5 7L9 11.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
 }
