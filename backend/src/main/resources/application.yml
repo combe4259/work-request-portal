@@ -15,3 +15,8 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:change-this-to-a-long-local-dev-secret-key-2026-work-request-portal}
+    access-token-expire-seconds: ${JWT_ACCESS_TOKEN_EXPIRE_SECONDS:3600}
