@@ -3,10 +3,14 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useNavigate } from 'react-router-dom'
+import axios from 'axios'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import AuthLayout from '@/components/layout/AuthLayout'
+import { useCreateTeamMutation, useJoinTeamMutation } from '@/features/auth/mutations'
+import { useAuthStore } from '@/stores/authStore'
+import type { Team } from '@/types/auth'
 
 type Mode = 'create' | 'join' | null
 
@@ -33,6 +37,12 @@ type JoinTeamValues = z.infer<typeof joinTeamSchema>
 export default function TeamSelectPage() {
   const navigate = useNavigate()
   const [mode, setMode] = useState<Mode>(null)
+  const { addTeam } = useAuthStore()
+
+  const handleSuccess = (team: Team) => {
+    addTeam(team)
+    navigate('/dashboard', { replace: true })
+  }
 
   return (
     <AuthLayout>
@@ -61,10 +71,10 @@ export default function TeamSelectPage() {
 
       {/* 인라인 폼 */}
       {mode === 'create' && (
-        <CreateTeamForm onSuccess={() => navigate('/dashboard')} />
+        <CreateTeamForm onSuccess={handleSuccess} />
       )}
       {mode === 'join' && (
-        <JoinTeamForm onSuccess={() => navigate('/dashboard')} />
+        <JoinTeamForm onSuccess={handleSuccess} />
       )}
 
       <div className="mt-6 pt-5 border-t border-gray-100">
@@ -120,16 +130,27 @@ function OptionCard({ active, onClick, icon, title, desc }: OptionCardProps) {
 }
 
 // ── 팀 만들기 폼 ──────────────────────────────────────
-function CreateTeamForm({ onSuccess }: { onSuccess: () => void }) {
+function CreateTeamForm({ onSuccess }: { onSuccess: (team: Team) => void }) {
+  const [serverError, setServerError] = useState<string | null>(null)
+  const createTeamMutation = useCreateTeamMutation()
+
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<CreateTeamValues>({ resolver: zodResolver(createTeamSchema) })
 
-  const onSubmit = async (_data: CreateTeamValues) => {
-    // TODO: API 연동
-    onSuccess()
+  const onSubmit = async (data: CreateTeamValues) => {
+    setServerError(null)
+    try {
+      const team = await createTeamMutation.mutateAsync({
+        name: data.name,
+        description: data.description?.trim() ? data.description.trim() : undefined,
+      })
+      onSuccess(team)
+    } catch (error) {
+      setServerError(resolveErrorMessage(error, '팀 생성 중 오류가 발생했습니다.'))
+    }
   }
 
   return (
@@ -167,9 +188,15 @@ function CreateTeamForm({ onSuccess }: { onSuccess: () => void }) {
           )}
         </div>
 
+        {serverError && (
+          <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2.5">
+            <p className="text-xs text-red-600">{serverError}</p>
+          </div>
+        )}
+
         <Button
           type="submit"
-          disabled={isSubmitting}
+          disabled={isSubmitting || createTeamMutation.isPending}
           className="w-full h-9 bg-brand hover:bg-brand-hover text-white text-sm font-semibold transition-colors"
         >
           {isSubmitting ? (
@@ -187,16 +214,26 @@ function CreateTeamForm({ onSuccess }: { onSuccess: () => void }) {
 }
 
 // ── 팀 참여 폼 ────────────────────────────────────────
-function JoinTeamForm({ onSuccess }: { onSuccess: () => void }) {
+function JoinTeamForm({ onSuccess }: { onSuccess: (team: Team) => void }) {
+  const [serverError, setServerError] = useState<string | null>(null)
+  const joinTeamMutation = useJoinTeamMutation()
+
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<JoinTeamValues>({ resolver: zodResolver(joinTeamSchema) })
 
-  const onSubmit = async (_data: JoinTeamValues) => {
-    // TODO: API 연동
-    onSuccess()
+  const onSubmit = async (data: JoinTeamValues) => {
+    setServerError(null)
+    try {
+      const team = await joinTeamMutation.mutateAsync({
+        inviteCode: data.inviteCode.trim().toUpperCase(),
+      })
+      onSuccess(team)
+    } catch (error) {
+      setServerError(resolveErrorMessage(error, '팀 참여 중 오류가 발생했습니다.'))
+    }
   }
 
   return (
@@ -227,9 +264,15 @@ function JoinTeamForm({ onSuccess }: { onSuccess: () => void }) {
           )}
         </div>
 
+        {serverError && (
+          <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2.5">
+            <p className="text-xs text-red-600">{serverError}</p>
+          </div>
+        )}
+
         <Button
           type="submit"
-          disabled={isSubmitting}
+          disabled={isSubmitting || joinTeamMutation.isPending}
           className="w-full h-9 bg-brand hover:bg-brand-hover text-white text-sm font-semibold transition-colors"
         >
           {isSubmitting ? (
@@ -244,6 +287,16 @@ function JoinTeamForm({ onSuccess }: { onSuccess: () => void }) {
       </form>
     </div>
   )
+}
+
+function resolveErrorMessage(error: unknown, fallback: string) {
+  if (axios.isAxiosError(error)) {
+    const message = error.response?.data?.message
+    if (typeof message === 'string' && message.trim()) {
+      return message
+    }
+  }
+  return fallback
 }
 
 // ── SVG 아이콘 ────────────────────────────────────────

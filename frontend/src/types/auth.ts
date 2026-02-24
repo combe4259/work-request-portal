@@ -14,6 +14,7 @@ export interface Team {
   name: string
   description?: string
   teamRole: TeamRole
+  inviteCode?: string
 }
 
 export interface LoginRequest {
