@@ -12,3 +12,18 @@ export interface WorkRequest {
   assignee: string
   deadline: string
 }
+
+export interface WorkRequestDetail {
+  id: string
+  docNo: string
+  title: string
+  background: string
+  description: string
+  type: RequestType
+  priority: Priority
+  status: Status
+  requester: string
+  assignee: string
+  deadline: string
+  createdAt: string
+}

@@ -75,6 +75,8 @@ export default function WorkRequestFormPage() {
       priority: data.priority,
       deadline: data.deadline,
       assignee: data.assignee,
+      background: data.background,
+      description: data.description,
     })
     navigate('/work-requests')
   }

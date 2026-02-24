@@ -107,11 +107,20 @@ export function Pagination({
 
 // ── DeadlineCell ──────────────────────────────────────
 export function DeadlineCell({ date }: { date: string }) {
+  if (!date) {
+    return <span className="text-[12px] text-gray-400">-</span>
+  }
+
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  const diff = Math.ceil((new Date(date).getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+  const deadline = new Date(date)
+  if (Number.isNaN(deadline.getTime())) {
+    return <span className="text-[12px] text-gray-400">-</span>
+  }
+
+  const diff = Math.ceil((deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
   let cls = 'text-gray-500'
   if (diff < 0) cls = 'text-red-500 font-semibold'
   else if (diff <= 3) cls = 'text-orange-500 font-semibold'
-  return <span className={`text-[12px] ${cls}`}>{date.slice(5)}</span>
+  return <span className={`text-[12px] ${cls}`}>{date.slice(5) || date}</span>
 }

@@ -1,4 +1,6 @@
-import type { Priority, RequestType, Status, WorkRequest } from '@/types/work-request'
+import api from '@/lib/api'
+import { useAuthStore } from '@/stores/authStore'
+import type { Priority, RequestType, Status, WorkRequest, WorkRequestDetail } from '@/types/work-request'
 
 export type WorkRequestSortKey = 'docNo' | 'deadline'
 export type WorkRequestSortDir = 'asc' | 'desc'
@@ -27,47 +29,145 @@ export interface CreateWorkRequestInput {
   priority: Priority
   deadline: string
   assignee?: string
+  background?: string
+  description: string
 }
 
-let workRequestsStore: WorkRequest[] = [
-  { id: '1',  docNo: 'WR-051', title: '모바일 PDA 화면 레이아웃 개선 요청',     type: '기능개선', priority: '높음', status: '개발중',   assignee: '김개발',   deadline: '2026-02-25' },
-  { id: '2',  docNo: 'WR-050', title: '신규 계좌 개설 프로세스 자동화',         type: '신규개발', priority: '긴급', status: '검토중',   assignee: '이설계',   deadline: '2026-02-22' },
-  { id: '3',  docNo: 'WR-049', title: '잔고 조회 API 응답 지연 버그 수정',      type: '버그수정', priority: '긴급', status: '테스트중', assignee: '박테스터', deadline: '2026-02-21' },
-  { id: '4',  docNo: 'WR-048', title: 'AWS S3 스토리지 용량 확장',            type: '인프라',   priority: '보통', status: '완료',    assignee: '최인프라', deadline: '2026-02-18' },
-  { id: '5',  docNo: 'WR-047', title: '로그인 세션 만료 시간 정책 변경',        type: '기능개선', priority: '낮음', status: '접수대기', assignee: '미배정',   deadline: '2026-03-05' },
-  { id: '6',  docNo: 'WR-046', title: '주문 내역 엑셀 다운로드 기능 추가',      type: '신규개발', priority: '보통', status: '개발중',   assignee: '김개발',   deadline: '2026-02-28' },
-  { id: '7',  docNo: 'WR-045', title: '고객 알림 푸시 발송 로직 개선',          type: '기능개선', priority: '높음', status: '검토중',   assignee: '이설계',   deadline: '2026-03-03' },
-  { id: '8',  docNo: 'WR-044', title: '배포 파이프라인 CI/CD 구성',            type: '인프라',   priority: '보통', status: '완료',    assignee: '최인프라', deadline: '2026-02-14' },
-  { id: '9',  docNo: 'WR-043', title: '결제 모듈 PG사 연동 오류 수정',         type: '버그수정', priority: '긴급', status: '완료',    assignee: '박테스터', deadline: '2026-02-12' },
-  { id: '10', docNo: 'WR-042', title: '관리자 대시보드 권한 분리',             type: '신규개발', priority: '보통', status: '개발중',   assignee: '김개발',   deadline: '2026-03-10' },
-  { id: '11', docNo: 'WR-041', title: '거래 내역 조회 페이지 성능 개선',        type: '기능개선', priority: '높음', status: '접수대기', assignee: '미배정',   deadline: '2026-03-07' },
-  { id: '12', docNo: 'WR-040', title: '사용자 비밀번호 재설정 이메일 발송 오류', type: '버그수정', priority: '보통', status: '반려',    assignee: '박테스터', deadline: '2026-02-10' },
-]
+export interface CreateWorkRequestResult {
+  id: string
+}
 
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+interface ApiPageResponse<T> {
+  content: T[]
+}
+
+interface ApiWorkRequestListItem {
+  id: number
+  requestNo: string
+  title: string
+  type: RequestType
+  priority: Priority
+  status: Status
+  assigneeId: number | null
+  deadline: string | null
+}
+
+interface ApiWorkRequestDetailResponse {
+  id: number
+  requestNo: string
+  title: string
+  background: string | null
+  description: string
+  type: RequestType
+  priority: Priority
+  status: Status
+  requesterId: number
+  assigneeId: number | null
+  deadline: string | null
+  createdAt: string | null
+}
+
+interface ApiCreateWorkRequestRequest {
+  title: string
+  background?: string
+  description: string
+  type: RequestType
+  priority: Priority
+  status: Status
+  teamId: number
+  requesterId: number
+  assigneeId: number | null
+  deadline: string
+}
+
+interface ApiCreateWorkRequestResponse {
+  id: number
+}
+
+interface ApiUpdateWorkRequestRequest {
+  status: Status
+}
+
+const LIST_FETCH_SIZE = 500
+
+function mapUserLabel(userId: number | null | undefined, fallbackText: string): string {
+  if (userId == null) {
+    return fallbackText
+  }
+
+  const auth = useAuthStore.getState()
+  if (auth.user && auth.user.id === userId) {
+    return auth.user.name
+  }
+
+  return `사용자#${userId}`
+}
+
+function toDateOnly(value: string | null | undefined): string {
+  return value?.slice(0, 10) ?? ''
+}
+
+function mapListItem(item: ApiWorkRequestListItem): WorkRequest {
+  return {
+    id: String(item.id),
+    docNo: item.requestNo,
+    title: item.title,
+    type: item.type,
+    priority: item.priority,
+    status: item.status,
+    assignee: mapUserLabel(item.assigneeId, '미배정'),
+    deadline: toDateOnly(item.deadline),
+  }
+}
+
+function mapDetailItem(item: ApiWorkRequestDetailResponse): WorkRequestDetail {
+  return {
+    id: String(item.id),
+    docNo: item.requestNo,
+    title: item.title,
+    background: item.background ?? '',
+    description: item.description,
+    type: item.type,
+    priority: item.priority,
+    status: item.status,
+    requester: mapUserLabel(item.requesterId, '알 수 없음'),
+    assignee: mapUserLabel(item.assigneeId, '미배정'),
+    deadline: toDateOnly(item.deadline),
+    createdAt: item.createdAt?.replace('T', ' ').slice(0, 16) ?? '',
+  }
 }
 
 export async function listWorkRequests(params: WorkRequestListParams): Promise<WorkRequestListResult> {
-  await delay(180)
-
-  const filtered = workRequestsStore.filter((r) => {
-    const matchSearch = params.search === '' || r.title.includes(params.search) || r.docNo.includes(params.search)
-    const matchType = params.filterType === '전체' || r.type === params.filterType
-    const matchPriority = params.filterPriority === '전체' || r.priority === params.filterPriority
-    const matchStatus = params.filterStatus === '전체' || r.status === params.filterStatus
-    return matchSearch && matchType && matchPriority && matchStatus
+  const { data } = await api.get<ApiPageResponse<ApiWorkRequestListItem>>('/work-requests', {
+    params: { page: 0, size: LIST_FETCH_SIZE },
   })
 
+  const filtered = data.content
+    .map(mapListItem)
+    .filter((item) => {
+      const keyword = params.search.trim()
+      const matchSearch = keyword.length === 0 || item.title.includes(keyword) || item.docNo.includes(keyword)
+      const matchType = params.filterType === '전체' || item.type === params.filterType
+      const matchPriority = params.filterPriority === '전체' || item.priority === params.filterPriority
+      const matchStatus = params.filterStatus === '전체' || item.status === params.filterStatus
+      return matchSearch && matchType && matchPriority && matchStatus
+    })
+
+  const sortFactor = params.sortDir === 'asc' ? 1 : -1
   const sorted = [...filtered].sort((a, b) => {
-    const v = params.sortDir === 'asc' ? 1 : -1
-    if (params.sortKey === 'docNo') return a.docNo > b.docNo ? v : -v
-    return a.deadline > b.deadline ? v : -v
+    if (params.sortKey === 'docNo') {
+      return a.docNo.localeCompare(b.docNo, 'ko-KR', { numeric: true }) * sortFactor
+    }
+
+    const aDeadline = a.deadline ? new Date(a.deadline).getTime() : Number.MAX_SAFE_INTEGER
+    const bDeadline = b.deadline ? new Date(b.deadline).getTime() : Number.MAX_SAFE_INTEGER
+    return (aDeadline - bDeadline) * sortFactor
   })
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / params.pageSize))
   const safePage = Math.min(Math.max(1, params.page), totalPages)
-  const items = sorted.slice((safePage - 1) * params.pageSize, safePage * params.pageSize)
+  const start = (safePage - 1) * params.pageSize
+  const items = sorted.slice(start, start + params.pageSize)
 
   return {
     items,
@@ -77,28 +177,39 @@ export async function listWorkRequests(params: WorkRequestListParams): Promise<W
   }
 }
 
-function getNextDocNo() {
-  const maxNo = workRequestsStore.reduce((max, item) => {
-    const n = Number(item.docNo.replace('WR-', ''))
-    return Number.isFinite(n) ? Math.max(max, n) : max
-  }, 0)
-  return `WR-${String(maxNo + 1).padStart(3, '0')}`
+export async function getWorkRequest(id: string | number): Promise<WorkRequestDetail> {
+  const { data } = await api.get<ApiWorkRequestDetailResponse>(`/work-requests/${id}`)
+  return mapDetailItem(data)
 }
 
-export async function createWorkRequest(input: CreateWorkRequestInput): Promise<WorkRequest> {
-  await delay(220)
+export async function createWorkRequest(input: CreateWorkRequestInput): Promise<CreateWorkRequestResult> {
+  const auth = useAuthStore.getState()
+  const user = auth.user
+  const currentTeam = auth.currentTeam ?? auth.teams[0]
 
-  const next: WorkRequest = {
-    id: String(Date.now()),
-    docNo: getNextDocNo(),
+  if (!user || !currentTeam) {
+    throw new Error('현재 로그인 사용자 또는 팀 정보가 없습니다.')
+  }
+
+  const payload: ApiCreateWorkRequestRequest = {
     title: input.title,
+    background: input.background?.trim() ? input.background.trim() : undefined,
+    description: input.description,
     type: input.type,
     priority: input.priority,
     status: '접수대기',
-    assignee: input.assignee?.trim() ? input.assignee : '미배정',
+    teamId: currentTeam.id,
+    requesterId: user.id,
+    // assignee는 현재 UI가 이름 기반이어서 백엔드 userId 매핑 전까지 미배정으로 저장
+    assigneeId: null,
     deadline: input.deadline,
   }
 
-  workRequestsStore = [next, ...workRequestsStore]
-  return next
+  const { data } = await api.post<ApiCreateWorkRequestResponse>('/work-requests', payload)
+  return { id: String(data.id) }
+}
+
+export async function updateWorkRequestStatus(id: string | number, status: Status): Promise<void> {
+  const payload: ApiUpdateWorkRequestRequest = { status }
+  await api.put(`/work-requests/${id}`, payload)
 }
