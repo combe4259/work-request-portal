@@ -1,3 +1,5 @@
+import api from '@/lib/api'
+import { useAuthStore } from '@/stores/authStore'
 import type { Priority, TestScenario, TestScenarioType, TestStatus } from '@/types/test-scenario'
 
 export type TestScenarioSortKey = 'docNo' | 'deadline' | 'priority' | 'status'
@@ -37,26 +39,81 @@ export interface CreateTestScenarioInput {
   assignee?: string
 }
 
-const PRIORITY_ORDER: Record<string, number> = { '긴급': 0, '높음': 1, '보통': 2, '낮음': 3 }
-const STATUS_ORDER: Record<string, number> = { '실행중': 0, '검토중': 1, '승인됨': 2, '실패': 3, '작성중': 4, '통과': 5, '보류': 6 }
+interface ApiPageResponse<T> {
+  content: T[]
+}
 
-let testScenariosStore: TestScenario[] = [
-  { id: '1', docNo: 'TS-018', title: '모바일 PDA 레이아웃 반응형 검증', type: '기능', priority: '높음', status: '실행중', assignee: '박테스터', relatedDoc: 'WR-051', deadline: '2026-02-26' },
-  { id: '2', docNo: 'TS-017', title: '계좌 개설 프로세스 E2E 흐름 검증', type: 'E2E', priority: '긴급', status: '승인됨', assignee: '박테스터', relatedDoc: 'WR-050', deadline: '2026-02-24' },
-  { id: '3', docNo: 'TS-016', title: '잔고 조회 API 응답시간 회귀 테스트', type: '회귀', priority: '긴급', status: '통과', assignee: '박테스터', relatedDoc: 'WR-049', deadline: '2026-02-20' },
-  { id: '4', docNo: 'TS-015', title: 'S3 파일 업로드/다운로드 통합 테스트', type: '통합', priority: '보통', status: '통과', assignee: '최인프라', relatedDoc: 'WR-048', deadline: '2026-02-17' },
-  { id: '5', docNo: 'TS-014', title: '로그인 세션 만료 기능 검증', type: '기능', priority: '낮음', status: '작성중', assignee: '미배정', relatedDoc: 'WR-047', deadline: '2026-03-03' },
-  { id: '6', docNo: 'TS-013', title: '엑셀 다운로드 데이터 정합성 검증', type: '기능', priority: '보통', status: '검토중', assignee: '박테스터', relatedDoc: 'WR-046', deadline: '2026-02-27' },
-  { id: '7', docNo: 'TS-012', title: 'JWT 토큰 보안 취약점 침투 테스트', type: '보안', priority: '긴급', status: '통과', assignee: '박테스터', relatedDoc: 'TK-019', deadline: '2026-02-17' },
-  { id: '8', docNo: 'TS-011', title: '잔고 조회 N+1 쿼리 성능 검증', type: '성능', priority: '높음', status: '실행중', assignee: '이설계', relatedDoc: 'TK-020', deadline: '2026-02-27' },
-  { id: '9', docNo: 'TS-010', title: '결제 모듈 PG 연동 오류 회귀 테스트', type: '회귀', priority: '긴급', status: '실패', assignee: '박테스터', relatedDoc: 'WR-043', deadline: '2026-02-21' },
-  { id: '10', docNo: 'TS-009', title: '관리자 권한 분리 E2E 시나리오', type: 'E2E', priority: '보통', status: '작성중', assignee: '미배정', relatedDoc: 'WR-042', deadline: '2026-03-08' },
-  { id: '11', docNo: 'TS-008', title: 'SQL Injection 방어 보안 점검', type: '보안', priority: '긴급', status: '통과', assignee: '박테스터', relatedDoc: 'TK-014', deadline: '2026-02-09' },
-  { id: '12', docNo: 'TS-007', title: '거래 내역 조회 대용량 성능 테스트', type: '성능', priority: '높음', status: '보류', assignee: '이설계', relatedDoc: 'WR-041', deadline: '2026-03-06' },
-]
+interface ApiTestScenarioListItem {
+  id: number
+  scenarioNo: string
+  title: string
+  type: TestScenarioType
+  priority: Priority
+  status: TestStatus
+  assigneeId: number | null
+  deadline: string | null
+}
 
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+interface ApiTestScenarioDetailResponse {
+  id: number
+  scenarioNo: string
+  title: string
+  type: TestScenarioType
+  priority: Priority
+  status: TestStatus
+  assigneeId: number | null
+  deadline: string | null
+}
+
+interface ApiCreateTestScenarioRequest {
+  title: string
+  type: TestScenarioType
+  priority: Priority
+  status: TestStatus
+  teamId: number
+  assigneeId: number | null
+  steps: string
+  deadline: string
+  createdBy: number
+}
+
+interface ApiCreateTestScenarioResponse {
+  id: number
+}
+
+const PRIORITY_ORDER: Record<string, number> = { 긴급: 0, 높음: 1, 보통: 2, 낮음: 3 }
+const STATUS_ORDER: Record<string, number> = { 실행중: 0, 검토중: 1, 승인됨: 2, 실패: 3, 작성중: 4, 통과: 5, 보류: 6 }
+const LIST_FETCH_SIZE = 500
+
+function mapUserLabel(userId: number | null | undefined, fallbackText: string): string {
+  if (userId == null) {
+    return fallbackText
+  }
+
+  const auth = useAuthStore.getState()
+  if (auth.user && auth.user.id === userId) {
+    return auth.user.name
+  }
+
+  return `사용자#${userId}`
+}
+
+function toDateOnly(value: string | null | undefined): string {
+  return value?.slice(0, 10) ?? ''
+}
+
+function mapListItem(item: ApiTestScenarioListItem): TestScenario {
+  return {
+    id: String(item.id),
+    docNo: item.scenarioNo,
+    title: item.title,
+    type: item.type,
+    priority: item.priority,
+    status: item.status,
+    assignee: mapUserLabel(item.assigneeId, '미배정'),
+    relatedDoc: '-',
+    deadline: toDateOnly(item.deadline),
+  }
 }
 
 function getSummary(source: TestScenario[]): TestScenarioSummary {
@@ -69,10 +126,15 @@ function getSummary(source: TestScenario[]): TestScenarioSummary {
 }
 
 export async function listTestScenarios(params: TestScenarioListParams): Promise<TestScenarioListResult> {
-  await delay(180)
+  const { data } = await api.get<ApiPageResponse<ApiTestScenarioListItem>>('/test-scenarios', {
+    params: { page: 0, size: LIST_FETCH_SIZE },
+  })
 
-  const filtered = testScenariosStore.filter((r) => {
-    const matchSearch = params.search === '' || r.title.includes(params.search) || r.docNo.includes(params.search)
+  const source = data.content.map(mapListItem)
+
+  const filtered = source.filter((r) => {
+    const keyword = params.search.trim()
+    const matchSearch = keyword.length === 0 || r.title.includes(keyword) || r.docNo.includes(keyword)
     const matchType = params.filterType === '전체' || r.type === params.filterType
     const matchPriority = params.filterPriority === '전체' || r.priority === params.filterPriority
     const matchStatus = params.filterStatus === '전체' || r.status === params.filterStatus
@@ -80,11 +142,20 @@ export async function listTestScenarios(params: TestScenarioListParams): Promise
   })
 
   const sorted = [...filtered].sort((a, b) => {
-    const v = params.sortDir === 'asc' ? 1 : -1
-    if (params.sortKey === 'docNo') return a.docNo > b.docNo ? v : -v
-    if (params.sortKey === 'priority') return ((PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9)) * v
-    if (params.sortKey === 'status') return ((STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9)) * v
-    return a.deadline > b.deadline ? v : -v
+    const sortFactor = params.sortDir === 'asc' ? 1 : -1
+    if (params.sortKey === 'docNo') {
+      return a.docNo.localeCompare(b.docNo, 'ko-KR', { numeric: true }) * sortFactor
+    }
+    if (params.sortKey === 'priority') {
+      return ((PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9)) * sortFactor
+    }
+    if (params.sortKey === 'status') {
+      return ((STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9)) * sortFactor
+    }
+
+    const aDeadline = a.deadline ? new Date(a.deadline).getTime() : Number.MAX_SAFE_INTEGER
+    const bDeadline = b.deadline ? new Date(b.deadline).getTime() : Number.MAX_SAFE_INTEGER
+    return (aDeadline - bDeadline) * sortFactor
   })
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / params.pageSize))
@@ -96,33 +167,45 @@ export async function listTestScenarios(params: TestScenarioListParams): Promise
     total: sorted.length,
     totalPages,
     page: safePage,
-    summary: getSummary(testScenariosStore),
+    summary: getSummary(source),
   }
 }
 
-function getNextDocNo() {
-  const maxNo = testScenariosStore.reduce((max, item) => {
-    const n = Number(item.docNo.replace('TS-', ''))
-    return Number.isFinite(n) ? Math.max(max, n) : max
-  }, 0)
-  return `TS-${String(maxNo + 1).padStart(3, '0')}`
-}
-
 export async function createTestScenario(input: CreateTestScenarioInput): Promise<TestScenario> {
-  await delay(220)
+  const auth = useAuthStore.getState()
+  const user = auth.user
+  const currentTeam = auth.currentTeam ?? auth.teams[0]
 
-  const next: TestScenario = {
-    id: String(Date.now()),
-    docNo: getNextDocNo(),
+  if (!user || !currentTeam) {
+    throw new Error('현재 로그인 사용자 또는 팀 정보가 없습니다.')
+  }
+
+  const payload: ApiCreateTestScenarioRequest = {
     title: input.title,
     type: input.type,
     priority: input.priority,
     status: '작성중',
-    assignee: input.assignee?.trim() ? input.assignee : '미배정',
-    relatedDoc: '-',
+    teamId: currentTeam.id,
+    // assignee는 현재 UI가 이름 기반이어서 백엔드 userId 매핑 전까지 미배정으로 저장
+    assigneeId: null,
+    steps: '[]',
     deadline: input.deadline,
+    createdBy: user.id,
   }
 
-  testScenariosStore = [next, ...testScenariosStore]
-  return next
+  const { data } = await api.post<ApiCreateTestScenarioResponse>('/test-scenarios', payload)
+
+  const detail = await api.get<ApiTestScenarioDetailResponse>(`/test-scenarios/${data.id}`)
+
+  return {
+    id: String(detail.data.id),
+    docNo: detail.data.scenarioNo,
+    title: detail.data.title,
+    type: detail.data.type,
+    priority: detail.data.priority,
+    status: detail.data.status,
+    assignee: mapUserLabel(detail.data.assigneeId, '미배정'),
+    relatedDoc: '-',
+    deadline: toDateOnly(detail.data.deadline),
+  }
 }
