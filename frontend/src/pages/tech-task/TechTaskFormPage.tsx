@@ -91,6 +91,9 @@ export default function TechTaskFormPage() {
       type: data.type,
       priority: data.priority,
       deadline: data.deadline,
+      currentIssue: data.currentIssue,
+      solution: data.solution,
+      definitionOfDone: dodItems.length > 0 ? JSON.stringify(dodItems) : undefined,
       assignee: data.assignee,
     })
     navigate('/tech-tasks')
