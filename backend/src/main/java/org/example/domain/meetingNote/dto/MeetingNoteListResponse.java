@@ -1,4 +1,16 @@
 package org.example.domain.meetingNote.dto;
 
-public record MeetingNoteListResponse(Long id) {
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+
+public record MeetingNoteListResponse(
+        Long id,
+        String noteNo,
+        String title,
+        LocalDate meetingDate,
+        Long facilitatorId,
+        long actionTotal,
+        long actionDone,
+        LocalDateTime createdAt
+) {
 }

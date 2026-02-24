@@ -1,10 +1,10 @@
-import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { FormField } from '@/components/common/FormField'
 import { inputCls, selectCls } from '@/lib/formStyles'
+import { useCreateMeetingNoteMutation } from '@/features/meeting-note/mutations'
 
 const FACILITATORS = ['박PM', '이설계', '김개발', '최설계', '최HR', '박디자인']
 
@@ -18,7 +18,7 @@ type FormValues = z.infer<typeof schema>
 
 export default function MeetingNoteFormPage() {
   const navigate = useNavigate()
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const createMeetingNote = useCreateMeetingNoteMutation()
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -29,10 +29,13 @@ export default function MeetingNoteFormPage() {
     },
   })
 
-  const onSubmit = async (_data: FormValues) => {
-    setIsSubmitting(true)
-    await new Promise((r) => setTimeout(r, 600)) // TODO: API 연동 후 생성된 id로 navigate
-    navigate('/meeting-notes/6')
+  const onSubmit = async (data: FormValues) => {
+    const created = await createMeetingNote.mutateAsync({
+      title: data.title,
+      date: data.date,
+      facilitator: data.facilitator,
+    })
+    navigate(`/meeting-notes/${created.id}`)
   }
 
   return (
@@ -106,10 +109,10 @@ export default function MeetingNoteFormPage() {
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={createMeetingNote.isPending}
               className="h-9 px-5 text-[13px] font-semibold text-white bg-brand hover:bg-brand-hover rounded-lg transition-colors disabled:opacity-60 flex items-center gap-1.5"
             >
-              {isSubmitting ? (
+              {createMeetingNote.isPending ? (
                 <><SpinnerIcon />등록 중...</>
               ) : (
                 '등록 후 편집'

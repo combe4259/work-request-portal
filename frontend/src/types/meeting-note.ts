@@ -11,7 +11,8 @@ export interface MeetingNote {
   docNo: string
   title: string
   date: string
-  location: string
   facilitator: string
+  actionTotal: number
+  actionDone: number
   createdAt: string
 }

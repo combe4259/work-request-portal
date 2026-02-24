@@ -1,4 +1,16 @@
 package org.example.domain.meetingNote.dto;
 
-public record MeetingNoteUpdateRequest() {
+import java.time.LocalDate;
+import java.util.List;
+
+public record MeetingNoteUpdateRequest(
+        String title,
+        LocalDate meetingDate,
+        String location,
+        Long facilitatorId,
+        List<String> agenda,
+        String content,
+        List<String> decisions,
+        List<MeetingActionItemItemRequest> actionItems
+) {
 }
