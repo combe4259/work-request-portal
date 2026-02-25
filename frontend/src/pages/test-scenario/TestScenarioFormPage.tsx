@@ -1,12 +1,16 @@
-import { useState, useRef, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { ErrorState, LoadingState } from '@/components/common/AsyncState'
 import { FormField } from '@/components/common/FormField'
 import { inputCls, textareaCls, selectCls } from '@/lib/formStyles'
-import { ASSIGNEES } from '@/lib/constants'
-import { useCreateTestScenarioMutation } from '@/features/test-scenario/mutations'
+import { useTeamMembersQuery } from '@/features/auth/queries'
+import { useDocumentIndexQuery } from '@/features/document-index/queries'
+import { useCreateTestScenarioMutation, useUpdateTestScenarioMutation } from '@/features/test-scenario/mutations'
+import { useTestScenarioDetailQuery, useTestScenarioRelatedRefsQuery } from '@/features/test-scenario/queries'
 import { testScenarioFormSchema, type TestScenarioFormValues } from '@/features/test-scenario/schemas'
+import { useAuthStore } from '@/stores/authStore'
 
 interface TestStep {
   id: number
@@ -15,20 +19,71 @@ interface TestStep {
 }
 
 
-const ALL_DOCS = [
-  { docNo: 'WR-051', title: '모바일 PDA 화면 레이아웃 개선 요청' },
-  { docNo: 'WR-050', title: '신규 계좌 개설 프로세스 자동화' },
-  { docNo: 'WR-049', title: '잔고 조회 API 응답 지연 버그 수정' },
-  { docNo: 'TK-021', title: '계좌 조회 서비스 레이어 리팩토링' },
-  { docNo: 'TK-020', title: 'N+1 쿼리 문제 해결 — 잔고 조회 API' },
-  { docNo: 'TK-019', title: 'JWT 토큰 갱신 로직 보안 취약점 패치' },
-]
+const ALLOWED_REF_TYPES = [
+  'WORK_REQUEST',
+  'TECH_TASK',
+  'TEST_SCENARIO',
+  'DEFECT',
+  'DEPLOYMENT',
+] as const
 
 let stepIdCounter = 3
 
+function parseScenarioSteps(raw: string): TestStep[] {
+  if (!raw) {
+    return []
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) {
+      return []
+    }
+
+    const steps = parsed
+      .map((item, index) => {
+        if (typeof item === 'string') {
+          return {
+            id: index + 1,
+            action: item,
+            expected: '',
+          }
+        }
+
+        if (typeof item === 'object' && item !== null) {
+          const action = String((item as { action?: unknown }).action ?? '').trim()
+          const expected = String((item as { expected?: unknown }).expected ?? '').trim()
+          return {
+            id: index + 1,
+            action,
+            expected,
+          }
+        }
+
+        return null
+      })
+      .filter((step): step is TestStep => step !== null)
+
+    stepIdCounter = Math.max(stepIdCounter, steps.length)
+    return steps
+  } catch {
+    return []
+  }
+}
+
 export default function TestScenarioFormPage() {
   const navigate = useNavigate()
+  const { id } = useParams<{ id: string }>()
+  const isEdit = id != null
+  const numericId = Number(id)
+  const validEditId = isEdit && Number.isInteger(numericId) && numericId > 0 ? numericId : undefined
   const createTestScenario = useCreateTestScenarioMutation()
+  const updateTestScenario = useUpdateTestScenarioMutation()
+  const currentUser = useAuthStore((state) => state.user)
+  const currentTeam = useAuthStore((state) => state.currentTeam)
+  const teamMembersQuery = useTeamMembersQuery(currentTeam?.id)
+  const detailQuery = useTestScenarioDetailQuery(validEditId)
+  const relatedRefsQuery = useTestScenarioRelatedRefsQuery(validEditId)
 
   // 테스트 단계
   const [steps, setSteps] = useState<TestStep[]>([
@@ -41,6 +96,13 @@ export default function TestScenarioFormPage() {
   const [docSearch, setDocSearch] = useState('')
   const [docDropOpen, setDocDropOpen] = useState(false)
   const docRef = useRef<HTMLDivElement>(null)
+  const documentIndexQuery = useDocumentIndexQuery({
+    q: docSearch,
+    types: [...ALLOWED_REF_TYPES],
+    teamId: currentTeam?.id,
+    enabled: docDropOpen && !relatedDoc && Boolean(currentTeam?.id),
+    size: 40,
+  })
 
   // 첨부파일
   const [fileList, setFileList] = useState<File[]>([])
@@ -53,11 +115,22 @@ export default function TestScenarioFormPage() {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const filteredDocs = ALL_DOCS.filter(
+  const filteredDocs = (documentIndexQuery.data ?? []).filter(
     (d) =>
       d.docNo !== relatedDoc?.docNo &&
       (d.docNo.toLowerCase().includes(docSearch.toLowerCase()) || d.title.includes(docSearch))
   )
+
+  const assigneeOptions = useMemo(() => {
+    const names = new Set<string>()
+    if (currentUser?.name) {
+      names.add(currentUser.name)
+    }
+    ;(teamMembersQuery.data ?? []).forEach((member) => {
+      names.add(member.name)
+    })
+    return Array.from(names)
+  }, [currentUser?.name, teamMembersQuery.data])
 
   const selectDoc = (doc: { docNo: string; title: string }) => {
     setRelatedDoc(doc)
@@ -88,22 +161,117 @@ export default function TestScenarioFormPage() {
   const {
     register,
     handleSubmit,
+    reset,
     formState: { errors, isSubmitting },
   } = useForm<TestScenarioFormValues>({
     resolver: zodResolver(testScenarioFormSchema),
     defaultValues: { priority: '보통', type: '기능' },
   })
 
+  useEffect(() => {
+    if (!detailQuery.data) {
+      return
+    }
+
+    reset({
+      title: detailQuery.data.title,
+      type: detailQuery.data.type,
+      priority: detailQuery.data.priority,
+      deadline: detailQuery.data.deadline,
+      assignee: detailQuery.data.assignee === '미배정' ? '' : detailQuery.data.assignee,
+      precondition: detailQuery.data.precondition,
+    })
+
+    const parsedSteps = parseScenarioSteps(detailQuery.data.steps)
+    setSteps(parsedSteps.length > 0 ? parsedSteps : [{ id: 1, action: '', expected: '' }])
+  }, [detailQuery.data, reset])
+
+  useEffect(() => {
+    if (!relatedRefsQuery.data || relatedRefsQuery.data.length === 0) {
+      return
+    }
+    const firstRef = relatedRefsQuery.data[0]
+    setRelatedDoc({
+      docNo: firstRef.refNo,
+      title: firstRef.title ?? firstRef.refNo,
+    })
+  }, [relatedRefsQuery.data])
+
   const onSubmit = async (data: TestScenarioFormValues) => {
+    const serializedSteps = JSON.stringify(
+      steps
+        .filter((step) => step.action.trim().length > 0 || step.expected.trim().length > 0)
+        .map((step) => ({ action: step.action.trim(), expected: step.expected.trim() }))
+    )
+
+    if (validEditId != null && detailQuery.data) {
+      await updateTestScenario.mutateAsync({
+        id: validEditId,
+        title: data.title,
+        type: data.type,
+        priority: data.priority,
+        status: detailQuery.data.status,
+        assignee: data.assignee,
+        precondition: data.precondition,
+        steps: serializedSteps,
+        expectedResult: detailQuery.data.expectedResult,
+        actualResult: detailQuery.data.actualResult,
+        statusNote: detailQuery.data.statusNote,
+        deadline: data.deadline,
+        relatedDoc: relatedDoc?.docNo,
+      })
+      navigate(`/test-scenarios/${validEditId}`)
+      return
+    }
+
     await createTestScenario.mutateAsync({
       title: data.title,
       type: data.type,
       priority: data.priority,
       deadline: data.deadline,
       assignee: data.assignee,
+      relatedDoc: relatedDoc?.docNo,
     })
     navigate('/test-scenarios')
   }
+
+  if (isEdit && validEditId == null) {
+    return (
+      <div className="p-6">
+        <ErrorState
+          title="잘못된 접근입니다"
+          description="테스트 시나리오 ID가 올바르지 않습니다."
+          actionLabel="목록으로 이동"
+          onAction={() => navigate('/test-scenarios')}
+        />
+      </div>
+    )
+  }
+
+  if (isEdit && detailQuery.isPending) {
+    return (
+      <div className="p-6">
+        <LoadingState title="테스트 시나리오 정보를 불러오는 중입니다" description="잠시만 기다려주세요." />
+      </div>
+    )
+  }
+
+  if (isEdit && (detailQuery.isError || !detailQuery.data)) {
+    return (
+      <div className="p-6">
+        <ErrorState
+          title="테스트 시나리오 정보를 불러오지 못했습니다"
+          description="잠시 후 다시 시도해주세요."
+          actionLabel="다시 시도"
+          onAction={() => {
+            void detailQuery.refetch()
+          }}
+        />
+      </div>
+    )
+  }
+
+  const isMutating = isSubmitting || createTestScenario.isPending || updateTestScenario.isPending
 
   return (
     <div className="min-h-full p-6 flex flex-col items-center">
@@ -118,8 +286,8 @@ export default function TestScenarioFormPage() {
             <BackIcon />
           </button>
           <div>
-            <h1 className="text-[18px] font-bold text-gray-900">테스트 시나리오 등록</h1>
-            <p className="text-[12px] text-gray-400 mt-0.5">새로운 테스트 시나리오를 등록합니다</p>
+            <h1 className="text-[18px] font-bold text-gray-900">{isEdit ? '테스트 시나리오 수정' : '테스트 시나리오 등록'}</h1>
+            <p className="text-[12px] text-gray-400 mt-0.5">{isEdit ? '테스트 시나리오 내용을 수정합니다' : '새로운 테스트 시나리오를 등록합니다'}</p>
           </div>
         </div>
 
@@ -172,7 +340,8 @@ export default function TestScenarioFormPage() {
             <div className="grid grid-cols-2 gap-4">
               <FormField label="담당자">
                 <select {...register('assignee')} className={selectCls(false)}>
-                  {ASSIGNEES.map((a) => <option key={a} value={a}>{a}</option>)}
+                  <option value="">미배정</option>
+                  {assigneeOptions.map((name) => <option key={name} value={name}>{name}</option>)}
                 </select>
               </FormField>
 
@@ -344,10 +513,10 @@ export default function TestScenarioFormPage() {
             </button>
             <button
               type="submit"
-              disabled={isSubmitting || createTestScenario.isPending}
+              disabled={isMutating}
               className="h-9 px-5 text-[13px] font-semibold text-white bg-brand hover:bg-brand-hover rounded-lg transition-colors disabled:opacity-60 flex items-center gap-2"
             >
-              {isSubmitting || createTestScenario.isPending ? <><SpinnerIcon />등록 중...</> : '등록하기'}
+              {isMutating ? <><SpinnerIcon />{isEdit ? '수정 중...' : '등록 중...'}</> : isEdit ? '수정 완료' : '등록하기'}
             </button>
           </div>
         </form>

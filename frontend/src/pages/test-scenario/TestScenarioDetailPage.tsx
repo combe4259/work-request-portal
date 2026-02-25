@@ -1,7 +1,10 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { TestTypeBadge, TestStatusBadge } from '@/components/test-scenario/Badges'
 import { PriorityBadge } from '@/components/work-request/Badges'
+import ConfirmDialog from '@/components/common/ConfirmDialog'
+import { useDeleteTestScenarioMutation, useUpdateTestScenarioStatusMutation } from '@/features/test-scenario/mutations'
+import { useTestScenarioRelatedRefsQuery } from '@/features/test-scenario/queries'
 import type { TestStatus } from '@/types/test-scenario'
 
 // ── Mock 데이터 ───────────────────────────────────────
@@ -57,19 +60,63 @@ const DOC_PREFIX_STYLE: Record<string, string> = {
 
 type StepResult = 'pass' | 'fail' | null
 
+function getRefRoute(refType: string, refId: number): string | null {
+  switch (refType) {
+    case 'WORK_REQUEST':
+      return `/work-requests/${refId}`
+    case 'TECH_TASK':
+      return `/tech-tasks/${refId}`
+    case 'TEST_SCENARIO':
+      return `/test-scenarios/${refId}`
+    case 'DEFECT':
+      return `/defects/${refId}`
+    case 'DEPLOYMENT':
+      return `/deployments/${refId}`
+    case 'MEETING_NOTE':
+      return `/meeting-notes/${refId}`
+    case 'PROJECT_IDEA':
+      return `/ideas/${refId}`
+    case 'KNOWLEDGE_BASE':
+      return `/knowledge-base/${refId}`
+    default:
+      return null
+  }
+}
+
 export default function TestScenarioDetailPage() {
   const navigate = useNavigate()
+  const { id } = useParams<{ id: string }>()
+  const numericId = Number(id)
+  const hasValidId = Number.isInteger(numericId) && numericId > 0
+  const docId = hasValidId ? numericId : Number(MOCK_DETAIL.id)
+  const updateStatus = useUpdateTestScenarioStatusMutation(docId)
+  const deleteScenario = useDeleteTestScenarioMutation()
+  const relatedRefsQuery = useTestScenarioRelatedRefsQuery(hasValidId ? numericId : undefined)
   const data = MOCK_DETAIL
+  const relatedDocs = relatedRefsQuery.data?.map((item) => ({
+    docNo: item.refNo,
+    title: item.title ?? item.refNo,
+    route: getRefRoute(item.refType, item.refId),
+  })) ?? data.relatedDocs.map((item) => ({ ...item, route: null }))
 
   const [status, setStatus] = useState<TestStatus>(data.status)
   const [statusOpen, setStatusOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const [comment, setComment] = useState('')
   const [comments, setComments] = useState(MOCK_COMMENTS)
   const [stepResults, setStepResults] = useState<StepResult[]>(
     Array(data.steps.length).fill(null)
   )
 
-  const handleStatusChange = (s: TestStatus) => { setStatus(s); setStatusOpen(false) }
+  const handleStatusChange = async (s: TestStatus) => {
+    setStatus(s)
+    setStatusOpen(false)
+    try {
+      await updateStatus.mutateAsync(s)
+    } catch {
+      setStatus(data.status)
+    }
+  }
 
   const handleComment = () => {
     if (!comment.trim()) return
@@ -135,7 +182,9 @@ export default function TestScenarioDetailPage() {
                 {STATUS_OPTIONS.map((s) => (
                   <button
                     key={s}
-                    onClick={() => handleStatusChange(s)}
+                    onClick={() => {
+                      void handleStatusChange(s)
+                    }}
                     className={`w-full px-3 py-2 text-left text-[12px] hover:bg-gray-50 transition-colors ${s === status ? 'bg-blue-50' : ''}`}
                   >
                     <TestStatusBadge status={s} />
@@ -145,11 +194,18 @@ export default function TestScenarioDetailPage() {
             )}
           </div>
           <button
-            onClick={() => navigate(`/test-scenarios/${data.id}/edit`)}
+            onClick={() => navigate(`/test-scenarios/${id ?? data.id}/edit`)}
             className="h-8 px-3 border border-gray-200 rounded-lg text-[12px] font-medium text-gray-600 hover:bg-white transition-colors flex items-center gap-1.5"
           >
             <EditIcon />
             수정
+          </button>
+          <button
+            type="button"
+            onClick={() => setDeleteOpen(true)}
+            className="h-8 px-3 border border-red-200 rounded-lg text-[12px] font-medium text-red-600 hover:bg-red-50 transition-colors"
+          >
+            삭제
           </button>
         </div>
       </div>
@@ -165,11 +221,11 @@ export default function TestScenarioDetailPage() {
               <MetaItem label="담당자" value={data.assignee} />
               <MetaItem label="연관 문서">
                 <div className="flex flex-wrap gap-1 mt-0.5">
-                  {data.relatedDocs.map((d) => {
+                  {relatedDocs.map((d) => {
                     const prefix = d.docNo.split('-')[0]
                     return (
                       <span
-                        key={d.docNo}
+                        key={`${d.docNo}-${d.route ?? 'none'}`}
                         className={`font-mono text-[10px] px-1.5 py-0.5 rounded ${DOC_PREFIX_STYLE[prefix] ?? 'bg-gray-100 text-gray-500'}`}
                       >
                         {d.docNo}
@@ -312,13 +368,18 @@ export default function TestScenarioDetailPage() {
           {/* 연관 문서 */}
           <Section title="연관 문서">
             <div className="flex flex-wrap gap-2">
-              {data.relatedDocs.map((d) => {
+              {relatedDocs.map((d) => {
                 const prefix = d.docNo.split('-')[0]
                 return (
                   <button
-                    key={d.docNo}
-                    onClick={() => navigate(-1)}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg hover:border-brand/40 hover:bg-blue-50/30 transition-colors group"
+                    key={`${d.docNo}-${d.route ?? 'none'}`}
+                    onClick={() => {
+                      if (d.route) {
+                        navigate(d.route)
+                      }
+                    }}
+                    disabled={!d.route}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg hover:border-brand/40 hover:bg-blue-50/30 transition-colors group disabled:opacity-70 disabled:cursor-default"
                   >
                     <span className={`font-mono text-[11px] px-1.5 py-0.5 rounded ${DOC_PREFIX_STYLE[prefix] ?? 'bg-gray-100 text-gray-500'}`}>
                       {d.docNo}
@@ -412,6 +473,21 @@ export default function TestScenarioDetailPage() {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="테스트 시나리오를 삭제할까요?"
+        description="삭제 후에는 복구할 수 없습니다."
+        confirmText={deleteScenario.isPending ? '삭제 중...' : '삭제'}
+        cancelText="취소"
+        destructive
+        onConfirm={() => {
+          void deleteScenario.mutateAsync(docId).then(() => {
+            navigate('/test-scenarios')
+          })
+        }}
+      />
     </div>
   )
 }
