@@ -16,5 +16,7 @@ public interface DefectService {
 
     void update(Long id, DefectUpdateRequest request);
 
+    void delete(Long id);
+
     void updateStatus(Long id, DefectStatusUpdateRequest request);
 }
