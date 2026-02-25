@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { EmptyState, ErrorState, LoadingState } from '@/components/common/AsyncState'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
+import ShowMoreButton from '@/components/common/ShowMoreButton'
 import { PriorityBadge, StatusBadge } from '@/components/work-request/Badges'
 import { TechTypeBadge } from '@/components/tech-task/Badges'
 import api from '@/lib/api'
@@ -11,6 +12,7 @@ import { useAttachmentsQuery } from '@/features/attachment/queries'
 import { useActivityLogsQuery } from '@/features/activity-log/queries'
 import { useDeleteTechTaskMutation, useUpdateTechTaskStatusMutation } from '@/features/tech-task/mutations'
 import { useTechTaskDetailQuery, useTechTaskPrLinksQuery, useTechTaskRelatedRefsQuery } from '@/features/tech-task/queries'
+import { useExpandableList } from '@/hooks/useExpandableList'
 import type { Status } from '@/types/tech-task'
 
 const STATUS_OPTIONS: Status[] = ['접수대기', '검토중', '개발중', '테스트중', '완료', '반려']
@@ -120,6 +122,10 @@ export default function TechTaskDetailPage() {
   const comments = commentsQuery.data?.items ?? []
   const attachments = attachmentsQuery.data ?? []
   const activityLogs = activityLogsQuery.data?.items ?? []
+  const relatedDocs = relatedRefsQuery.data ?? []
+  const visibleRelatedDocs = useExpandableList(relatedDocs, 5)
+  const visibleComments = useExpandableList(comments, 3)
+  const visibleActivityLogs = useExpandableList(activityLogs, 5)
 
   const handleComment = async () => {
     const trimmed = comment.trim()
@@ -185,7 +191,6 @@ export default function TechTaskDetailPage() {
 
   const data = detailQuery.data
   const prLinks = prLinksQuery.data ?? []
-  const relatedDocs = relatedRefsQuery.data ?? []
 
   const doneCnt = dod.filter((d) => d.done).length
 
@@ -357,7 +362,7 @@ export default function TechTaskDetailPage() {
           {relatedDocs.length > 0 && (
             <Section title="연관 문서">
               <div className="flex flex-wrap gap-2">
-                {relatedDocs.map((d) => {
+                {visibleRelatedDocs.visibleItems.map((d) => {
                   const route = getRefRoute(d.refType, d.refId)
                   return (
                     <button
@@ -376,6 +381,12 @@ export default function TechTaskDetailPage() {
                   )
                 })}
               </div>
+              <ShowMoreButton
+                expanded={visibleRelatedDocs.expanded}
+                hiddenCount={visibleRelatedDocs.hiddenCount}
+                onToggle={visibleRelatedDocs.toggle}
+                className="mt-3"
+              />
             </Section>
           )}
 
@@ -407,7 +418,7 @@ export default function TechTaskDetailPage() {
               ) : comments.length === 0 ? (
                 <EmptyState title="댓글이 없습니다" description="첫 댓글을 남겨보세요." />
               ) : (
-                comments.map((c) => (
+                visibleComments.visibleItems.map((c) => (
                   <div key={c.id} className="flex gap-2.5">
                     <div className="w-6 h-6 rounded-full bg-brand/10 flex items-center justify-center text-brand text-[10px] font-bold flex-shrink-0">
                       {c.authorName[0]}
@@ -423,6 +434,12 @@ export default function TechTaskDetailPage() {
                 ))
               )}
             </div>
+            <ShowMoreButton
+              expanded={visibleComments.expanded}
+              hiddenCount={visibleComments.hiddenCount}
+              onToggle={visibleComments.toggle}
+              className="mb-3"
+            />
             <div className="flex gap-2 pt-2 border-t border-gray-100">
               <textarea
                 value={comment}
@@ -454,7 +471,7 @@ export default function TechTaskDetailPage() {
                 ) : activityLogs.length === 0 ? (
                   <p className="text-[12px] text-gray-400">처리 이력이 없습니다.</p>
                 ) : (
-                  activityLogs.map((h, i) => (
+                  visibleActivityLogs.visibleItems.map((h, i) => (
                     <div key={h.id} className="flex gap-3 relative">
                       <div className="w-5 h-5 rounded-full bg-white border-2 border-gray-200 flex-shrink-0 z-10 flex items-center justify-center">
                         <div className={`w-1.5 h-1.5 rounded-full ${i === 0 ? 'bg-brand' : 'bg-gray-300'}`} />
@@ -474,6 +491,12 @@ export default function TechTaskDetailPage() {
                 )}
               </div>
             </div>
+            <ShowMoreButton
+              expanded={visibleActivityLogs.expanded}
+              hiddenCount={visibleActivityLogs.hiddenCount}
+              onToggle={visibleActivityLogs.toggle}
+              className="mt-3"
+            />
           </div>
         </div>
       </div>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { EmptyState, ErrorState, LoadingState } from '@/components/common/AsyncState'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
+import ShowMoreButton from '@/components/common/ShowMoreButton'
 import { DeployTypeBadge, DeployEnvBadge, DeployStatusBadge } from '@/components/deployment/Badges'
 import { useDeleteDeploymentMutation, useUpdateDeploymentStatusMutation } from '@/features/deployment/mutations'
 import { useDeploymentDetailQuery, useDeploymentRelatedRefsQuery, useDeploymentStepsQuery } from '@/features/deployment/queries'
@@ -10,6 +11,7 @@ import { useCreateCommentMutation } from '@/features/comment/mutations'
 import { useCommentsQuery } from '@/features/comment/queries'
 import { useAttachmentsQuery } from '@/features/attachment/queries'
 import { useActivityLogsQuery } from '@/features/activity-log/queries'
+import { useExpandableList } from '@/hooks/useExpandableList'
 import type { DeployStatus } from '@/types/deployment'
 
 const STATUS_OPTIONS: DeployStatus[] = ['대기', '진행중', '완료', '실패', '롤백']
@@ -91,6 +93,9 @@ export default function DeploymentDetailPage() {
     title: item.title ?? item.refNo,
     route: getRefRoute(item.refType, item.refId),
   })) ?? []
+  const visibleIncludedDocs = useExpandableList(includedDocs, 5)
+  const visibleComments = useExpandableList(comments, 3)
+  const visibleActivityLogs = useExpandableList(activityLogs, 5)
 
   const handleStatusChange = async (next: DeployStatus) => {
     if (!data) {
@@ -308,8 +313,9 @@ export default function DeploymentDetailPage() {
             ) : includedDocs.length === 0 ? (
               <p className="text-[12px] text-gray-400">포함 항목이 없습니다.</p>
             ) : (
-              <div className="flex flex-wrap gap-2">
-                {includedDocs.map((doc) => {
+              <>
+                <div className="flex flex-wrap gap-2">
+                  {visibleIncludedDocs.visibleItems.map((doc) => {
                   const prefix = doc.docNo.split('-')[0]
                   return (
                     <button
@@ -326,8 +332,15 @@ export default function DeploymentDetailPage() {
                       <span className="text-[12px] text-gray-600 group-hover:text-brand transition-colors">{doc.title}</span>
                     </button>
                   )
-                })}
-              </div>
+                  })}
+                </div>
+                <ShowMoreButton
+                  expanded={visibleIncludedDocs.expanded}
+                  hiddenCount={visibleIncludedDocs.hiddenCount}
+                  onToggle={visibleIncludedDocs.toggle}
+                  className="mt-3"
+                />
+              </>
             )}
           </Section>
 
@@ -466,7 +479,7 @@ export default function DeploymentDetailPage() {
               ) : comments.length === 0 ? (
                 <EmptyState title="댓글이 없습니다" description="첫 댓글을 남겨보세요." />
               ) : (
-                comments.map((item) => (
+                visibleComments.visibleItems.map((item) => (
                   <div key={item.id} className="flex gap-2.5">
                     <div className="w-6 h-6 rounded-full bg-brand/10 flex items-center justify-center text-brand text-[10px] font-bold flex-shrink-0">
                       {item.authorName[0]}
@@ -482,6 +495,12 @@ export default function DeploymentDetailPage() {
                 ))
               )}
             </div>
+            <ShowMoreButton
+              expanded={visibleComments.expanded}
+              hiddenCount={visibleComments.hiddenCount}
+              onToggle={visibleComments.toggle}
+              className="mb-3"
+            />
             <div className="flex gap-2 pt-2 border-t border-gray-100">
               <textarea
                 value={comment}
@@ -517,7 +536,7 @@ export default function DeploymentDetailPage() {
                 ) : activityLogs.length === 0 ? (
                   <p className="text-[12px] text-gray-400">처리 이력이 없습니다.</p>
                 ) : (
-                  activityLogs.map((item, index) => (
+                  visibleActivityLogs.visibleItems.map((item, index) => (
                     <div key={item.id} className="flex gap-3 relative">
                       <div className="w-5 h-5 rounded-full bg-white border-2 border-gray-200 flex-shrink-0 z-10 flex items-center justify-center">
                         <div className={`w-1.5 h-1.5 rounded-full ${index === 0 ? 'bg-brand' : 'bg-gray-300'}`} />
@@ -537,6 +556,12 @@ export default function DeploymentDetailPage() {
                 )}
               </div>
             </div>
+            <ShowMoreButton
+              expanded={visibleActivityLogs.expanded}
+              hiddenCount={visibleActivityLogs.hiddenCount}
+              onToggle={visibleActivityLogs.toggle}
+              className="mt-3"
+            />
           </div>
         </div>
       </div>

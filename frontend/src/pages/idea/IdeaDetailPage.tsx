@@ -3,8 +3,10 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { CategoryBadge, IdeaStatusBadge } from '@/components/idea/Badges'
 import { EmptyState, ErrorState, LoadingState } from '@/components/common/AsyncState'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
+import ShowMoreButton from '@/components/common/ShowMoreButton'
 import { useIdeaQuery, useIdeaRelatedRefsQuery } from '@/features/idea/queries'
 import { useDeleteIdeaMutation, useLikeIdeaMutation, useUnlikeIdeaMutation, useUpdateIdeaStatusMutation } from '@/features/idea/mutations'
+import { useExpandableList } from '@/hooks/useExpandableList'
 import type { IdeaStatus } from '@/types/idea'
 
 const MOCK_COMMENTS = [
@@ -51,6 +53,9 @@ export default function IdeaDetailPage() {
   const [liked, setLiked] = useState(false)
   const [comment, setComment] = useState('')
   const [comments, setComments] = useState(MOCK_COMMENTS)
+  const relatedRefs = relatedRefsQuery.data ?? []
+  const visibleRelatedRefs = useExpandableList(relatedRefs, 5)
+  const visibleComments = useExpandableList(comments, 3)
 
   if (isPending) {
     return (
@@ -214,10 +219,10 @@ export default function IdeaDetailPage() {
             )}
           </Section>
 
-          {relatedRefsQuery.data && relatedRefsQuery.data.length > 0 ? (
+          {relatedRefs.length > 0 ? (
             <Section title="연관 문서">
               <div className="flex flex-wrap gap-2">
-                {relatedRefsQuery.data.map((item) => {
+                {visibleRelatedRefs.visibleItems.map((item) => {
                   const route = getRefRoute(item.refType, item.refId)
                   return (
                     <button
@@ -235,6 +240,12 @@ export default function IdeaDetailPage() {
                   )
                 })}
               </div>
+              <ShowMoreButton
+                expanded={visibleRelatedRefs.expanded}
+                hiddenCount={visibleRelatedRefs.hiddenCount}
+                onToggle={visibleRelatedRefs.toggle}
+                className="mt-3"
+              />
             </Section>
           ) : null}
         </div>
@@ -243,7 +254,7 @@ export default function IdeaDetailPage() {
           <div className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] px-4 py-4">
             <p className="text-[12px] font-semibold text-gray-700 mb-3">댓글 {comments.length}</p>
             <div className="space-y-3 mb-3 max-h-[260px] overflow-y-auto">
-              {comments.map((c) => (
+              {visibleComments.visibleItems.map((c) => (
                 <div key={c.id} className="flex gap-2.5">
                   <div className="w-6 h-6 rounded-full bg-brand/10 flex items-center justify-center text-brand text-[10px] font-bold flex-shrink-0">
                     {c.author[0]}
@@ -258,6 +269,12 @@ export default function IdeaDetailPage() {
                 </div>
               ))}
             </div>
+            <ShowMoreButton
+              expanded={visibleComments.expanded}
+              hiddenCount={visibleComments.hiddenCount}
+              onToggle={visibleComments.toggle}
+              className="mb-3"
+            />
             <div className="flex gap-2 pt-2 border-t border-gray-100">
               <textarea
                 value={comment}

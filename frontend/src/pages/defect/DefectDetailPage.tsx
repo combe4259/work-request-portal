@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { EmptyState, ErrorState, LoadingState } from '@/components/common/AsyncState'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
+import ShowMoreButton from '@/components/common/ShowMoreButton'
 import { DefectTypeBadge, SeverityBadge, DefectStatusBadge } from '@/components/defect/Badges'
 import { useDeleteDefectMutation, useUpdateDefectStatusMutation } from '@/features/defect/mutations'
 import { useDefectDetailQuery } from '@/features/defect/queries'
@@ -9,6 +10,7 @@ import { useCreateCommentMutation } from '@/features/comment/mutations'
 import { useCommentsQuery } from '@/features/comment/queries'
 import { useAttachmentsQuery } from '@/features/attachment/queries'
 import { useActivityLogsQuery } from '@/features/activity-log/queries'
+import { useExpandableList } from '@/hooks/useExpandableList'
 import type { DefectStatus } from '@/types/defect'
 
 const STATUS_OPTIONS: DefectStatus[] = ['접수', '분석중', '수정중', '검증중', '완료', '재현불가', '보류']
@@ -68,6 +70,8 @@ export default function DefectDetailPage() {
   const comments = commentsQuery.data?.items ?? []
   const attachments = attachmentsQuery.data ?? []
   const activityLogs = activityLogsQuery.data?.items ?? []
+  const visibleComments = useExpandableList(comments, 3)
+  const visibleActivityLogs = useExpandableList(activityLogs, 5)
 
   useEffect(() => {
     if (!data) {
@@ -340,7 +344,7 @@ export default function DefectDetailPage() {
               ) : comments.length === 0 ? (
                 <EmptyState title="댓글이 없습니다" description="첫 댓글을 남겨보세요." />
               ) : (
-                comments.map((item) => (
+                visibleComments.visibleItems.map((item) => (
                   <div key={item.id} className="flex gap-2.5">
                     <div className="w-6 h-6 rounded-full bg-brand/10 flex items-center justify-center text-brand text-[10px] font-bold flex-shrink-0">
                       {item.authorName[0]}
@@ -356,6 +360,12 @@ export default function DefectDetailPage() {
                 ))
               )}
             </div>
+            <ShowMoreButton
+              expanded={visibleComments.expanded}
+              hiddenCount={visibleComments.hiddenCount}
+              onToggle={visibleComments.toggle}
+              className="mb-3"
+            />
             <div className="flex gap-2 pt-2 border-t border-gray-100">
               <textarea
                 value={comment}
@@ -391,7 +401,7 @@ export default function DefectDetailPage() {
                 ) : activityLogs.length === 0 ? (
                   <p className="text-[12px] text-gray-400">처리 이력이 없습니다.</p>
                 ) : (
-                  activityLogs.map((item, index) => (
+                  visibleActivityLogs.visibleItems.map((item, index) => (
                     <div key={item.id} className="flex gap-3 relative">
                       <div className="w-5 h-5 rounded-full bg-white border-2 border-gray-200 flex-shrink-0 z-10 flex items-center justify-center">
                         <div className={`w-1.5 h-1.5 rounded-full ${index === 0 ? 'bg-brand' : 'bg-gray-300'}`} />
@@ -411,6 +421,12 @@ export default function DefectDetailPage() {
                 )}
               </div>
             </div>
+            <ShowMoreButton
+              expanded={visibleActivityLogs.expanded}
+              hiddenCount={visibleActivityLogs.hiddenCount}
+              onToggle={visibleActivityLogs.toggle}
+              className="mt-3"
+            />
           </div>
         </div>
       </div>

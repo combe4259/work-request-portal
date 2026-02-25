@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { EmptyState, ErrorState, LoadingState } from '@/components/common/AsyncState'
+import ShowMoreButton from '@/components/common/ShowMoreButton'
 import { useKnowledgeBaseArticleQuery } from '@/features/knowledge-base/queries'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import MarkdownRenderer from '@/components/common/MarkdownRenderer'
 import { useDeleteKnowledgeBaseArticleMutation, useIncreaseKnowledgeBaseViewMutation } from '@/features/knowledge-base/mutations'
+import { useExpandableList } from '@/hooks/useExpandableList'
 import type { KBCategory } from '@/types/knowledge-base'
 
 const CATEGORY_STYLES: Record<KBCategory, string> = {
@@ -43,6 +45,8 @@ export default function KnowledgeBaseDetailPage() {
   const deleteArticle = useDeleteKnowledgeBaseArticleMutation()
   const viewedRef = useRef(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const relatedDocs = data?.relatedDocs ?? []
+  const visibleRelatedDocs = useExpandableList(relatedDocs, 5)
 
   useEffect(() => {
     if (!validId || !data || viewedRef.current) {
@@ -153,11 +157,11 @@ export default function KnowledgeBaseDetailPage() {
         <MarkdownRenderer content={data.content} className="text-[13px]" />
       </div>
 
-      {data.relatedDocs.length > 0 ? (
+      {relatedDocs.length > 0 ? (
         <div className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] px-5 py-4">
           <p className="text-[12px] font-semibold text-gray-700 mb-3">연관 문서</p>
           <div className="flex flex-wrap gap-2">
-            {data.relatedDocs.map((doc) => {
+            {visibleRelatedDocs.visibleItems.map((doc) => {
               const route = getDocRoute(doc.docNo)
               return (
                 <button
@@ -175,6 +179,12 @@ export default function KnowledgeBaseDetailPage() {
               )
             })}
           </div>
+          <ShowMoreButton
+            expanded={visibleRelatedDocs.expanded}
+            hiddenCount={visibleRelatedDocs.hiddenCount}
+            onToggle={visibleRelatedDocs.toggle}
+            className="mt-3"
+          />
         </div>
       ) : null}
 
