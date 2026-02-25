@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { EmptyState, ErrorState, LoadingState } from '@/components/common/AsyncState'
+import ConfirmDialog from '@/components/common/ConfirmDialog'
 import { PriorityBadge, StatusBadge } from '@/components/work-request/Badges'
 import { TechTypeBadge } from '@/components/tech-task/Badges'
-import { useUpdateTechTaskStatusMutation } from '@/features/tech-task/mutations'
+import { useDeleteTechTaskMutation, useUpdateTechTaskStatusMutation } from '@/features/tech-task/mutations'
 import { useTechTaskDetailQuery, useTechTaskPrLinksQuery, useTechTaskRelatedRefsQuery } from '@/features/tech-task/queries'
 import type { Status } from '@/types/tech-task'
 
@@ -80,9 +81,11 @@ export default function TechTaskDetailPage() {
   const relatedRefsQuery = useTechTaskRelatedRefsQuery(id)
   const prLinksQuery = useTechTaskPrLinksQuery(id)
   const updateStatusMutation = useUpdateTechTaskStatusMutation(id ?? '')
+  const deleteMutation = useDeleteTechTaskMutation()
 
   const [status, setStatus] = useState<Status>('접수대기')
   const [statusOpen, setStatusOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const [dod, setDod] = useState<DodItem[]>([])
   const [comment, setComment] = useState('')
   const [comments, setComments] = useState(MOCK_COMMENTS)
@@ -204,6 +207,13 @@ export default function TechTaskDetailPage() {
           >
             <EditIcon />
             수정
+          </button>
+          <button
+            type="button"
+            onClick={() => setDeleteOpen(true)}
+            className="h-8 px-3 border border-red-200 rounded-lg text-[12px] font-medium text-red-600 hover:bg-red-50 transition-colors"
+          >
+            삭제
           </button>
         </div>
       </div>
@@ -399,6 +409,22 @@ export default function TechTaskDetailPage() {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="기술과제를 삭제할까요?"
+        description="삭제 후에는 복구할 수 없습니다."
+        confirmText={deleteMutation.isPending ? '삭제 중...' : '삭제'}
+        cancelText="취소"
+        destructive
+        onConfirm={() => {
+          if (!id) return
+          void deleteMutation.mutateAsync(id).then(() => {
+            navigate('/tech-tasks')
+          })
+        }}
+      />
     </div>
   )
 }

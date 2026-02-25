@@ -1,5 +1,7 @@
 import api from '@/lib/api'
+import { toRelatedRefsPayload } from '@/lib/relatedRefs'
 import { useAuthStore } from '@/stores/authStore'
+import { resolveTeamMemberIdByName } from '@/features/auth/memberResolver'
 import type { Priority, Status, TechTask, TechTaskType } from '@/types/tech-task'
 
 export type TechTaskSortKey = 'docNo' | 'deadline'
@@ -62,10 +64,25 @@ export interface CreateTechTaskInput {
   solution: string
   definitionOfDone?: string
   assignee?: string
+  relatedDocs?: string[]
 }
 
 export interface CreateTechTaskResult {
   id: string
+}
+
+export interface UpdateTechTaskInput {
+  id: string | number
+  title: string
+  type: TechTaskType
+  priority: Priority
+  status: Status
+  deadline: string
+  currentIssue: string
+  solution: string
+  definitionOfDone?: string
+  assignee?: string
+  relatedDocs?: string[]
 }
 
 interface ApiPageResponse<T> {
@@ -134,6 +151,18 @@ interface ApiCreateTechTaskResponse {
 interface ApiUpdateTechTaskStatusRequest {
   status: Status
   statusNote?: string
+}
+
+interface ApiUpdateTechTaskRequest {
+  title?: string
+  currentIssue?: string
+  solution?: string
+  definitionOfDone?: string | null
+  type?: TechTaskType
+  priority?: Priority
+  status?: Status
+  assigneeId?: number | null
+  deadline?: string
 }
 
 const LIST_FETCH_SIZE = 500
@@ -254,6 +283,8 @@ export async function createTechTask(input: CreateTechTaskInput): Promise<Create
     throw new Error('현재 로그인 사용자 또는 팀 정보가 없습니다.')
   }
 
+  const assigneeId = await resolveTeamMemberIdByName(currentTeam.id, input.assignee)
+
   const payload: ApiCreateTechTaskRequest = {
     title: input.title,
     currentIssue: input.currentIssue,
@@ -264,16 +295,52 @@ export async function createTechTask(input: CreateTechTaskInput): Promise<Create
     status: '접수대기',
     teamId: currentTeam.id,
     registrantId: user.id,
-    // assignee는 현재 UI가 이름 기반이어서 백엔드 userId 매핑 전까지 미배정으로 저장
-    assigneeId: null,
+    assigneeId,
     deadline: input.deadline,
   }
 
   const { data } = await api.post<ApiCreateTechTaskResponse>('/tech-tasks', payload)
+
+  const relatedRefs = toRelatedRefsPayload(input.relatedDocs ?? [])
+  if (relatedRefs.length > 0) {
+    await api.put(`/tech-tasks/${data.id}/related-refs`, { items: relatedRefs })
+  }
+
   return { id: String(data.id) }
 }
 
 export async function updateTechTaskStatus(id: string | number, status: Status, statusNote?: string): Promise<void> {
   const payload: ApiUpdateTechTaskStatusRequest = { status, statusNote }
   await api.patch(`/tech-tasks/${id}/status`, payload)
+}
+
+export async function updateTechTask(input: UpdateTechTaskInput): Promise<void> {
+  const auth = useAuthStore.getState()
+  const currentTeam = auth.currentTeam ?? auth.teams[0]
+  if (!currentTeam) {
+    throw new Error('현재 선택된 팀 정보가 없습니다.')
+  }
+
+  const assigneeId = await resolveTeamMemberIdByName(currentTeam.id, input.assignee)
+
+  const payload: ApiUpdateTechTaskRequest = {
+    title: input.title,
+    currentIssue: input.currentIssue,
+    solution: input.solution,
+    definitionOfDone: input.definitionOfDone?.trim() ? input.definitionOfDone : null,
+    type: input.type,
+    priority: input.priority,
+    status: input.status,
+    assigneeId,
+    deadline: input.deadline,
+  }
+
+  await api.put(`/tech-tasks/${input.id}`, payload)
+
+  const relatedRefs = toRelatedRefsPayload(input.relatedDocs ?? [])
+  await api.put(`/tech-tasks/${input.id}/related-refs`, { items: relatedRefs })
+}
+
+export async function deleteTechTask(id: string | number): Promise<void> {
+  await api.delete(`/tech-tasks/${id}`)
 }
