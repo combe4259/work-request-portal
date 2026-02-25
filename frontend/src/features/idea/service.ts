@@ -1,4 +1,5 @@
 import api from '@/lib/api'
+import { toRelatedRefsPayload } from '@/lib/relatedRefs'
 import { useAuthStore } from '@/stores/authStore'
 import type { Idea, IdeaCategory, IdeaStatus } from '@/types/idea'
 
@@ -41,10 +42,22 @@ export interface CreateIdeaInput {
   content: string
   category: IdeaCategory
   benefits: string[]
+  relatedDocs?: string[]
 }
 
 export interface CreateIdeaResult {
   id: string
+}
+
+export interface UpdateIdeaInput {
+  id: string | number
+  title: string
+  content: string
+  category: IdeaCategory
+  benefits: string[]
+  status: IdeaStatus
+  statusNote?: string
+  relatedDocs?: string[]
 }
 
 interface ApiPageResponse<T> {
@@ -99,9 +112,25 @@ interface ApiUpdateIdeaStatusRequest {
   statusNote?: string
 }
 
+interface ApiUpdateIdeaRequest {
+  title?: string
+  content?: string
+  benefits?: string[]
+  category?: IdeaCategory
+  status?: IdeaStatus
+  statusNote?: string | null
+}
+
 interface ApiVoteResponse {
   liked: boolean
   likeCount: number
+}
+
+interface ApiIdeaRelatedRefResponse {
+  refType: string
+  refId: number
+  refNo: string
+  title: string | null
 }
 
 const LIST_FETCH_SIZE = 500
@@ -193,6 +222,11 @@ export async function getIdea(id: string | number): Promise<IdeaDetail> {
   }
 }
 
+export async function listIdeaRelatedRefs(id: string | number): Promise<ApiIdeaRelatedRefResponse[]> {
+  const { data } = await api.get<ApiIdeaRelatedRefResponse[]>(`/ideas/${id}/related-refs`)
+  return data
+}
+
 export async function createIdea(input: CreateIdeaInput): Promise<CreateIdeaResult> {
   const auth = useAuthStore.getState()
   const user = auth.user
@@ -213,6 +247,12 @@ export async function createIdea(input: CreateIdeaInput): Promise<CreateIdeaResu
   }
 
   const { data } = await api.post<ApiCreateIdeaResponse>('/ideas', payload)
+
+  const relatedRefs = toRelatedRefsPayload(input.relatedDocs ?? [])
+  if (relatedRefs.length > 0) {
+    await api.put(`/ideas/${data.id}/related-refs`, { items: relatedRefs })
+  }
+
   return { id: String(data.id) }
 }
 
@@ -229,4 +269,24 @@ export async function likeIdea(id: string | number): Promise<ApiVoteResponse> {
 export async function unlikeIdea(id: string | number): Promise<ApiVoteResponse> {
   const { data } = await api.delete<ApiVoteResponse>(`/ideas/${id}/votes/me`)
   return data
+}
+
+export async function updateIdea(input: UpdateIdeaInput): Promise<void> {
+  const payload: ApiUpdateIdeaRequest = {
+    title: input.title,
+    content: input.content,
+    benefits: input.benefits,
+    category: input.category,
+    status: input.status,
+    statusNote: input.statusNote?.trim() ? input.statusNote : null,
+  }
+
+  await api.put(`/ideas/${input.id}`, payload)
+
+  const relatedRefs = toRelatedRefsPayload(input.relatedDocs ?? [])
+  await api.put(`/ideas/${input.id}/related-refs`, { items: relatedRefs })
+}
+
+export async function deleteIdea(id: string | number): Promise<void> {
+  await api.delete(`/ideas/${id}`)
 }

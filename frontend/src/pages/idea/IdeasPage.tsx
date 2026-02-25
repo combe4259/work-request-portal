@@ -6,11 +6,12 @@ import { PlusIcon, SearchIcon } from '@/components/common/Icons'
 import { EmptyState, ErrorState, LoadingState } from '@/components/common/AsyncState'
 import { useIdeasQuery } from '@/features/idea/queries'
 import { useLikeIdeaMutation, useUnlikeIdeaMutation } from '@/features/idea/mutations'
+import type { IdeaListParams } from '@/features/idea/service'
 import type { IdeaCategory, IdeaStatus } from '@/types/idea'
 
 const CATEGORY_OPTIONS: string[] = ['전체', 'UX/UI', '기능', '인프라', '프로세스', '기타']
 const STATUS_OPTIONS: string[] = ['전체', '제안됨', '검토중', '채택', '보류', '기각']
-const SORT_OPTIONS: string[] = ['최신순', '좋아요순']
+const SORT_OPTIONS = ['최신순', '좋아요순'] as const
 const PAGE_SIZE = 120
 
 export default function IdeasPage() {
@@ -18,12 +19,12 @@ export default function IdeasPage() {
   const [search, setSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState('전체')
   const [filterStatus, setFilterStatus] = useState('전체')
-  const [sort, setSort] = useState('최신순')
+  const [sort, setSort] = useState<'최신순' | '좋아요순'>('최신순')
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set())
   const likeIdea = useLikeIdeaMutation()
   const unlikeIdea = useUnlikeIdeaMutation()
 
-  const params = useMemo(
+  const params = useMemo<IdeaListParams>(
     () => ({
       search,
       filterCategory: filterCategory as IdeaCategory | '전체',

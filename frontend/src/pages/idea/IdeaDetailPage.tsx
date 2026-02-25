@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { CategoryBadge, IdeaStatusBadge } from '@/components/idea/Badges'
 import { EmptyState, ErrorState, LoadingState } from '@/components/common/AsyncState'
-import { useIdeaQuery } from '@/features/idea/queries'
-import { useLikeIdeaMutation, useUnlikeIdeaMutation, useUpdateIdeaStatusMutation } from '@/features/idea/mutations'
+import ConfirmDialog from '@/components/common/ConfirmDialog'
+import { useIdeaQuery, useIdeaRelatedRefsQuery } from '@/features/idea/queries'
+import { useDeleteIdeaMutation, useLikeIdeaMutation, useUnlikeIdeaMutation, useUpdateIdeaStatusMutation } from '@/features/idea/mutations'
 import type { IdeaStatus } from '@/types/idea'
 
 const MOCK_COMMENTS = [
@@ -13,16 +14,40 @@ const MOCK_COMMENTS = [
 
 const STATUS_OPTIONS: IdeaStatus[] = ['제안됨', '검토중', '채택', '보류', '기각']
 
+function getRefRoute(refType: string, refId: number): string | null {
+  switch (refType) {
+    case 'WORK_REQUEST':
+      return `/work-requests/${refId}`
+    case 'TECH_TASK':
+      return `/tech-tasks/${refId}`
+    case 'TEST_SCENARIO':
+      return `/test-scenarios/${refId}`
+    case 'DEFECT':
+      return `/defects/${refId}`
+    case 'DEPLOYMENT':
+      return `/deployments/${refId}`
+    case 'MEETING_NOTE':
+      return `/meeting-notes/${refId}`
+    case 'KNOWLEDGE_BASE':
+      return `/knowledge-base/${refId}`
+    default:
+      return null
+  }
+}
+
 export default function IdeaDetailPage() {
   const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
   const { data, isPending, isError, refetch } = useIdeaQuery(id)
+  const relatedRefsQuery = useIdeaRelatedRefsQuery(id)
   const updateStatus = useUpdateIdeaStatusMutation()
   const likeIdea = useLikeIdeaMutation()
   const unlikeIdea = useUnlikeIdeaMutation()
+  const deleteIdea = useDeleteIdeaMutation()
 
   const [statusOpen, setStatusOpen] = useState(false)
   const [statusDraft, setStatusDraft] = useState<IdeaStatus | null>(null)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const [liked, setLiked] = useState(false)
   const [comment, setComment] = useState('')
   const [comments, setComments] = useState(MOCK_COMMENTS)
@@ -135,6 +160,22 @@ export default function IdeaDetailPage() {
               </div>
             )}
           </div>
+
+          <button
+            type="button"
+            onClick={() => navigate(`/ideas/${data.id}/edit`)}
+            className="h-8 px-3 border border-gray-200 rounded-lg text-[12px] font-medium text-gray-600 hover:bg-white transition-colors flex items-center gap-1.5"
+          >
+            <EditIcon />
+            수정
+          </button>
+          <button
+            type="button"
+            onClick={() => setDeleteOpen(true)}
+            className="h-8 px-3 border border-red-200 rounded-lg text-[12px] font-medium text-red-600 hover:bg-red-50 transition-colors"
+          >
+            삭제
+          </button>
         </div>
       </div>
 
@@ -172,6 +213,30 @@ export default function IdeaDetailPage() {
               </div>
             )}
           </Section>
+
+          {relatedRefsQuery.data && relatedRefsQuery.data.length > 0 ? (
+            <Section title="연관 문서">
+              <div className="flex flex-wrap gap-2">
+                {relatedRefsQuery.data.map((item) => {
+                  const route = getRefRoute(item.refType, item.refId)
+                  return (
+                    <button
+                      key={`${item.refType}-${item.refId}`}
+                      type="button"
+                      onClick={() => {
+                        if (route) navigate(route)
+                      }}
+                      disabled={!route}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg hover:border-brand/40 hover:bg-blue-50/30 transition-colors group disabled:opacity-70 disabled:cursor-default"
+                    >
+                      <span className="font-mono text-[11px] text-gray-600">{item.refNo}</span>
+                      <span className="text-[12px] text-gray-600 group-hover:text-brand transition-colors">{item.title ?? item.refNo}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </Section>
+          ) : null}
         </div>
 
         <div className="w-[300px] flex-shrink-0 space-y-4">
@@ -213,6 +278,21 @@ export default function IdeaDetailPage() {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="아이디어를 삭제할까요?"
+        description="삭제 후에는 복구할 수 없습니다."
+        confirmText={deleteIdea.isPending ? '삭제 중...' : '삭제'}
+        cancelText="취소"
+        destructive
+        onConfirm={() => {
+          void deleteIdea.mutateAsync(data.id).then(() => {
+            navigate('/ideas')
+          })
+        }}
+      />
     </div>
   )
 }
@@ -253,6 +333,15 @@ function HeartIcon({ filled }: { filled: boolean }) {
         strokeLinejoin="round"
         fill={filled ? 'currentColor' : 'none'}
       />
+    </svg>
+  )
+}
+
+function EditIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+      <path d="M2 11h2l6-6-2-2-6 6v2z" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round" />
+      <path d="M7.6 3.4l2 2" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
     </svg>
   )
 }

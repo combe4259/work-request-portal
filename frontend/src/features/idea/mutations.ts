@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { createIdea, likeIdea, unlikeIdea, updateIdeaStatus } from './service'
+import { createIdea, deleteIdea, likeIdea, unlikeIdea, updateIdea, updateIdeaStatus } from './service'
 import { ideaQueryKeys } from './queries'
 
 export function useCreateIdeaMutation() {
@@ -42,6 +42,30 @@ export function useUnlikeIdeaMutation() {
 
   return useMutation({
     mutationFn: unlikeIdea,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ideaQueryKeys.all })
+    },
+  })
+}
+
+export function useUpdateIdeaMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: updateIdea,
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({ queryKey: ideaQueryKeys.detail(variables.id) })
+      await queryClient.invalidateQueries({ queryKey: ideaQueryKeys.relatedRefs(variables.id) })
+      await queryClient.invalidateQueries({ queryKey: ideaQueryKeys.all })
+    },
+  })
+}
+
+export function useDeleteIdeaMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: deleteIdea,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ideaQueryKeys.all })
     },

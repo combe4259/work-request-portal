@@ -1,11 +1,15 @@
 import { useState, useRef, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { ErrorState, LoadingState } from '@/components/common/AsyncState'
 import { FormField } from '@/components/common/FormField'
 import { inputCls, textareaCls } from '@/lib/formStyles'
-import { useCreateIdeaMutation } from '@/features/idea/mutations'
+import { useDocumentIndexQuery } from '@/features/document-index/queries'
+import { useCreateIdeaMutation, useUpdateIdeaMutation } from '@/features/idea/mutations'
+import { useIdeaQuery, useIdeaRelatedRefsQuery } from '@/features/idea/queries'
+import { useAuthStore } from '@/stores/authStore'
 
 // ── 스키마 ───────────────────────────────────────────
 const schema = z.object({
@@ -16,18 +20,27 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>
 
-const ALL_DOCS = [
-  { docNo: 'WR-042', title: '계좌 개설 UI 개선 요청' },
-  { docNo: 'WR-038', title: '잔고 조회 화면 UI 개선 요청' },
-  { docNo: 'TK-109', title: '계좌 개설 API 연동 개발' },
-  { docNo: 'TK-112', title: 'API 응답 성능 최적화' },
-  { docNo: 'TS-017', title: '계좌 개설 프로세스 E2E 흐름 검증' },
-  { docNo: 'DF-034', title: 'Galaxy S23에서 메인 메뉴 버튼이 화면 밖으로 이탈' },
-]
+const ALLOWED_REF_TYPES = [
+  'WORK_REQUEST',
+  'TECH_TASK',
+  'TEST_SCENARIO',
+  'DEFECT',
+  'DEPLOYMENT',
+  'MEETING_NOTE',
+  'KNOWLEDGE_BASE',
+] as const
 
 export default function IdeaFormPage() {
   const navigate = useNavigate()
+  const { id } = useParams<{ id: string }>()
+  const isEdit = id != null
+  const numericId = Number(id)
+  const validEditId = isEdit && Number.isInteger(numericId) && numericId > 0 ? numericId : undefined
   const createIdea = useCreateIdeaMutation()
+  const updateIdea = useUpdateIdeaMutation()
+  const currentTeam = useAuthStore((state) => state.currentTeam)
+  const ideaQuery = useIdeaQuery(validEditId)
+  const relatedRefsQuery = useIdeaRelatedRefsQuery(validEditId)
 
   // 기대 효과
   const [benefits, setBenefits] = useState<string[]>([])
@@ -38,6 +51,13 @@ export default function IdeaFormPage() {
   const [docSearch, setDocSearch] = useState('')
   const [docDropOpen, setDocDropOpen] = useState(false)
   const docRef = useRef<HTMLDivElement>(null)
+  const documentIndexQuery = useDocumentIndexQuery({
+    q: docSearch,
+    types: [...ALLOWED_REF_TYPES],
+    teamId: currentTeam?.id,
+    enabled: docDropOpen && Boolean(currentTeam?.id),
+    size: 40,
+  })
 
   // 첨부파일
   const [fileList, setFileList] = useState<File[]>([])
@@ -50,7 +70,7 @@ export default function IdeaFormPage() {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const filteredDocs = ALL_DOCS.filter(
+  const filteredDocs = (documentIndexQuery.data ?? []).filter(
     (d) =>
       !relatedDocs.find((r) => r.docNo === d.docNo) &&
       (d.docNo.toLowerCase().includes(docSearch.toLowerCase()) || d.title.includes(docSearch))
@@ -77,6 +97,7 @@ export default function IdeaFormPage() {
     register,
     handleSubmit,
     watch,
+    reset,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -85,15 +106,94 @@ export default function IdeaFormPage() {
 
   const contentValue = watch('content') ?? ''
 
+  useEffect(() => {
+    if (!ideaQuery.data) {
+      return
+    }
+
+    reset({
+      title: ideaQuery.data.title,
+      category: ideaQuery.data.category,
+      content: ideaQuery.data.content,
+    })
+    setBenefits(ideaQuery.data.benefits)
+  }, [ideaQuery.data, reset])
+
+  useEffect(() => {
+    if (!relatedRefsQuery.data) {
+      return
+    }
+    setRelatedDocs(
+      relatedRefsQuery.data.map((item) => ({
+        docNo: item.refNo,
+        title: item.title ?? item.refNo,
+      }))
+    )
+  }, [relatedRefsQuery.data])
+
   const onSubmit = async (data: FormValues) => {
+    if (validEditId != null && ideaQuery.data) {
+      await updateIdea.mutateAsync({
+        id: validEditId,
+        title: data.title,
+        category: data.category,
+        content: data.content,
+        benefits,
+        status: ideaQuery.data.status,
+        statusNote: ideaQuery.data.statusNote,
+        relatedDocs: relatedDocs.map((doc) => doc.docNo),
+      })
+      navigate(`/ideas/${validEditId}`)
+      return
+    }
+
     await createIdea.mutateAsync({
       title: data.title,
       category: data.category,
       content: data.content,
       benefits,
+      relatedDocs: relatedDocs.map((doc) => doc.docNo),
     })
     navigate('/ideas')
   }
+
+  if (isEdit && validEditId == null) {
+    return (
+      <div className="p-6">
+        <ErrorState
+          title="잘못된 접근입니다"
+          description="아이디어 ID가 올바르지 않습니다."
+          actionLabel="목록으로 이동"
+          onAction={() => navigate('/ideas')}
+        />
+      </div>
+    )
+  }
+
+  if (isEdit && ideaQuery.isPending) {
+    return (
+      <div className="p-6">
+        <LoadingState title="아이디어 정보를 불러오는 중입니다" description="잠시만 기다려주세요." />
+      </div>
+    )
+  }
+
+  if (isEdit && (ideaQuery.isError || !ideaQuery.data)) {
+    return (
+      <div className="p-6">
+        <ErrorState
+          title="아이디어 정보를 불러오지 못했습니다"
+          description="잠시 후 다시 시도해주세요."
+          actionLabel="다시 시도"
+          onAction={() => {
+            void ideaQuery.refetch()
+          }}
+        />
+      </div>
+    )
+  }
+
+  const isMutating = createIdea.isPending || updateIdea.isPending
 
   return (
     <div className="min-h-full p-6 flex flex-col items-center">
@@ -108,8 +208,8 @@ export default function IdeaFormPage() {
             <BackIcon />
           </button>
           <div>
-            <h1 className="text-[18px] font-bold text-gray-900">아이디어 제안</h1>
-            <p className="text-[12px] text-gray-400 mt-0.5">팀에 새로운 아이디어를 제안합니다</p>
+            <h1 className="text-[18px] font-bold text-gray-900">{isEdit ? '아이디어 수정' : '아이디어 제안'}</h1>
+            <p className="text-[12px] text-gray-400 mt-0.5">{isEdit ? '아이디어 내용을 수정합니다' : '팀에 새로운 아이디어를 제안합니다'}</p>
           </div>
         </div>
 
@@ -309,10 +409,10 @@ export default function IdeaFormPage() {
             </button>
             <button
               type="submit"
-              disabled={createIdea.isPending}
+              disabled={isMutating}
               className="h-9 px-5 text-[13px] font-semibold text-white bg-brand hover:bg-brand-hover rounded-lg transition-colors disabled:opacity-60 flex items-center gap-2"
             >
-              {createIdea.isPending ? <><SpinnerIcon />제안 중...</> : '아이디어 제안'}
+              {isMutating ? <><SpinnerIcon />{isEdit ? '수정 중...' : '제안 중...'}</> : isEdit ? '수정 완료' : '아이디어 제안'}
             </button>
           </div>
         </form>
