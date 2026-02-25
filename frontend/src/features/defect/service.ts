@@ -60,6 +60,7 @@ export interface DefectDetail {
   expectedBehavior: string
   actualBehavior: string
   deadline: string
+  createdAt: string
 }
 
 export interface UpdateDefectInput {
@@ -113,6 +114,7 @@ interface ApiDefectDetailResponse {
   actualBehavior: string | null
   statusNote: string | null
   deadline: string | null
+  createdAt: string | null
 }
 
 interface ApiCreateDefectRequest {
@@ -177,6 +179,10 @@ function mapUserLabel(userId: number | null | undefined, fallbackText: string): 
 
 function toDateOnly(value: string | null | undefined): string {
   return value?.slice(0, 10) ?? ''
+}
+
+function toDateTime(value: string | null | undefined): string {
+  return value?.replace('T', ' ').slice(0, 16) ?? ''
 }
 
 function toRelatedDoc(refType: string | null | undefined, refId: number | null | undefined): string {
@@ -371,6 +377,7 @@ export async function getDefect(id: string | number): Promise<DefectDetail> {
     expectedBehavior: data.expectedBehavior ?? '',
     actualBehavior: data.actualBehavior ?? '',
     deadline: toDateOnly(data.deadline),
+    createdAt: toDateTime(data.createdAt),
   }
 }
 

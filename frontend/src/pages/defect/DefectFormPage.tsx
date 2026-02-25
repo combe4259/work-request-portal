@@ -10,6 +10,7 @@ import { useDocumentIndexQuery } from '@/features/document-index/queries'
 import { useCreateDefectMutation, useUpdateDefectMutation } from '@/features/defect/mutations'
 import { useDefectDetailQuery } from '@/features/defect/queries'
 import { defectFormSchema, type DefectFormValues } from '@/features/defect/schemas'
+import { createAttachmentsFromFiles } from '@/features/attachment/service'
 import { useAuthStore } from '@/stores/authStore'
 
 const ALLOWED_REF_TYPES = [
@@ -164,11 +165,18 @@ export default function DefectFormPage() {
         expectedBehavior: data.expected,
         actualBehavior: data.actual,
       })
+      if (fileList.length > 0) {
+        await createAttachmentsFromFiles({
+          refType: 'DEFECT',
+          refId: validEditId,
+          files: fileList,
+        })
+      }
       navigate(`/defects/${validEditId}`)
       return
     }
 
-    await createDefect.mutateAsync({
+    const created = await createDefect.mutateAsync({
       title: data.title,
       type: data.type,
       severity: data.severity,
@@ -180,7 +188,14 @@ export default function DefectFormPage() {
       expectedBehavior: data.expected,
       actualBehavior: data.actual,
     })
-    navigate('/defects')
+    if (fileList.length > 0) {
+      await createAttachmentsFromFiles({
+        refType: 'DEFECT',
+        refId: created.id,
+        files: fileList,
+      })
+    }
+    navigate(`/defects/${created.id}`)
   }
 
   if (isEdit && validEditId == null) {
