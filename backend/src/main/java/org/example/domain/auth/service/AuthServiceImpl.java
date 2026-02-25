@@ -25,15 +25,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 @Transactional(readOnly = true)
 public class AuthServiceImpl implements AuthService {
 
     private static final String DEFAULT_ROLE = "DEVELOPER";
-    private static final String DEFAULT_TEAM_ROLE = "OWNER";
 
     private final PortalUserRepository portalUserRepository;
     private final TeamRepository teamRepository;
@@ -73,18 +70,6 @@ public class AuthServiceImpl implements AuthService {
         user.setIsActive(true);
 
         PortalUser savedUser = portalUserRepository.save(user);
-
-        Team personalTeam = new Team();
-        personalTeam.setName(savedUser.getName() + "의 팀");
-        personalTeam.setInviteCode(generateInviteCode());
-        personalTeam.setCreatedBy(savedUser.getId());
-        Team savedTeam = teamRepository.save(personalTeam);
-
-        UserTeam userTeam = new UserTeam();
-        userTeam.setUserId(savedUser.getId());
-        userTeam.setTeamId(savedTeam.getId());
-        userTeam.setTeamRole(DEFAULT_TEAM_ROLE);
-        userTeamRepository.save(userTeam);
 
         return new SignupResponse(savedUser.getId(), savedUser.getEmail());
     }
@@ -210,25 +195,6 @@ public class AuthServiceImpl implements AuthService {
             case "PM", "TEAM_LEAD", "DEVELOPER", "REQUESTER" -> role;
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "유효하지 않은 역할입니다.");
         };
-    }
-
-    private String generateInviteCode() {
-        final String alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-
-        for (int attempt = 0; attempt < 20; attempt++) {
-            StringBuilder builder = new StringBuilder(8);
-            for (int i = 0; i < 8; i++) {
-                int index = ThreadLocalRandom.current().nextInt(alphabet.length());
-                builder.append(alphabet.charAt(index));
-            }
-
-            String code = builder.toString();
-            if (!teamRepository.existsByInviteCode(code)) {
-                return code;
-            }
-        }
-
-        return UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase(Locale.ROOT);
     }
 
     private boolean isBlank(String value) {

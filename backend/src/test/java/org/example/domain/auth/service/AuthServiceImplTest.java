@@ -4,8 +4,6 @@ import org.example.domain.auth.dto.LoginRequest;
 import org.example.domain.auth.dto.LoginResponse;
 import org.example.domain.auth.dto.SignupRequest;
 import org.example.domain.auth.dto.SignupResponse;
-import org.example.domain.team.entity.Team;
-import org.example.domain.team.entity.UserTeam;
 import org.example.domain.team.repository.TeamRepository;
 import org.example.domain.team.repository.UserTeamRepository;
 import org.example.domain.user.entity.PortalUser;
@@ -14,7 +12,6 @@ import org.example.global.security.JwtTokenProvider;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -56,7 +53,7 @@ class AuthServiceImplTest {
     private AuthServiceImpl authService;
 
     @Test
-    @DisplayName("signup 성공 시 사용자/개인팀/소속이 생성된다")
+    @DisplayName("signup 성공 시 사용자만 생성한다")
     void signupSuccess() {
         SignupRequest request = new SignupRequest("홍길동", "Test@Example.com", null, "password123");
 
@@ -67,24 +64,13 @@ class AuthServiceImplTest {
             user.setId(10L);
             return user;
         });
-        when(teamRepository.existsByInviteCode(anyString())).thenReturn(false);
-        when(teamRepository.save(any(Team.class))).thenAnswer(invocation -> {
-            Team team = invocation.getArgument(0);
-            team.setId(20L);
-            return team;
-        });
-        when(userTeamRepository.save(any(UserTeam.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         SignupResponse response = authService.signup(request);
 
         assertEquals(10L, response.id());
         assertEquals("test@example.com", response.email());
-
-        ArgumentCaptor<UserTeam> membershipCaptor = ArgumentCaptor.forClass(UserTeam.class);
-        verify(userTeamRepository).save(membershipCaptor.capture());
-        assertEquals(10L, membershipCaptor.getValue().getUserId());
-        assertEquals(20L, membershipCaptor.getValue().getTeamId());
-        assertEquals("OWNER", membershipCaptor.getValue().getTeamRole());
+        verify(teamRepository, never()).save(any());
+        verify(userTeamRepository, never()).save(any());
     }
 
     @Test
