@@ -1,27 +1,37 @@
-import { useState, useRef, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { ErrorState, LoadingState } from '@/components/common/AsyncState'
 import { FormField } from '@/components/common/FormField'
 import { inputCls, textareaCls, selectCls } from '@/lib/formStyles'
-import { ASSIGNEES } from '@/lib/constants'
-import { useCreateDefectMutation } from '@/features/defect/mutations'
+import { useTeamMembersQuery } from '@/features/auth/queries'
+import { useDocumentIndexQuery } from '@/features/document-index/queries'
+import { useCreateDefectMutation, useUpdateDefectMutation } from '@/features/defect/mutations'
+import { useDefectDetailQuery } from '@/features/defect/queries'
 import { defectFormSchema, type DefectFormValues } from '@/features/defect/schemas'
+import { useAuthStore } from '@/stores/authStore'
 
-const ALL_DOCS = [
-  { docNo: 'TS-018', title: '모바일 PDA 레이아웃 반응형 검증' },
-  { docNo: 'TS-017', title: '계좌 개설 프로세스 E2E 흐름 검증' },
-  { docNo: 'TS-016', title: '잔고 조회 API 응답시간 회귀 테스트' },
-  { docNo: 'TS-012', title: 'JWT 토큰 보안 취약점 침투 테스트' },
-  { docNo: 'WR-051', title: '모바일 PDA 화면 레이아웃 개선 요청' },
-  { docNo: 'WR-049', title: '잔고 조회 API 응답 지연 버그 수정' },
-]
+const ALLOWED_REF_TYPES = [
+  'WORK_REQUEST',
+  'TECH_TASK',
+  'TEST_SCENARIO',
+] as const
 
 let stepIdCounter = 3
 
 export default function DefectFormPage() {
   const navigate = useNavigate()
+  const { id } = useParams<{ id: string }>()
+  const isEdit = id != null
+  const numericId = Number(id)
+  const validEditId = isEdit && Number.isInteger(numericId) && numericId > 0 ? numericId : undefined
   const createDefect = useCreateDefectMutation()
+  const updateDefect = useUpdateDefectMutation()
+  const currentUser = useAuthStore((state) => state.user)
+  const currentTeam = useAuthStore((state) => state.currentTeam)
+  const teamMembersQuery = useTeamMembersQuery(currentTeam?.id)
+  const detailQuery = useDefectDetailQuery(validEditId)
 
   // 재현 경로
   const [steps, setSteps] = useState<{ id: number; text: string }[]>([
@@ -34,6 +44,13 @@ export default function DefectFormPage() {
   const [docSearch, setDocSearch] = useState('')
   const [docDropOpen, setDocDropOpen] = useState(false)
   const docRef = useRef<HTMLDivElement>(null)
+  const documentIndexQuery = useDocumentIndexQuery({
+    q: docSearch,
+    types: [...ALLOWED_REF_TYPES],
+    teamId: currentTeam?.id,
+    enabled: docDropOpen && !relatedDoc && Boolean(currentTeam?.id),
+    size: 40,
+  })
 
   // 첨부파일
   const [fileList, setFileList] = useState<File[]>([])
@@ -46,11 +63,22 @@ export default function DefectFormPage() {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const filteredDocs = ALL_DOCS.filter(
+  const filteredDocs = (documentIndexQuery.data ?? []).filter(
     (d) =>
       d.docNo !== relatedDoc?.docNo &&
       (d.docNo.toLowerCase().includes(docSearch.toLowerCase()) || d.title.includes(docSearch))
   )
+
+  const assigneeOptions = useMemo(() => {
+    const names = new Set<string>()
+    if (currentUser?.name) {
+      names.add(currentUser.name)
+    }
+    ;(teamMembersQuery.data ?? []).forEach((member) => {
+      names.add(member.name)
+    })
+    return Array.from(names)
+  }, [currentUser?.name, teamMembersQuery.data])
 
   const selectDoc = (doc: { docNo: string; title: string }) => {
     setRelatedDoc(doc); setDocSearch(''); setDocDropOpen(false)
@@ -80,6 +108,7 @@ export default function DefectFormPage() {
     register,
     handleSubmit,
     control,
+    reset,
     formState: { errors, isSubmitting },
   } = useForm<DefectFormValues>({
     resolver: zodResolver(defectFormSchema),
@@ -89,7 +118,56 @@ export default function DefectFormPage() {
   const expectedValue = useWatch({ control, name: 'expected' }) ?? ''
   const actualValue = useWatch({ control, name: 'actual' }) ?? ''
 
+  useEffect(() => {
+    if (!detailQuery.data) {
+      return
+    }
+
+    reset({
+      title: detailQuery.data.title,
+      type: detailQuery.data.type,
+      severity: detailQuery.data.severity,
+      deadline: detailQuery.data.deadline,
+      assignee: detailQuery.data.assignee === '미배정' ? '' : detailQuery.data.assignee,
+      environment: detailQuery.data.environment,
+      expected: detailQuery.data.expectedBehavior,
+      actual: detailQuery.data.actualBehavior,
+    })
+
+    setRelatedDoc(
+      detailQuery.data.relatedDoc && detailQuery.data.relatedDoc !== '-'
+        ? { docNo: detailQuery.data.relatedDoc, title: detailQuery.data.relatedDoc }
+        : null
+    )
+
+    setSteps(
+      detailQuery.data.reproductionSteps.length > 0
+        ? detailQuery.data.reproductionSteps.map((text, index) => ({ id: index + 1, text }))
+        : [{ id: 1, text: '' }]
+    )
+    stepIdCounter = Math.max(stepIdCounter, detailQuery.data.reproductionSteps.length + 1)
+  }, [detailQuery.data, reset])
+
   const onSubmit = async (data: DefectFormValues) => {
+    if (validEditId != null && detailQuery.data) {
+      await updateDefect.mutateAsync({
+        id: validEditId,
+        title: data.title,
+        type: data.type,
+        severity: data.severity,
+        status: detailQuery.data.status,
+        deadline: data.deadline,
+        assignee: data.assignee,
+        relatedDoc: relatedDoc?.docNo,
+        environment: data.environment,
+        reproductionSteps: steps.map((s) => s.text.trim()).filter((s) => s.length > 0),
+        expectedBehavior: data.expected,
+        actualBehavior: data.actual,
+      })
+      navigate(`/defects/${validEditId}`)
+      return
+    }
+
     await createDefect.mutateAsync({
       title: data.title,
       type: data.type,
@@ -105,6 +183,44 @@ export default function DefectFormPage() {
     navigate('/defects')
   }
 
+  if (isEdit && validEditId == null) {
+    return (
+      <div className="p-6">
+        <ErrorState
+          title="잘못된 접근입니다"
+          description="결함 ID가 올바르지 않습니다."
+          actionLabel="목록으로 이동"
+          onAction={() => navigate('/defects')}
+        />
+      </div>
+    )
+  }
+
+  if (isEdit && detailQuery.isPending) {
+    return (
+      <div className="p-6">
+        <LoadingState title="결함 정보를 불러오는 중입니다" description="잠시만 기다려주세요." />
+      </div>
+    )
+  }
+
+  if (isEdit && (detailQuery.isError || !detailQuery.data)) {
+    return (
+      <div className="p-6">
+        <ErrorState
+          title="결함 정보를 불러오지 못했습니다"
+          description="잠시 후 다시 시도해주세요."
+          actionLabel="다시 시도"
+          onAction={() => {
+            void detailQuery.refetch()
+          }}
+        />
+      </div>
+    )
+  }
+
+  const isMutating = isSubmitting || createDefect.isPending || updateDefect.isPending
+
   return (
     <div className="min-h-full p-6 flex flex-col items-center">
       <div className="w-full max-w-[720px]">
@@ -118,8 +234,8 @@ export default function DefectFormPage() {
             <BackIcon />
           </button>
           <div>
-            <h1 className="text-[18px] font-bold text-gray-900">결함 등록</h1>
-            <p className="text-[12px] text-gray-400 mt-0.5">발견된 결함을 등록합니다</p>
+            <h1 className="text-[18px] font-bold text-gray-900">{isEdit ? '결함 수정' : '결함 등록'}</h1>
+            <p className="text-[12px] text-gray-400 mt-0.5">{isEdit ? '결함 내용을 수정합니다' : '발견된 결함을 등록합니다'}</p>
           </div>
         </div>
 
@@ -171,7 +287,8 @@ export default function DefectFormPage() {
             <div className="grid grid-cols-2 gap-4">
               <FormField label="담당자">
                 <select {...register('assignee')} className={selectCls(false)}>
-                  {ASSIGNEES.map((a) => <option key={a} value={a}>{a}</option>)}
+                  <option value="">미배정</option>
+                  {assigneeOptions.map((name) => <option key={name} value={name}>{name}</option>)}
                 </select>
               </FormField>
 
@@ -338,10 +455,10 @@ export default function DefectFormPage() {
             </button>
             <button
               type="submit"
-              disabled={isSubmitting || createDefect.isPending}
+              disabled={isMutating}
               className="h-9 px-5 text-[13px] font-semibold text-white bg-brand hover:bg-brand-hover rounded-lg transition-colors disabled:opacity-60 flex items-center gap-2"
             >
-              {isSubmitting || createDefect.isPending ? <><SpinnerIcon />등록 중...</> : '등록하기'}
+              {isMutating ? <><SpinnerIcon />{isEdit ? '수정 중...' : '등록 중...'}</> : isEdit ? '수정 완료' : '등록하기'}
             </button>
           </div>
         </form>

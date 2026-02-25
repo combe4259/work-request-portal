@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
+import ConfirmDialog from '@/components/common/ConfirmDialog'
 import { DefectTypeBadge, SeverityBadge, DefectStatusBadge } from '@/components/defect/Badges'
+import { useDeleteDefectMutation, useUpdateDefectStatusMutation } from '@/features/defect/mutations'
 import type { DefectStatus, Severity } from '@/types/defect'
 
 // ── 샘플 상세 데이터 ──────────────────────────────────
@@ -55,14 +57,27 @@ const DOC_PREFIX_STYLE: Record<string, string> = {
 
 export default function DefectDetailPage() {
   const navigate = useNavigate()
+  const { id } = useParams<{ id: string }>()
   const data = MOCK_DETAIL
+  const docId = id && Number.isFinite(Number(id)) ? Number(id) : Number(data.id)
+  const updateStatus = useUpdateDefectStatusMutation(docId)
+  const deleteDefect = useDeleteDefectMutation()
 
   const [status, setStatus] = useState<DefectStatus>(data.status)
   const [statusOpen, setStatusOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const [comment, setComment] = useState('')
   const [comments, setComments] = useState(MOCK_COMMENTS)
 
-  const handleStatusChange = (s: DefectStatus) => { setStatus(s); setStatusOpen(false) }
+  const handleStatusChange = async (s: DefectStatus) => {
+    setStatus(s)
+    setStatusOpen(false)
+    try {
+      await updateStatus.mutateAsync(s)
+    } catch {
+      setStatus(data.status)
+    }
+  }
 
   const handleComment = () => {
     if (!comment.trim()) return
@@ -122,7 +137,7 @@ export default function DefectDetailPage() {
                 {STATUS_OPTIONS.map((s) => (
                   <button
                     key={s}
-                    onClick={() => handleStatusChange(s)}
+                    onClick={() => { void handleStatusChange(s) }}
                     className={`w-full px-3 py-2 text-left text-[12px] hover:bg-gray-50 transition-colors ${s === status ? 'bg-blue-50' : ''}`}
                   >
                     <DefectStatusBadge status={s} />
@@ -132,11 +147,18 @@ export default function DefectDetailPage() {
             )}
           </div>
           <button
-            onClick={() => navigate(`/defects/${data.id}/edit`)}
+            onClick={() => navigate(`/defects/${docId}/edit`)}
             className="h-8 px-3 border border-gray-200 rounded-lg text-[12px] font-medium text-gray-600 hover:bg-white transition-colors flex items-center gap-1.5"
           >
             <EditIcon />
             수정
+          </button>
+          <button
+            type="button"
+            onClick={() => setDeleteOpen(true)}
+            className="h-8 px-3 border border-red-200 rounded-lg text-[12px] font-medium text-red-600 hover:bg-red-50 transition-colors"
+          >
+            삭제
           </button>
         </div>
       </div>
@@ -302,6 +324,21 @@ export default function DefectDetailPage() {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="결함을 삭제할까요?"
+        description="삭제 후에는 복구할 수 없습니다."
+        confirmText={deleteDefect.isPending ? '삭제 중...' : '삭제'}
+        cancelText="취소"
+        destructive
+        onConfirm={() => {
+          void deleteDefect.mutateAsync(docId).then(() => {
+            navigate('/defects')
+          })
+        }}
+      />
     </div>
   )
 }

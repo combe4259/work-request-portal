@@ -1,5 +1,6 @@
 import api from '@/lib/api'
 import { useAuthStore } from '@/stores/authStore'
+import { resolveTeamMemberIdByName } from '@/features/auth/memberResolver'
 import type { Defect, DefectStatus, DefectType, Severity } from '@/types/defect'
 
 export type DefectSortKey = 'docNo' | 'deadline' | 'severity' | 'status'
@@ -44,6 +45,39 @@ export interface CreateDefectInput {
   actualBehavior: string
 }
 
+export interface DefectDetail {
+  id: string
+  docNo: string
+  title: string
+  type: DefectType
+  severity: Severity
+  status: DefectStatus
+  reporter: string
+  assignee: string
+  relatedDoc: string
+  environment: string
+  reproductionSteps: string[]
+  expectedBehavior: string
+  actualBehavior: string
+  deadline: string
+}
+
+export interface UpdateDefectInput {
+  id: string | number
+  title: string
+  type: DefectType
+  severity: Severity
+  status: DefectStatus
+  assignee?: string
+  relatedDoc?: string
+  environment?: string
+  reproductionSteps?: string[]
+  expectedBehavior: string
+  actualBehavior: string
+  deadline: string
+  statusNote?: string
+}
+
 interface ApiPageResponse<T> {
   content: T[]
 }
@@ -73,6 +107,11 @@ interface ApiDefectDetailResponse {
   assigneeId: number | null
   relatedRefType: string | null
   relatedRefId: number | null
+  environment: string | null
+  reproductionSteps: string | null
+  expectedBehavior: string | null
+  actualBehavior: string | null
+  statusNote: string | null
   deadline: string | null
 }
 
@@ -95,6 +134,28 @@ interface ApiCreateDefectRequest {
 
 interface ApiCreateDefectResponse {
   id: number
+}
+
+interface ApiUpdateDefectRequest {
+  title?: string
+  description?: string | null
+  type?: DefectType
+  severity?: Severity
+  status?: DefectStatus
+  relatedRefType?: string | null
+  relatedRefId?: number | null
+  environment?: string | null
+  reproductionSteps?: string
+  expectedBehavior?: string
+  actualBehavior?: string
+  deadline?: string
+  statusNote?: string | null
+  assigneeId?: number | null
+}
+
+interface ApiUpdateDefectStatusRequest {
+  status: DefectStatus
+  statusNote?: string
 }
 
 const SEVERITY_ORDER: Record<Severity, number> = { 치명적: 0, 높음: 1, 보통: 2, 낮음: 3 }
@@ -238,6 +299,7 @@ export async function createDefect(input: CreateDefectInput): Promise<Defect> {
   }
 
   const related = parseRelatedDoc(input.relatedDoc)
+  const assigneeId = await resolveTeamMemberIdByName(currentTeam.id, input.assignee)
 
   const payload: ApiCreateDefectRequest = {
     title: input.title,
@@ -246,8 +308,7 @@ export async function createDefect(input: CreateDefectInput): Promise<Defect> {
     status: '접수',
     teamId: currentTeam.id,
     reporterId: user.id,
-    // assignee는 현재 UI가 이름 기반이어서 백엔드 userId 매핑 전까지 미배정으로 저장
-    assigneeId: null,
+    assigneeId,
     relatedRefType: related.relatedRefType,
     relatedRefId: related.relatedRefId,
     environment: input.environment?.trim() ? input.environment : undefined,
@@ -272,4 +333,82 @@ export async function createDefect(input: CreateDefectInput): Promise<Defect> {
     relatedDoc: toRelatedDoc(detail.data.relatedRefType, detail.data.relatedRefId),
     deadline: toDateOnly(detail.data.deadline),
   }
+}
+
+function parseReproductionSteps(value: string | null | undefined): string[] {
+  if (!value) {
+    return []
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown
+    if (!Array.isArray(parsed)) {
+      return []
+    }
+    return parsed
+      .map((item) => (typeof item === 'string' ? item.trim() : ''))
+      .filter((item) => item.length > 0)
+  } catch {
+    return []
+  }
+}
+
+export async function getDefect(id: string | number): Promise<DefectDetail> {
+  const { data } = await api.get<ApiDefectDetailResponse>(`/defects/${id}`)
+
+  return {
+    id: String(data.id),
+    docNo: data.defectNo,
+    title: data.title,
+    type: data.type,
+    severity: data.severity,
+    status: data.status,
+    reporter: mapUserLabel(data.reporterId, '알 수 없음'),
+    assignee: mapUserLabel(data.assigneeId, '미배정'),
+    relatedDoc: toRelatedDoc(data.relatedRefType, data.relatedRefId),
+    environment: data.environment ?? '',
+    reproductionSteps: parseReproductionSteps(data.reproductionSteps),
+    expectedBehavior: data.expectedBehavior ?? '',
+    actualBehavior: data.actualBehavior ?? '',
+    deadline: toDateOnly(data.deadline),
+  }
+}
+
+export async function updateDefect(input: UpdateDefectInput): Promise<void> {
+  const auth = useAuthStore.getState()
+  const currentTeam = auth.currentTeam ?? auth.teams[0]
+  if (!currentTeam) {
+    throw new Error('현재 선택된 팀 정보가 없습니다.')
+  }
+
+  const related = parseRelatedDoc(input.relatedDoc)
+  const assigneeId = await resolveTeamMemberIdByName(currentTeam.id, input.assignee)
+
+  const payload: ApiUpdateDefectRequest = {
+    title: input.title,
+    description: null,
+    type: input.type,
+    severity: input.severity,
+    status: input.status,
+    relatedRefType: related.relatedRefType,
+    relatedRefId: related.relatedRefId,
+    environment: input.environment?.trim() ? input.environment : null,
+    reproductionSteps: JSON.stringify(input.reproductionSteps ?? []),
+    expectedBehavior: input.expectedBehavior,
+    actualBehavior: input.actualBehavior,
+    deadline: input.deadline,
+    statusNote: input.statusNote?.trim() ? input.statusNote : null,
+    assigneeId,
+  }
+
+  await api.put(`/defects/${input.id}`, payload)
+}
+
+export async function updateDefectStatus(id: string | number, status: DefectStatus, statusNote?: string): Promise<void> {
+  const payload: ApiUpdateDefectStatusRequest = { status, statusNote }
+  await api.patch(`/defects/${id}/status`, payload)
+}
+
+export async function deleteDefect(id: string | number): Promise<void> {
+  await api.delete(`/defects/${id}`)
 }
