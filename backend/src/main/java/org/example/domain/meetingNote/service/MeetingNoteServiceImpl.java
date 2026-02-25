@@ -52,6 +52,14 @@ import java.util.Locale;
 @Transactional(readOnly = true)
 public class MeetingNoteServiceImpl implements MeetingNoteService {
 
+    private static final String REF_TYPE_WORK_REQUEST = "WORK_REQUEST";
+    private static final String REF_TYPE_TECH_TASK = "TECH_TASK";
+    private static final String REF_TYPE_TEST_SCENARIO = "TEST_SCENARIO";
+    private static final String REF_TYPE_DEFECT = "DEFECT";
+    private static final String REF_TYPE_DEPLOYMENT = "DEPLOYMENT";
+    private static final String REF_TYPE_MEETING_NOTE = "MEETING_NOTE";
+    private static final String REF_TYPE_KNOWLEDGE_BASE = "KNOWLEDGE_BASE";
+
     private final MeetingNoteRepository meetingNoteRepository;
     private final MeetingActionItemRepository meetingActionItemRepository;
     private final MeetingAttendeeRepository meetingAttendeeRepository;
@@ -397,7 +405,7 @@ public class MeetingNoteServiceImpl implements MeetingNoteService {
             return null;
         }
         String normalized = rawType.trim().toUpperCase(Locale.ROOT);
-        if ("WORK_REQUEST".equals(normalized) || "TECH_TASK".equals(normalized)) {
+        if (REF_TYPE_WORK_REQUEST.equals(normalized) || REF_TYPE_TECH_TASK.equals(normalized)) {
             return normalized;
         }
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "유효하지 않은 linkedRefType입니다.");
@@ -406,7 +414,8 @@ public class MeetingNoteServiceImpl implements MeetingNoteService {
     private String normalizeRelatedRefType(String rawType) {
         String normalized = rawType.trim().toUpperCase(Locale.ROOT);
         return switch (normalized) {
-            case "WORK_REQUEST", "TECH_TASK", "TEST_SCENARIO", "DEFECT", "DEPLOYMENT", "MEETING_NOTE", "KNOWLEDGE_BASE" ->
+            case REF_TYPE_WORK_REQUEST, REF_TYPE_TECH_TASK, REF_TYPE_TEST_SCENARIO, REF_TYPE_DEFECT,
+                    REF_TYPE_DEPLOYMENT, REF_TYPE_MEETING_NOTE, REF_TYPE_KNOWLEDGE_BASE ->
                     normalized;
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "유효하지 않은 relatedRefType입니다.");
         };
@@ -414,68 +423,65 @@ public class MeetingNoteServiceImpl implements MeetingNoteService {
 
     private RefMetadata resolveRefMetadata(String rawRefType, Long refId) {
         String refType = normalizeRelatedRefType(rawRefType);
+        RefMetadata resolved = switch (refType) {
+            case REF_TYPE_WORK_REQUEST -> findWorkRequestRefMetadata(refId);
+            case REF_TYPE_TECH_TASK -> findTechTaskRefMetadata(refId);
+            case REF_TYPE_TEST_SCENARIO -> findTestScenarioRefMetadata(refId);
+            case REF_TYPE_DEFECT -> findDefectRefMetadata(refId);
+            case REF_TYPE_DEPLOYMENT -> findDeploymentRefMetadata(refId);
+            case REF_TYPE_MEETING_NOTE -> findMeetingNoteRefMetadata(refId);
+            case REF_TYPE_KNOWLEDGE_BASE -> findKnowledgeBaseRefMetadata(refType, refId);
+            default -> null;
+        };
+        return resolved == null ? new RefMetadata(toFallbackRefNo(refType, refId), null) : resolved;
+    }
 
-        if ("WORK_REQUEST".equals(refType)) {
-            WorkRequest row = workRequestRepository.findById(refId).orElse(null);
-            if (row != null) {
-                return new RefMetadata(row.getRequestNo(), row.getTitle());
-            }
+    private RefMetadata findWorkRequestRefMetadata(Long refId) {
+        WorkRequest row = workRequestRepository.findById(refId).orElse(null);
+        return row == null ? null : new RefMetadata(row.getRequestNo(), row.getTitle());
+    }
+
+    private RefMetadata findTechTaskRefMetadata(Long refId) {
+        TechTask row = techTaskRepository.findById(refId).orElse(null);
+        return row == null ? null : new RefMetadata(row.getTaskNo(), row.getTitle());
+    }
+
+    private RefMetadata findTestScenarioRefMetadata(Long refId) {
+        TestScenario row = testScenarioRepository.findById(refId).orElse(null);
+        return row == null ? null : new RefMetadata(row.getScenarioNo(), row.getTitle());
+    }
+
+    private RefMetadata findDefectRefMetadata(Long refId) {
+        Defect row = defectRepository.findById(refId).orElse(null);
+        return row == null ? null : new RefMetadata(row.getDefectNo(), row.getTitle());
+    }
+
+    private RefMetadata findDeploymentRefMetadata(Long refId) {
+        Deployment row = deploymentRepository.findById(refId).orElse(null);
+        return row == null ? null : new RefMetadata(row.getDeployNo(), row.getTitle());
+    }
+
+    private RefMetadata findMeetingNoteRefMetadata(Long refId) {
+        MeetingNote row = meetingNoteRepository.findById(refId).orElse(null);
+        return row == null ? null : new RefMetadata(row.getNoteNo(), row.getTitle());
+    }
+
+    private RefMetadata findKnowledgeBaseRefMetadata(String refType, Long refId) {
+        if (knowledgeBaseArticleRepository.existsById(refId)) {
+            return new RefMetadata(toFallbackRefNo(refType, refId), null);
         }
-
-        if ("TECH_TASK".equals(refType)) {
-            TechTask row = techTaskRepository.findById(refId).orElse(null);
-            if (row != null) {
-                return new RefMetadata(row.getTaskNo(), row.getTitle());
-            }
-        }
-
-        if ("TEST_SCENARIO".equals(refType)) {
-            TestScenario row = testScenarioRepository.findById(refId).orElse(null);
-            if (row != null) {
-                return new RefMetadata(row.getScenarioNo(), row.getTitle());
-            }
-        }
-
-        if ("DEFECT".equals(refType)) {
-            Defect row = defectRepository.findById(refId).orElse(null);
-            if (row != null) {
-                return new RefMetadata(row.getDefectNo(), row.getTitle());
-            }
-        }
-
-        if ("DEPLOYMENT".equals(refType)) {
-            Deployment row = deploymentRepository.findById(refId).orElse(null);
-            if (row != null) {
-                return new RefMetadata(row.getDeployNo(), row.getTitle());
-            }
-        }
-
-        if ("MEETING_NOTE".equals(refType)) {
-            MeetingNote row = meetingNoteRepository.findById(refId).orElse(null);
-            if (row != null) {
-                return new RefMetadata(row.getNoteNo(), row.getTitle());
-            }
-        }
-
-        if ("KNOWLEDGE_BASE".equals(refType)) {
-            boolean exists = knowledgeBaseArticleRepository.existsById(refId);
-            if (exists) {
-                return new RefMetadata(toFallbackRefNo(refType, refId), null);
-            }
-        }
-
-        return new RefMetadata(toFallbackRefNo(refType, refId), null);
+        return null;
     }
 
     private String toFallbackRefNo(String refType, Long refId) {
         String prefix = switch (refType) {
-            case "WORK_REQUEST" -> "WR";
-            case "TECH_TASK" -> "TK";
-            case "TEST_SCENARIO" -> "TS";
-            case "DEFECT" -> "DF";
-            case "DEPLOYMENT" -> "DP";
-            case "MEETING_NOTE" -> "MN";
-            case "KNOWLEDGE_BASE" -> "KB";
+            case REF_TYPE_WORK_REQUEST -> "WR";
+            case REF_TYPE_TECH_TASK -> "TK";
+            case REF_TYPE_TEST_SCENARIO -> "TS";
+            case REF_TYPE_DEFECT -> "DF";
+            case REF_TYPE_DEPLOYMENT -> "DP";
+            case REF_TYPE_MEETING_NOTE -> "MN";
+            case REF_TYPE_KNOWLEDGE_BASE -> "KB";
             default -> "REF";
         };
 

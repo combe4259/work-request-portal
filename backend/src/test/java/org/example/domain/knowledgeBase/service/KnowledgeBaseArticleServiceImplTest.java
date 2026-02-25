@@ -110,7 +110,7 @@ class KnowledgeBaseArticleServiceImplTest {
         assertThat(saved.getSummary()).isEqualTo("요약");
         assertThat(saved.getContent()).isEqualTo("본문");
         assertThat(saved.getTags()).isEqualTo("[\"backend\",\"api\"]");
-        assertThat(saved.getViewCount()).isEqualTo(0);
+        assertThat(saved.getViewCount()).isZero();
     }
 
     @Test

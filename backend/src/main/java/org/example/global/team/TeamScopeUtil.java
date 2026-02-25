@@ -52,9 +52,6 @@ public final class TeamScopeUtil {
         }
 
         HttpServletRequest request = attributes.getRequest();
-        if (request == null) {
-            return null;
-        }
 
         String rawTeamId = request.getHeader("X-Team-Id");
         if (rawTeamId == null || rawTeamId.isBlank()) {

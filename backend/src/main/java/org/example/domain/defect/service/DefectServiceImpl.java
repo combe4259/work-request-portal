@@ -15,11 +15,11 @@ import org.example.domain.defect.repository.DefectRepository;
 import org.example.global.team.TeamRequestContext;
 import org.example.global.team.TeamScopeUtil;
 import org.example.global.util.DocumentNoGenerator;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -30,23 +30,27 @@ import java.util.Locale;
 @Transactional(readOnly = true)
 public class DefectServiceImpl implements DefectService {
 
+    private static final String REF_TYPE_DEFECT = "DEFECT";
+    private static final String DEFECT_NOT_FOUND_MESSAGE = "결함을 찾을 수 없습니다.";
+
     private final DefectRepository defectRepository;
     private final DocumentNoGenerator documentNoGenerator;
     private final NotificationEventService notificationEventService;
     private final DocumentIndexSyncService documentIndexSyncService;
-    @Autowired(required = false)
-    private ActivityLogService activityLogService;
+    private final ActivityLogService activityLogService;
 
     public DefectServiceImpl(
             DefectRepository defectRepository,
             DocumentNoGenerator documentNoGenerator,
             NotificationEventService notificationEventService,
-            DocumentIndexSyncService documentIndexSyncService
+            DocumentIndexSyncService documentIndexSyncService,
+            @Nullable ActivityLogService activityLogService
     ) {
         this.defectRepository = defectRepository;
         this.documentNoGenerator = documentNoGenerator;
         this.notificationEventService = notificationEventService;
         this.documentIndexSyncService = documentIndexSyncService;
+        this.activityLogService = activityLogService;
     }
 
     @Override
@@ -62,7 +66,7 @@ public class DefectServiceImpl implements DefectService {
     @Override
     public DefectDetailResponse findById(Long id) {
         Defect entity = defectRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "결함을 찾을 수 없습니다."));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, DEFECT_NOT_FOUND_MESSAGE));
         TeamScopeUtil.ensureAccessible(entity.getTeamId());
         return DefectMapper.toDetailResponse(entity);
     }
@@ -97,7 +101,7 @@ public class DefectServiceImpl implements DefectService {
         }
 
         Defect entity = defectRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "결함을 찾을 수 없습니다."));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, DEFECT_NOT_FOUND_MESSAGE));
         TeamScopeUtil.ensureAccessible(entity.getTeamId());
         Long previousAssigneeId = entity.getAssigneeId();
         String previousStatus = entity.getStatus();
@@ -136,7 +140,7 @@ public class DefectServiceImpl implements DefectService {
     @Transactional
     public void delete(Long id) {
         Defect entity = defectRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "결함을 찾을 수 없습니다."));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, DEFECT_NOT_FOUND_MESSAGE));
         TeamScopeUtil.ensureAccessible(entity.getTeamId());
 
         recordDeleted(entity);
@@ -152,7 +156,7 @@ public class DefectServiceImpl implements DefectService {
         }
 
         Defect entity = defectRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "결함을 찾을 수 없습니다."));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, DEFECT_NOT_FOUND_MESSAGE));
         TeamScopeUtil.ensureAccessible(entity.getTeamId());
         String previousStatus = entity.getStatus();
 
@@ -238,7 +242,7 @@ public class DefectServiceImpl implements DefectService {
                 "담당자배정",
                 "결함 배정",
                 entity.getDefectNo() + " '" + entity.getTitle() + "' 결함이 배정되었습니다.",
-                "DEFECT",
+                REF_TYPE_DEFECT,
                 entity.getId()
         );
     }
@@ -267,7 +271,7 @@ public class DefectServiceImpl implements DefectService {
                 "상태변경",
                 "결함 상태 변경",
                 entity.getDefectNo() + " 상태가 '" + currentStatus + "'(으)로 변경되었습니다.",
-                "DEFECT",
+                REF_TYPE_DEFECT,
                 entity.getId()
         );
     }
@@ -331,9 +335,9 @@ public class DefectServiceImpl implements DefectService {
 
         Long actorId = TeamRequestContext.getCurrentUserId();
         try {
-            activityLogService.record(new ActivityLogCreateCommand(
+            activityLogService.recordLog(new ActivityLogCreateCommand(
                     entity.getTeamId(),
-                    "DEFECT",
+                    REF_TYPE_DEFECT,
                     entity.getId(),
                     actionType,
                     actorId,
@@ -352,7 +356,7 @@ public class DefectServiceImpl implements DefectService {
             return;
         }
         documentIndexSyncService.upsert(
-                "DEFECT",
+                REF_TYPE_DEFECT,
                 entity.getId(),
                 entity.getTeamId(),
                 entity.getDefectNo(),
@@ -366,7 +370,7 @@ public class DefectServiceImpl implements DefectService {
             return;
         }
         documentIndexSyncService.delete(
-                "DEFECT",
+                REF_TYPE_DEFECT,
                 entity.getId(),
                 entity.getTeamId()
         );

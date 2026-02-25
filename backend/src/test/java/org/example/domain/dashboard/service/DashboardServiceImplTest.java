@@ -132,7 +132,7 @@ class DashboardServiceImplTest {
 
         assertThat(response.kpi().todoCount()).isEqualTo(1);
         assertThat(response.kpi().inProgressCount()).isEqualTo(1);
-        assertThat(response.kpi().doneCount()).isEqualTo(0);
+        assertThat(response.kpi().doneCount()).isZero();
         assertThat(response.kpi().urgentCount()).isEqualTo(1);
         assertThat(response.workRequests()).hasSize(1);
         assertThat(response.workRequests().get(0).docNo()).isEqualTo("WR-001");

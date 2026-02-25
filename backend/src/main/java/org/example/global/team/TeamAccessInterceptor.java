@@ -29,6 +29,7 @@ public class TeamAccessInterceptor implements HandlerInterceptor {
     }
 
     @Override
+    @SuppressWarnings("java:S3516")
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
         if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
             return true;

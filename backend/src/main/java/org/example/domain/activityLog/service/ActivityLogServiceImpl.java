@@ -54,7 +54,7 @@ public class ActivityLogServiceImpl implements ActivityLogService {
 
     @Override
     @Transactional
-    public void record(ActivityLogCreateCommand command) {
+    public void recordLog(ActivityLogCreateCommand command) {
         if (command == null) {
             return;
         }

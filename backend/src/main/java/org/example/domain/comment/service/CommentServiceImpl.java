@@ -9,11 +9,11 @@ import org.example.domain.comment.entity.Comment;
 import org.example.domain.comment.mapper.CommentMapper;
 import org.example.domain.comment.repository.CommentRepository;
 import org.example.global.team.TeamScopeUtil;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -37,11 +37,14 @@ public class CommentServiceImpl implements CommentService {
     );
 
     private final CommentRepository commentRepository;
-    @Autowired(required = false)
-    private DocumentIndexRepository documentIndexRepository;
+    private final DocumentIndexRepository documentIndexRepository;
 
-    public CommentServiceImpl(CommentRepository commentRepository) {
+    public CommentServiceImpl(
+            CommentRepository commentRepository,
+            @Nullable DocumentIndexRepository documentIndexRepository
+    ) {
         this.commentRepository = commentRepository;
+        this.documentIndexRepository = documentIndexRepository;
     }
 
     @Override

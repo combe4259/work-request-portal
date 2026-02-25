@@ -105,14 +105,15 @@ public class DocumentIndexServiceImpl implements DocumentIndexService {
                 .filter(value -> !value.isEmpty())
                 .map(value -> value.toUpperCase(Locale.ROOT))
                 .distinct()
-                .peek(this::validateRefType)
+                .map(this::validateAndReturnRefType)
                 .toList();
     }
 
-    private void validateRefType(String refType) {
+    private String validateAndReturnRefType(String refType) {
         if (!ALLOWED_REF_TYPES.contains(refType)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "유효하지 않은 types 값입니다.");
         }
+        return refType;
     }
 
     private String normalizeKeyword(String rawKeyword) {

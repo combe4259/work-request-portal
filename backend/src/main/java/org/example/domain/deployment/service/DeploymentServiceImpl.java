@@ -33,11 +33,11 @@ import org.example.domain.workRequest.repository.WorkRequestRepository;
 import org.example.global.team.TeamRequestContext;
 import org.example.global.team.TeamScopeUtil;
 import org.example.global.util.DocumentNoGenerator;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -52,6 +52,13 @@ import java.util.Locale;
 @Transactional(readOnly = true)
 public class DeploymentServiceImpl implements DeploymentService {
 
+    private static final String REF_TYPE_WORK_REQUEST = "WORK_REQUEST";
+    private static final String REF_TYPE_TECH_TASK = "TECH_TASK";
+    private static final String REF_TYPE_TEST_SCENARIO = "TEST_SCENARIO";
+    private static final String REF_TYPE_DEFECT = "DEFECT";
+    private static final String REF_TYPE_DEPLOYMENT = "DEPLOYMENT";
+    private static final String REF_TYPE_KNOWLEDGE_BASE = "KNOWLEDGE_BASE";
+
     private final DeploymentRepository deploymentRepository;
     private final DeploymentRelatedRefRepository deploymentRelatedRefRepository;
     private final DeploymentStepRepository deploymentStepRepository;
@@ -62,8 +69,7 @@ public class DeploymentServiceImpl implements DeploymentService {
     private final DocumentNoGenerator documentNoGenerator;
     private final NotificationEventService notificationEventService;
     private final DocumentIndexSyncService documentIndexSyncService;
-    @Autowired(required = false)
-    private ActivityLogService activityLogService;
+    private final ActivityLogService activityLogService;
 
     public DeploymentServiceImpl(
             DeploymentRepository deploymentRepository,
@@ -75,7 +81,8 @@ public class DeploymentServiceImpl implements DeploymentService {
             DefectRepository defectRepository,
             DocumentNoGenerator documentNoGenerator,
             NotificationEventService notificationEventService,
-            DocumentIndexSyncService documentIndexSyncService
+            DocumentIndexSyncService documentIndexSyncService,
+            @Nullable ActivityLogService activityLogService
     ) {
         this.deploymentRepository = deploymentRepository;
         this.deploymentRelatedRefRepository = deploymentRelatedRefRepository;
@@ -87,6 +94,7 @@ public class DeploymentServiceImpl implements DeploymentService {
         this.documentNoGenerator = documentNoGenerator;
         this.notificationEventService = notificationEventService;
         this.documentIndexSyncService = documentIndexSyncService;
+        this.activityLogService = activityLogService;
     }
 
     @Override
@@ -276,8 +284,9 @@ public class DeploymentServiceImpl implements DeploymentService {
         DeploymentStep step = deploymentStepRepository.findByIdAndDeploymentId(stepId, id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "배포 절차를 찾을 수 없습니다."));
 
-        step.setIsDone(request.isDone());
-        if (request.isDone()) {
+        boolean isDone = request.isDone();
+        step.setIsDone(isDone);
+        if (isDone) {
             if (step.getCompletedAt() == null) {
                 step.setCompletedAt(LocalDateTime.now());
             }
@@ -428,7 +437,8 @@ public class DeploymentServiceImpl implements DeploymentService {
     private String normalizeRefType(String rawRefType) {
         String value = rawRefType.trim().toUpperCase(Locale.ROOT);
         return switch (value) {
-            case "WORK_REQUEST", "TECH_TASK", "TEST_SCENARIO", "DEFECT", "DEPLOYMENT", "KNOWLEDGE_BASE" -> value;
+            case REF_TYPE_WORK_REQUEST, REF_TYPE_TECH_TASK, REF_TYPE_TEST_SCENARIO, REF_TYPE_DEFECT,
+                    REF_TYPE_DEPLOYMENT, REF_TYPE_KNOWLEDGE_BASE -> value;
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "유효하지 않은 refType입니다.");
         };
     }
@@ -436,35 +446,35 @@ public class DeploymentServiceImpl implements DeploymentService {
     private RefMetadata resolveRefMetadata(String refType, Long refId) {
         String normalizedRefType = normalizeRefType(refType);
 
-        if ("WORK_REQUEST".equals(normalizedRefType)) {
+        if (REF_TYPE_WORK_REQUEST.equals(normalizedRefType)) {
             WorkRequest wr = workRequestRepository.findById(refId).orElse(null);
             if (wr != null) {
                 return new RefMetadata(wr.getRequestNo(), wr.getTitle());
             }
         }
 
-        if ("TECH_TASK".equals(normalizedRefType)) {
+        if (REF_TYPE_TECH_TASK.equals(normalizedRefType)) {
             TechTask task = techTaskRepository.findById(refId).orElse(null);
             if (task != null) {
                 return new RefMetadata(task.getTaskNo(), task.getTitle());
             }
         }
 
-        if ("TEST_SCENARIO".equals(normalizedRefType)) {
+        if (REF_TYPE_TEST_SCENARIO.equals(normalizedRefType)) {
             TestScenario scenario = testScenarioRepository.findById(refId).orElse(null);
             if (scenario != null) {
                 return new RefMetadata(scenario.getScenarioNo(), scenario.getTitle());
             }
         }
 
-        if ("DEFECT".equals(normalizedRefType)) {
+        if (REF_TYPE_DEFECT.equals(normalizedRefType)) {
             Defect defect = defectRepository.findById(refId).orElse(null);
             if (defect != null) {
                 return new RefMetadata(defect.getDefectNo(), defect.getTitle());
             }
         }
 
-        if ("DEPLOYMENT".equals(normalizedRefType)) {
+        if (REF_TYPE_DEPLOYMENT.equals(normalizedRefType)) {
             Deployment deployment = deploymentRepository.findById(refId).orElse(null);
             if (deployment != null) {
                 return new RefMetadata(deployment.getDeployNo(), deployment.getTitle());
@@ -476,12 +486,12 @@ public class DeploymentServiceImpl implements DeploymentService {
 
     private String toFallbackRefNo(String refType, Long refId) {
         String prefix = switch (refType) {
-            case "WORK_REQUEST" -> "WR";
-            case "TECH_TASK" -> "TK";
-            case "TEST_SCENARIO" -> "TS";
-            case "DEFECT" -> "DF";
-            case "DEPLOYMENT" -> "DP";
-            case "KNOWLEDGE_BASE" -> "KB";
+            case REF_TYPE_WORK_REQUEST -> "WR";
+            case REF_TYPE_TECH_TASK -> "TK";
+            case REF_TYPE_TEST_SCENARIO -> "TS";
+            case REF_TYPE_DEFECT -> "DF";
+            case REF_TYPE_DEPLOYMENT -> "DP";
+            case REF_TYPE_KNOWLEDGE_BASE -> "KB";
             default -> "REF";
         };
 
@@ -506,7 +516,7 @@ public class DeploymentServiceImpl implements DeploymentService {
                 "담당자배정",
                 "배포 담당자 배정",
                 entity.getDeployNo() + " '" + entity.getTitle() + "' 배포가 배정되었습니다.",
-                "DEPLOYMENT",
+                REF_TYPE_DEPLOYMENT,
                 entity.getId()
         );
     }
@@ -546,7 +556,7 @@ public class DeploymentServiceImpl implements DeploymentService {
                 type,
                 title,
                 entity.getDeployNo() + " 상태가 '" + currentStatus + "'(으)로 변경되었습니다.",
-                "DEPLOYMENT",
+                REF_TYPE_DEPLOYMENT,
                 entity.getId()
         );
     }
@@ -610,9 +620,9 @@ public class DeploymentServiceImpl implements DeploymentService {
 
         Long actorId = TeamRequestContext.getCurrentUserId();
         try {
-            activityLogService.record(new ActivityLogCreateCommand(
+            activityLogService.recordLog(new ActivityLogCreateCommand(
                     entity.getTeamId(),
-                    "DEPLOYMENT",
+                    REF_TYPE_DEPLOYMENT,
                     entity.getId(),
                     actionType,
                     actorId,
@@ -634,7 +644,7 @@ public class DeploymentServiceImpl implements DeploymentService {
             return;
         }
         documentIndexSyncService.upsert(
-                "DEPLOYMENT",
+                REF_TYPE_DEPLOYMENT,
                 entity.getId(),
                 entity.getTeamId(),
                 entity.getDeployNo(),
@@ -648,7 +658,7 @@ public class DeploymentServiceImpl implements DeploymentService {
             return;
         }
         documentIndexSyncService.delete(
-                "DEPLOYMENT",
+                REF_TYPE_DEPLOYMENT,
                 entity.getId(),
                 entity.getTeamId()
         );

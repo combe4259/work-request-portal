@@ -9,8 +9,8 @@ import org.example.domain.attachment.mapper.AttachmentMapper;
 import org.example.domain.attachment.repository.AttachmentRepository;
 import org.example.domain.documentIndex.repository.DocumentIndexRepository;
 import org.example.global.team.TeamScopeUtil;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -35,11 +35,14 @@ public class AttachmentServiceImpl implements AttachmentService {
     );
 
     private final AttachmentRepository attachmentRepository;
-    @Autowired(required = false)
-    private DocumentIndexRepository documentIndexRepository;
+    private final DocumentIndexRepository documentIndexRepository;
 
-    public AttachmentServiceImpl(AttachmentRepository attachmentRepository) {
+    public AttachmentServiceImpl(
+            AttachmentRepository attachmentRepository,
+            @Nullable DocumentIndexRepository documentIndexRepository
+    ) {
         this.attachmentRepository = attachmentRepository;
+        this.documentIndexRepository = documentIndexRepository;
     }
 
     @Override

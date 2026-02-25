@@ -198,7 +198,7 @@ class MeetingNoteServiceImplTest {
         assertThat(createdId).isEqualTo(100L);
         assertThat(saved.getNoteNo()).isEqualTo("MN-001");
         assertThat(saved.getLocation()).isNull();
-        assertThat(saved.getContent()).isEqualTo("");
+        assertThat(saved.getContent()).isEmpty();
         assertThat(saved.getTeamId()).isEqualTo(10L);
         assertThat(saved.getCreatedBy()).isEqualTo(2L);
 

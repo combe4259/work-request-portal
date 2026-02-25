@@ -22,11 +22,11 @@ import org.example.domain.workRequest.repository.WorkRequestRepository;
 import org.example.global.team.TeamRequestContext;
 import org.example.global.team.TeamScopeUtil;
 import org.example.global.util.DocumentNoGenerator;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -40,6 +40,9 @@ import java.util.Locale;
 @Transactional(readOnly = true)
 public class WorkRequestServiceImpl implements WorkRequestService {
 
+    private static final String REF_TYPE_WORK_REQUEST = "WORK_REQUEST";
+    private static final String WORK_REQUEST_NOT_FOUND_PREFIX = "WorkRequest not found: ";
+
     private final WorkRequestRepository workRequestRepository;
     @SuppressWarnings("unused")
     private final WorkRequestQueryRepository workRequestQueryRepository;
@@ -47,8 +50,7 @@ public class WorkRequestServiceImpl implements WorkRequestService {
     private final DocumentNoGenerator documentNoGenerator;
     private final NotificationEventService notificationEventService;
     private final DocumentIndexSyncService documentIndexSyncService;
-    @Autowired(required = false)
-    private ActivityLogService activityLogService;
+    private final ActivityLogService activityLogService;
 
     public WorkRequestServiceImpl(
             WorkRequestRepository workRequestRepository,
@@ -56,7 +58,8 @@ public class WorkRequestServiceImpl implements WorkRequestService {
             WorkRequestRelatedRefRepository workRequestRelatedRefRepository,
             DocumentNoGenerator documentNoGenerator,
             NotificationEventService notificationEventService,
-            DocumentIndexSyncService documentIndexSyncService
+            DocumentIndexSyncService documentIndexSyncService,
+            @Nullable ActivityLogService activityLogService
     ) {
         this.workRequestRepository = workRequestRepository;
         this.workRequestQueryRepository = workRequestQueryRepository;
@@ -64,6 +67,7 @@ public class WorkRequestServiceImpl implements WorkRequestService {
         this.documentNoGenerator = documentNoGenerator;
         this.notificationEventService = notificationEventService;
         this.documentIndexSyncService = documentIndexSyncService;
+        this.activityLogService = activityLogService;
     }
 
     @Override
@@ -76,7 +80,7 @@ public class WorkRequestServiceImpl implements WorkRequestService {
     @Override
     public WorkRequestDetailResponse findById(Long id) {
         WorkRequest entity = workRequestRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("WorkRequest not found: " + id));
+                .orElseThrow(() -> new EntityNotFoundException(WORK_REQUEST_NOT_FOUND_PREFIX + id));
         ensureSameTeam(entity.getTeamId());
         return WorkRequestMapper.toDetailResponse(entity);
     }
@@ -103,7 +107,7 @@ public class WorkRequestServiceImpl implements WorkRequestService {
     @Transactional
     public void update(Long id, WorkRequestUpdateRequest request) {
         WorkRequest entity = workRequestRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("WorkRequest not found: " + id));
+                .orElseThrow(() -> new EntityNotFoundException(WORK_REQUEST_NOT_FOUND_PREFIX + id));
         ensureSameTeam(entity.getTeamId());
 
         Long previousAssigneeId = entity.getAssigneeId();
@@ -127,7 +131,7 @@ public class WorkRequestServiceImpl implements WorkRequestService {
         }
 
         WorkRequest entity = workRequestRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("WorkRequest not found: " + id));
+                .orElseThrow(() -> new EntityNotFoundException(WORK_REQUEST_NOT_FOUND_PREFIX + id));
         ensureSameTeam(entity.getTeamId());
 
         String previousStatus = entity.getStatus();
@@ -158,7 +162,7 @@ public class WorkRequestServiceImpl implements WorkRequestService {
     @Transactional
     public void delete(Long id) {
         WorkRequest entity = workRequestRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("WorkRequest not found: " + id));
+                .orElseThrow(() -> new EntityNotFoundException(WORK_REQUEST_NOT_FOUND_PREFIX + id));
         ensureSameTeam(entity.getTeamId());
         recordDeleted(entity);
 
@@ -230,7 +234,7 @@ public class WorkRequestServiceImpl implements WorkRequestService {
 
     private void ensureAccessibleWorkRequest(Long id) {
         WorkRequest entity = workRequestRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("WorkRequest not found: " + id));
+                .orElseThrow(() -> new EntityNotFoundException(WORK_REQUEST_NOT_FOUND_PREFIX + id));
         ensureSameTeam(entity.getTeamId());
     }
 
@@ -252,7 +256,7 @@ public class WorkRequestServiceImpl implements WorkRequestService {
     private String normalizeRefType(String rawRefType) {
         String value = rawRefType.trim().toUpperCase(Locale.ROOT);
         return switch (value) {
-            case "WORK_REQUEST", "TECH_TASK", "TEST_SCENARIO", "DEFECT", "DEPLOYMENT", "MEETING_NOTE", "PROJECT_IDEA",
+            case REF_TYPE_WORK_REQUEST, "TECH_TASK", "TEST_SCENARIO", "DEFECT", "DEPLOYMENT", "MEETING_NOTE", "PROJECT_IDEA",
                     "KNOWLEDGE_BASE" -> value;
             default -> throw new org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST, "유효하지 않은 refType입니다.");
         };
@@ -260,7 +264,7 @@ public class WorkRequestServiceImpl implements WorkRequestService {
 
     private String toFallbackRefNo(String refType, Long refId) {
         String prefix = switch (refType) {
-            case "WORK_REQUEST" -> "WR";
+            case REF_TYPE_WORK_REQUEST -> "WR";
             case "TECH_TASK" -> "TK";
             case "TEST_SCENARIO" -> "TS";
             case "DEFECT" -> "DF";
@@ -294,7 +298,7 @@ public class WorkRequestServiceImpl implements WorkRequestService {
                 "담당자배정",
                 "업무요청 배정",
                 entity.getRequestNo() + " '" + entity.getTitle() + "' 업무가 배정되었습니다.",
-                "WORK_REQUEST",
+                REF_TYPE_WORK_REQUEST,
                 entity.getId()
         );
     }
@@ -323,7 +327,7 @@ public class WorkRequestServiceImpl implements WorkRequestService {
                 "상태변경",
                 "업무요청 상태 변경",
                 entity.getRequestNo() + " 상태가 '" + currentStatus + "'(으)로 변경되었습니다.",
-                "WORK_REQUEST",
+                REF_TYPE_WORK_REQUEST,
                 entity.getId()
         );
     }
@@ -387,9 +391,9 @@ public class WorkRequestServiceImpl implements WorkRequestService {
 
         Long actorId = TeamRequestContext.getCurrentUserId();
         try {
-            activityLogService.record(new ActivityLogCreateCommand(
+            activityLogService.recordLog(new ActivityLogCreateCommand(
                     entity.getTeamId(),
-                    "WORK_REQUEST",
+                    REF_TYPE_WORK_REQUEST,
                     entity.getId(),
                     actionType,
                     actorId,
@@ -408,7 +412,7 @@ public class WorkRequestServiceImpl implements WorkRequestService {
             return;
         }
         documentIndexSyncService.upsert(
-                "WORK_REQUEST",
+                REF_TYPE_WORK_REQUEST,
                 entity.getId(),
                 entity.getTeamId(),
                 entity.getRequestNo(),
@@ -422,7 +426,7 @@ public class WorkRequestServiceImpl implements WorkRequestService {
             return;
         }
         documentIndexSyncService.delete(
-                "WORK_REQUEST",
+                REF_TYPE_WORK_REQUEST,
                 entity.getId(),
                 entity.getTeamId()
         );

@@ -7,5 +7,5 @@ public interface ActivityLogService {
 
     Page<ActivityLogListResponse> findPage(String refType, Long refId, int page, int size);
 
-    void record(ActivityLogCreateCommand command);
+    void recordLog(ActivityLogCreateCommand command);
 }

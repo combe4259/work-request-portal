@@ -43,6 +43,8 @@ import java.util.Locale;
 @Transactional(readOnly = true)
 public class ProjectIdeaServiceImpl implements ProjectIdeaService {
 
+    private static final String REF_TYPE_PROJECT_IDEA = "PROJECT_IDEA";
+
     private final ProjectIdeaRepository projectIdeaRepository;
     private final ProjectIdeaRelatedRefRepository projectIdeaRelatedRefRepository;
     private final IdeaVoteRepository ideaVoteRepository;
@@ -417,7 +419,7 @@ public class ProjectIdeaServiceImpl implements ProjectIdeaService {
                 type,
                 title,
                 entity.getIdeaNo() + " 상태가 '" + currentStatus + "'(으)로 변경되었습니다.",
-                "PROJECT_IDEA",
+                REF_TYPE_PROJECT_IDEA,
                 entity.getId()
         );
     }
@@ -427,7 +429,7 @@ public class ProjectIdeaServiceImpl implements ProjectIdeaService {
             return;
         }
         documentIndexSyncService.upsert(
-                "PROJECT_IDEA",
+                REF_TYPE_PROJECT_IDEA,
                 entity.getId(),
                 entity.getTeamId(),
                 entity.getIdeaNo(),
@@ -441,7 +443,7 @@ public class ProjectIdeaServiceImpl implements ProjectIdeaService {
             return;
         }
         documentIndexSyncService.delete(
-                "PROJECT_IDEA",
+                REF_TYPE_PROJECT_IDEA,
                 entity.getId(),
                 entity.getTeamId()
         );

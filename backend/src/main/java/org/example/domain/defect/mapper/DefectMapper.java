@@ -6,6 +6,8 @@ import org.example.domain.defect.dto.DefectListResponse;
 import org.example.domain.defect.dto.DefectUpdateRequest;
 import org.example.domain.defect.entity.Defect;
 
+import java.util.function.Consumer;
+
 public final class DefectMapper {
 
     private DefectMapper() {
@@ -36,56 +38,28 @@ public final class DefectMapper {
     }
 
     public static void applyUpdate(Defect entity, DefectUpdateRequest request) {
-        if (request.title() != null) {
-            entity.setTitle(request.title());
-        }
-        if (request.description() != null) {
-            entity.setDescription(request.description());
-        }
-        if (request.type() != null) {
-            entity.setType(request.type());
-        }
-        if (request.severity() != null) {
-            entity.setSeverity(request.severity());
-        }
-        if (request.status() != null) {
-            entity.setStatus(request.status());
-        }
-        if (request.relatedRefType() != null) {
-            entity.setRelatedRefType(request.relatedRefType());
-        }
-        if (request.relatedRefId() != null) {
-            entity.setRelatedRefId(request.relatedRefId());
-        }
-        if (request.environment() != null) {
-            entity.setEnvironment(request.environment());
-        }
-        if (request.reproductionSteps() != null) {
-            entity.setReproductionSteps(request.reproductionSteps());
-        }
-        if (request.expectedBehavior() != null) {
-            entity.setExpectedBehavior(request.expectedBehavior());
-        }
-        if (request.actualBehavior() != null) {
-            entity.setActualBehavior(request.actualBehavior());
-        }
-        if (request.deadline() != null) {
-            entity.setDeadline(request.deadline());
-        }
-        if (request.statusNote() != null) {
-            entity.setStatusNote(request.statusNote());
-        }
-        if (request.assigneeId() != null) {
-            entity.setAssigneeId(request.assigneeId());
-        }
-        if (request.startedAt() != null) {
-            entity.setStartedAt(request.startedAt());
-        }
-        if (request.verifiedAt() != null) {
-            entity.setVerifiedAt(request.verifiedAt());
-        }
-        if (request.resolvedAt() != null) {
-            entity.setResolvedAt(request.resolvedAt());
+        setIfPresent(request.title(), entity::setTitle);
+        setIfPresent(request.description(), entity::setDescription);
+        setIfPresent(request.type(), entity::setType);
+        setIfPresent(request.severity(), entity::setSeverity);
+        setIfPresent(request.status(), entity::setStatus);
+        setIfPresent(request.relatedRefType(), entity::setRelatedRefType);
+        setIfPresent(request.relatedRefId(), entity::setRelatedRefId);
+        setIfPresent(request.environment(), entity::setEnvironment);
+        setIfPresent(request.reproductionSteps(), entity::setReproductionSteps);
+        setIfPresent(request.expectedBehavior(), entity::setExpectedBehavior);
+        setIfPresent(request.actualBehavior(), entity::setActualBehavior);
+        setIfPresent(request.deadline(), entity::setDeadline);
+        setIfPresent(request.statusNote(), entity::setStatusNote);
+        setIfPresent(request.assigneeId(), entity::setAssigneeId);
+        setIfPresent(request.startedAt(), entity::setStartedAt);
+        setIfPresent(request.verifiedAt(), entity::setVerifiedAt);
+        setIfPresent(request.resolvedAt(), entity::setResolvedAt);
+    }
+
+    private static <T> void setIfPresent(T value, Consumer<T> setter) {
+        if (value != null) {
+            setter.accept(value);
         }
     }
 

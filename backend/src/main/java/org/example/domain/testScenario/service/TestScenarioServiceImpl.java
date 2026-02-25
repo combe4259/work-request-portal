@@ -20,11 +20,11 @@ import org.example.domain.testScenario.repository.TestScenarioRepository;
 import org.example.global.team.TeamRequestContext;
 import org.example.global.team.TeamScopeUtil;
 import org.example.global.util.DocumentNoGenerator;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -38,26 +38,30 @@ import java.util.Locale;
 @Transactional(readOnly = true)
 public class TestScenarioServiceImpl implements TestScenarioService {
 
+    private static final String REF_TYPE_TEST_SCENARIO = "TEST_SCENARIO";
+    private static final String TEST_SCENARIO_NOT_FOUND_MESSAGE = "테스트 시나리오를 찾을 수 없습니다.";
+
     private final TestScenarioRepository testScenarioRepository;
     private final TestScenarioRelatedRefRepository testScenarioRelatedRefRepository;
     private final DocumentNoGenerator documentNoGenerator;
     private final NotificationEventService notificationEventService;
     private final DocumentIndexSyncService documentIndexSyncService;
-    @Autowired(required = false)
-    private ActivityLogService activityLogService;
+    private final ActivityLogService activityLogService;
 
     public TestScenarioServiceImpl(
             TestScenarioRepository testScenarioRepository,
             TestScenarioRelatedRefRepository testScenarioRelatedRefRepository,
             DocumentNoGenerator documentNoGenerator,
             NotificationEventService notificationEventService,
-            DocumentIndexSyncService documentIndexSyncService
+            DocumentIndexSyncService documentIndexSyncService,
+            @Nullable ActivityLogService activityLogService
     ) {
         this.testScenarioRepository = testScenarioRepository;
         this.testScenarioRelatedRefRepository = testScenarioRelatedRefRepository;
         this.documentNoGenerator = documentNoGenerator;
         this.notificationEventService = notificationEventService;
         this.documentIndexSyncService = documentIndexSyncService;
+        this.activityLogService = activityLogService;
     }
 
     @Override
@@ -73,7 +77,7 @@ public class TestScenarioServiceImpl implements TestScenarioService {
     @Override
     public TestScenarioDetailResponse findById(Long id) {
         TestScenario entity = testScenarioRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "테스트 시나리오를 찾을 수 없습니다."));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, TEST_SCENARIO_NOT_FOUND_MESSAGE));
         TeamScopeUtil.ensureAccessible(entity.getTeamId());
         return TestScenarioMapper.toDetailResponse(entity);
     }
@@ -107,7 +111,7 @@ public class TestScenarioServiceImpl implements TestScenarioService {
         }
 
         TestScenario entity = testScenarioRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "테스트 시나리오를 찾을 수 없습니다."));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, TEST_SCENARIO_NOT_FOUND_MESSAGE));
         TeamScopeUtil.ensureAccessible(entity.getTeamId());
         Long previousAssigneeId = entity.getAssigneeId();
         String previousStatus = entity.getStatus();
@@ -143,7 +147,7 @@ public class TestScenarioServiceImpl implements TestScenarioService {
     @Transactional
     public void delete(Long id) {
         TestScenario entity = testScenarioRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "테스트 시나리오를 찾을 수 없습니다."));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, TEST_SCENARIO_NOT_FOUND_MESSAGE));
         TeamScopeUtil.ensureAccessible(entity.getTeamId());
         recordDeleted(entity);
 
@@ -160,7 +164,7 @@ public class TestScenarioServiceImpl implements TestScenarioService {
         }
 
         TestScenario entity = testScenarioRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "테스트 시나리오를 찾을 수 없습니다."));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, TEST_SCENARIO_NOT_FOUND_MESSAGE));
         TeamScopeUtil.ensureAccessible(entity.getTeamId());
         String previousStatus = entity.getStatus();
 
@@ -250,14 +254,14 @@ public class TestScenarioServiceImpl implements TestScenarioService {
 
     private void ensureAccessibleTestScenario(Long id) {
         TestScenario entity = testScenarioRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "테스트 시나리오를 찾을 수 없습니다."));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, TEST_SCENARIO_NOT_FOUND_MESSAGE));
         TeamScopeUtil.ensureAccessible(entity.getTeamId());
     }
 
     private String normalizeRefType(String rawRefType) {
         String value = rawRefType.trim().toUpperCase(Locale.ROOT);
         return switch (value) {
-            case "WORK_REQUEST", "TECH_TASK", "TEST_SCENARIO", "DEFECT", "DEPLOYMENT" -> value;
+            case "WORK_REQUEST", "TECH_TASK", REF_TYPE_TEST_SCENARIO, "DEFECT", "DEPLOYMENT" -> value;
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "유효하지 않은 refType입니다.");
         };
     }
@@ -266,7 +270,7 @@ public class TestScenarioServiceImpl implements TestScenarioService {
         String prefix = switch (refType) {
             case "WORK_REQUEST" -> "WR";
             case "TECH_TASK" -> "TK";
-            case "TEST_SCENARIO" -> "TS";
+            case REF_TYPE_TEST_SCENARIO -> "TS";
             case "DEFECT" -> "DF";
             case "DEPLOYMENT" -> "DP";
             default -> "REF";
@@ -303,7 +307,7 @@ public class TestScenarioServiceImpl implements TestScenarioService {
                 "담당자배정",
                 "테스트 시나리오 배정",
                 entity.getScenarioNo() + " '" + entity.getTitle() + "' 시나리오가 배정되었습니다.",
-                "TEST_SCENARIO",
+                REF_TYPE_TEST_SCENARIO,
                 entity.getId()
         );
     }
@@ -332,7 +336,7 @@ public class TestScenarioServiceImpl implements TestScenarioService {
                 "상태변경",
                 "테스트 시나리오 상태 변경",
                 entity.getScenarioNo() + " 상태가 '" + currentStatus + "'(으)로 변경되었습니다.",
-                "TEST_SCENARIO",
+                REF_TYPE_TEST_SCENARIO,
                 entity.getId()
         );
     }
@@ -396,9 +400,9 @@ public class TestScenarioServiceImpl implements TestScenarioService {
 
         Long actorId = TeamRequestContext.getCurrentUserId();
         try {
-            activityLogService.record(new ActivityLogCreateCommand(
+            activityLogService.recordLog(new ActivityLogCreateCommand(
                     entity.getTeamId(),
-                    "TEST_SCENARIO",
+                    REF_TYPE_TEST_SCENARIO,
                     entity.getId(),
                     actionType,
                     actorId,
@@ -417,7 +421,7 @@ public class TestScenarioServiceImpl implements TestScenarioService {
             return;
         }
         documentIndexSyncService.upsert(
-                "TEST_SCENARIO",
+                REF_TYPE_TEST_SCENARIO,
                 entity.getId(),
                 entity.getTeamId(),
                 entity.getScenarioNo(),
@@ -431,7 +435,7 @@ public class TestScenarioServiceImpl implements TestScenarioService {
             return;
         }
         documentIndexSyncService.delete(
-                "TEST_SCENARIO",
+                REF_TYPE_TEST_SCENARIO,
                 entity.getId(),
                 entity.getTeamId()
         );

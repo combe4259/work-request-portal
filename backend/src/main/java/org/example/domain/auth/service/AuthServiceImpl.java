@@ -193,7 +193,7 @@ public class AuthServiceImpl implements AuthService {
 
         String role = rawRole.trim().toUpperCase(Locale.ROOT);
         return switch (role) {
-            case "PM", "TEAM_LEAD", "DEVELOPER", "REQUESTER" -> role;
+            case "PM", "TEAM_LEAD", DEFAULT_ROLE, "REQUESTER" -> role;
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "유효하지 않은 역할입니다.");
         };
     }
