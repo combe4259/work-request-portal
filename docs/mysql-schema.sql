@@ -401,7 +401,27 @@ CREATE TABLE attachments (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 -- =====================================================
--- 12. 알림 (Notifications)
+-- 12. 처리 이력 (Activity Logs)
+-- =====================================================
+CREATE TABLE activity_logs (
+    id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+    team_id       BIGINT NOT NULL,
+    ref_type      VARCHAR(30) NOT NULL,
+    ref_id        BIGINT NOT NULL,
+    action_type   VARCHAR(50) NOT NULL,
+    actor_id      BIGINT,
+    field_name    VARCHAR(50),
+    before_value  VARCHAR(500),
+    after_value   VARCHAR(500),
+    message       VARCHAR(1000),
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    INDEX idx_activity_ref (team_id, ref_type, ref_id, id),
+    INDEX idx_activity_actor (actor_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
+-- =====================================================
+-- 13. 알림 (Notifications)
 -- =====================================================
 CREATE TABLE notifications (
     id          BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -420,7 +440,7 @@ CREATE TABLE notifications (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 -- =====================================================
--- 13. 회의록 (Meeting Notes)
+-- 14. 회의록 (Meeting Notes)
 -- =====================================================
 CREATE TABLE meeting_notes (
     id              BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -461,7 +481,7 @@ CREATE TABLE meeting_note_related_refs (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 -- =====================================================
--- 14. 회의 참석자 (Meeting Attendees)
+-- 15. 회의 참석자 (Meeting Attendees)
 -- =====================================================
 CREATE TABLE meeting_attendees (
     id              BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -476,7 +496,7 @@ CREATE TABLE meeting_attendees (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 -- =====================================================
--- 15. 회의 액션 아이템 (Meeting Action Items)
+-- 16. 회의 액션 아이템 (Meeting Action Items)
 -- =====================================================
 CREATE TABLE meeting_action_items (
     id                BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -499,7 +519,7 @@ CREATE TABLE meeting_action_items (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 -- =====================================================
--- 16. 프로젝트 아이디어 (Project Ideas)
+-- 17. 프로젝트 아이디어 (Project Ideas)
 -- =====================================================
 CREATE TABLE project_ideas (
     id                BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -540,7 +560,7 @@ CREATE TABLE project_idea_related_refs (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 -- =====================================================
--- 17. 아이디어 투표 (Idea Votes)
+-- 18. 아이디어 투표 (Idea Votes)
 -- =====================================================
 CREATE TABLE idea_votes (
     id          BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -555,7 +575,7 @@ CREATE TABLE idea_votes (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 -- =====================================================
--- 18. 공유 리소스 (Shared Resources)
+-- 19. 공유 리소스 (Shared Resources)
 -- =====================================================
 CREATE TABLE shared_resources (
     id          BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -577,7 +597,7 @@ CREATE TABLE shared_resources (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 -- =====================================================
--- 19. 지식 베이스 문서 (Knowledge Base)
+-- 20. 지식 베이스 문서 (Knowledge Base)
 -- MongoDB를 쓰지 않는 경우를 위한 최소 스키마
 -- =====================================================
 CREATE TABLE knowledge_base_articles (
@@ -620,7 +640,7 @@ CREATE TABLE knowledge_base_related_refs (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 -- =====================================================
--- 20. 문서번호 채번 (Document Sequences)
+-- 21. 문서번호 채번 (Document Sequences)
 -- 문서번호 형식: PREFIX-001 (예: WR-001)
 -- =====================================================
 CREATE TABLE document_sequences (
