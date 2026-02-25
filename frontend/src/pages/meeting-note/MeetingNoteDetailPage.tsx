@@ -346,6 +346,7 @@ export default function MeetingNoteDetailPage() {
 
   // ── 안건 ──────────────────────────────────────
   const [agendaInput, setAgendaInput] = useState('')
+  const [isAgendaInputComposing, setIsAgendaInputComposing] = useState(false)
   const addAgenda = () => {
     const t = agendaInput.trim()
     if (!t) return
@@ -361,6 +362,7 @@ export default function MeetingNoteDetailPage() {
 
   // ── 결정 사항 ─────────────────────────────────
   const [decisionInput, setDecisionInput] = useState('')
+  const [isDecisionInputComposing, setIsDecisionInputComposing] = useState(false)
   const addDecision = () => {
     const t = decisionInput.trim()
     if (!t) return
@@ -378,6 +380,7 @@ export default function MeetingNoteDetailPage() {
     assigneeId: currentUser?.id ?? 0,
     deadline: '',
   })
+  const [isActionInputComposing, setIsActionInputComposing] = useState(false)
   const selectedAssigneeId = actionInput.assigneeId > 0
     ? actionInput.assigneeId
     : (userOptions[0]?.value ?? 0)
@@ -634,7 +637,14 @@ export default function MeetingNoteDetailPage() {
                 <input
                   value={agendaInput}
                   onChange={(e) => setAgendaInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addAgenda() } }}
+                  onCompositionStart={() => setIsAgendaInputComposing(true)}
+                  onCompositionEnd={() => setIsAgendaInputComposing(false)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !isAgendaInputComposing && !e.nativeEvent.isComposing) {
+                      e.preventDefault()
+                      addAgenda()
+                    }
+                  }}
                   placeholder="+ 안건 추가 (Enter)"
                   className="flex-1 text-[13px] text-gray-400 bg-transparent outline-none placeholder-gray-300 py-0.5"
                 />
@@ -677,7 +687,14 @@ export default function MeetingNoteDetailPage() {
                 <input
                   value={decisionInput}
                   onChange={(e) => setDecisionInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addDecision() } }}
+                  onCompositionStart={() => setIsDecisionInputComposing(true)}
+                  onCompositionEnd={() => setIsDecisionInputComposing(false)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !isDecisionInputComposing && !e.nativeEvent.isComposing) {
+                      e.preventDefault()
+                      addDecision()
+                    }
+                  }}
                   placeholder="+ 결정 사항 추가 (Enter)"
                   className="flex-1 text-[13px] text-gray-400 bg-transparent outline-none placeholder-gray-300 py-0.5"
                 />
@@ -788,7 +805,14 @@ export default function MeetingNoteDetailPage() {
                 <input
                   value={actionInput.content}
                   onChange={(e) => setActionInput((prev) => ({ ...prev, content: e.target.value }))}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addAction() } }}
+                  onCompositionStart={() => setIsActionInputComposing(true)}
+                  onCompositionEnd={() => setIsActionInputComposing(false)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !isActionInputComposing && !e.nativeEvent.isComposing) {
+                      e.preventDefault()
+                      addAction()
+                    }
+                  }}
                   placeholder="+ 할 일 추가"
                   className="flex-1 text-[13px] text-gray-400 bg-transparent outline-none placeholder-gray-300"
                 />
