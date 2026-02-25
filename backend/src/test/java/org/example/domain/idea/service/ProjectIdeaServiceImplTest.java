@@ -1,6 +1,7 @@
 package org.example.domain.idea.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.example.domain.notification.service.NotificationEventService;
 import org.example.domain.idea.dto.ProjectIdeaCreateRequest;
 import org.example.domain.idea.dto.ProjectIdeaDetailResponse;
 import org.example.domain.idea.dto.ProjectIdeaListResponse;
@@ -38,6 +39,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -58,6 +61,9 @@ class ProjectIdeaServiceImplTest {
 
     @Mock
     private DocumentNoGenerator documentNoGenerator;
+
+    @Mock
+    private NotificationEventService notificationEventService;
 
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();
@@ -184,6 +190,14 @@ class ProjectIdeaServiceImplTest {
 
         assertThat(entity.getStatus()).isEqualTo("채택");
         assertThat(entity.getStatusNote()).isEqualTo("반영 예정");
+        verify(notificationEventService).create(
+                eq(2L),
+                eq("아이디어채택"),
+                eq("아이디어 채택"),
+                contains("채택"),
+                eq("PROJECT_IDEA"),
+                eq(7L)
+        );
     }
 
     @Test

@@ -3,6 +3,8 @@ package org.example.domain.idea.controller;
 import org.example.domain.idea.dto.ProjectIdeaCreateRequest;
 import org.example.domain.idea.dto.ProjectIdeaDetailResponse;
 import org.example.domain.idea.dto.ProjectIdeaListResponse;
+import org.example.domain.idea.dto.ProjectIdeaRelatedRefResponse;
+import org.example.domain.idea.dto.ProjectIdeaRelatedRefsUpdateRequest;
 import org.example.domain.idea.dto.ProjectIdeaStatusUpdateRequest;
 import org.example.domain.idea.dto.ProjectIdeaUpdateRequest;
 import org.example.domain.idea.dto.ProjectIdeaVoteResponse;
@@ -22,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -62,12 +65,32 @@ public class ProjectIdeaController {
         return ResponseEntity.noContent().build();
     }
 
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteProjectIdea(@PathVariable Long id) {
+        projectIdeaService.delete(id);
+        return ResponseEntity.noContent().build();
+    }
+
     @PatchMapping("/{id}/status")
     public ResponseEntity<Void> updateProjectIdeaStatus(
             @PathVariable Long id,
             @RequestBody ProjectIdeaStatusUpdateRequest request
     ) {
         projectIdeaService.updateStatus(id, request);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{id}/related-refs")
+    public ResponseEntity<List<ProjectIdeaRelatedRefResponse>> getRelatedRefs(@PathVariable Long id) {
+        return ResponseEntity.ok(projectIdeaService.getRelatedRefs(id));
+    }
+
+    @PutMapping("/{id}/related-refs")
+    public ResponseEntity<Void> replaceRelatedRefs(
+            @PathVariable Long id,
+            @RequestBody ProjectIdeaRelatedRefsUpdateRequest request
+    ) {
+        projectIdeaService.replaceRelatedRefs(id, request);
         return ResponseEntity.noContent().build();
     }
 

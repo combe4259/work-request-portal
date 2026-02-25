@@ -3,20 +3,28 @@ package org.example.domain.idea.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.example.domain.documentIndex.service.DocumentIndexSyncService;
+import org.example.domain.notification.service.NotificationEventService;
 import org.example.domain.idea.dto.ProjectIdeaCreateRequest;
 import org.example.domain.idea.dto.ProjectIdeaDetailResponse;
 import org.example.domain.idea.dto.ProjectIdeaListResponse;
+import org.example.domain.idea.dto.ProjectIdeaRelatedRefItemRequest;
+import org.example.domain.idea.dto.ProjectIdeaRelatedRefResponse;
+import org.example.domain.idea.dto.ProjectIdeaRelatedRefsUpdateRequest;
 import org.example.domain.idea.dto.ProjectIdeaStatusUpdateRequest;
 import org.example.domain.idea.dto.ProjectIdeaUpdateRequest;
 import org.example.domain.idea.dto.ProjectIdeaVoteResponse;
 import org.example.domain.idea.entity.IdeaVote;
 import org.example.domain.idea.entity.ProjectIdea;
+import org.example.domain.idea.entity.ProjectIdeaRelatedRef;
 import org.example.domain.idea.mapper.ProjectIdeaMapper;
 import org.example.domain.idea.repository.IdeaVoteRepository;
+import org.example.domain.idea.repository.ProjectIdeaRelatedRefRepository;
 import org.example.domain.idea.repository.ProjectIdeaRepository;
 import org.example.domain.user.entity.PortalUser;
 import org.example.domain.user.repository.PortalUserRepository;
 import org.example.global.security.JwtTokenProvider;
+import org.example.global.team.TeamScopeUtil;
 import org.example.global.util.DocumentNoGenerator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -26,39 +34,54 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 
 @Service
 @Transactional(readOnly = true)
 public class ProjectIdeaServiceImpl implements ProjectIdeaService {
 
     private final ProjectIdeaRepository projectIdeaRepository;
+    private final ProjectIdeaRelatedRefRepository projectIdeaRelatedRefRepository;
     private final IdeaVoteRepository ideaVoteRepository;
     private final PortalUserRepository portalUserRepository;
     private final JwtTokenProvider jwtTokenProvider;
     private final DocumentNoGenerator documentNoGenerator;
     private final ObjectMapper objectMapper;
+    private final NotificationEventService notificationEventService;
+    private final DocumentIndexSyncService documentIndexSyncService;
 
     public ProjectIdeaServiceImpl(
             ProjectIdeaRepository projectIdeaRepository,
+            ProjectIdeaRelatedRefRepository projectIdeaRelatedRefRepository,
             IdeaVoteRepository ideaVoteRepository,
             PortalUserRepository portalUserRepository,
             JwtTokenProvider jwtTokenProvider,
             DocumentNoGenerator documentNoGenerator,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            NotificationEventService notificationEventService,
+            DocumentIndexSyncService documentIndexSyncService
     ) {
         this.projectIdeaRepository = projectIdeaRepository;
+        this.projectIdeaRelatedRefRepository = projectIdeaRelatedRefRepository;
         this.ideaVoteRepository = ideaVoteRepository;
         this.portalUserRepository = portalUserRepository;
         this.jwtTokenProvider = jwtTokenProvider;
         this.documentNoGenerator = documentNoGenerator;
         this.objectMapper = objectMapper;
+        this.notificationEventService = notificationEventService;
+        this.documentIndexSyncService = documentIndexSyncService;
     }
 
     @Override
     public Page<ProjectIdeaListResponse> findPage(int page, int size) {
         PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
-        return projectIdeaRepository.findAll(pageable)
+        Long teamId = TeamScopeUtil.currentTeamId();
+        return (teamId == null
+                ? projectIdeaRepository.findAll(pageable)
+                : projectIdeaRepository.findByTeamId(teamId, pageable))
                 .map(entity -> ProjectIdeaMapper.toListResponse(entity, ideaVoteRepository.countByIdeaId(entity.getId())));
     }
 
@@ -78,12 +101,14 @@ public class ProjectIdeaServiceImpl implements ProjectIdeaService {
 
         ProjectIdea entity = ProjectIdeaMapper.fromCreateRequest(request, benefitsJson);
         entity.setIdeaNo(documentNoGenerator.next("ID"));
+        entity.setTeamId(TeamScopeUtil.requireTeamId(request.teamId()));
         entity.setCategory(normalizeCategory(request.category()));
         entity.setStatus(normalizeStatus(defaultIfBlank(request.status(), "제안됨")));
         entity.setStatusNote(normalizeNullable(request.statusNote()));
         entity.setContent(request.content().trim());
 
         ProjectIdea saved = projectIdeaRepository.save(entity);
+        syncDocumentIndex(saved);
         return saved.getId();
     }
 
@@ -95,6 +120,7 @@ public class ProjectIdeaServiceImpl implements ProjectIdeaService {
         }
 
         ProjectIdea entity = getIdeaOrThrow(id);
+        String previousStatus = entity.getStatus();
 
         if (request.title() != null && request.title().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "title은 필수입니다.");
@@ -122,6 +148,20 @@ public class ProjectIdeaServiceImpl implements ProjectIdeaService {
         if (request.content() != null) {
             entity.setContent(request.content().trim());
         }
+        syncDocumentIndex(entity);
+
+        notifyStatusChanged(entity, previousStatus);
+    }
+
+    @Override
+    @Transactional
+    public void delete(Long id) {
+        ProjectIdea entity = getIdeaOrThrow(id);
+
+        projectIdeaRelatedRefRepository.deleteByProjectIdeaId(id);
+        ideaVoteRepository.deleteByIdeaId(id);
+        projectIdeaRepository.delete(entity);
+        deleteDocumentIndex(entity);
     }
 
     @Override
@@ -132,8 +172,72 @@ public class ProjectIdeaServiceImpl implements ProjectIdeaService {
         }
 
         ProjectIdea entity = getIdeaOrThrow(id);
+        String previousStatus = entity.getStatus();
         entity.setStatus(normalizeStatus(request.status()));
         entity.setStatusNote(normalizeNullable(request.statusNote()));
+        syncDocumentIndex(entity);
+
+        notifyStatusChanged(entity, previousStatus);
+    }
+
+    @Override
+    public List<ProjectIdeaRelatedRefResponse> getRelatedRefs(Long id) {
+        getIdeaOrThrow(id);
+        return projectIdeaRelatedRefRepository.findByProjectIdeaIdOrderBySortOrderAscIdAsc(id).stream()
+                .map(ref -> new ProjectIdeaRelatedRefResponse(
+                        ref.getRefType(),
+                        ref.getRefId(),
+                        toFallbackRefNo(ref.getRefType(), ref.getRefId()),
+                        null
+                ))
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public void replaceRelatedRefs(Long id, ProjectIdeaRelatedRefsUpdateRequest request) {
+        getIdeaOrThrow(id);
+        projectIdeaRelatedRefRepository.deleteByProjectIdeaId(id);
+
+        if (request == null || request.items() == null || request.items().isEmpty()) {
+            return;
+        }
+
+        List<ProjectIdeaRelatedRefItemRequest> sortedItems = request.items().stream()
+                .filter(item -> item != null)
+                .sorted((a, b) -> {
+                    int left = a.sortOrder() == null ? Integer.MAX_VALUE : a.sortOrder();
+                    int right = b.sortOrder() == null ? Integer.MAX_VALUE : b.sortOrder();
+                    return Integer.compare(left, right);
+                })
+                .toList();
+
+        LinkedHashSet<String> seen = new LinkedHashSet<>();
+        List<ProjectIdeaRelatedRef> rows = new ArrayList<>();
+        int defaultSortOrder = 1;
+        for (ProjectIdeaRelatedRefItemRequest item : sortedItems) {
+            if (item.refId() == null || isBlank(item.refType())) {
+                continue;
+            }
+
+            String normalizedRefType = normalizeRefType(item.refType());
+            String uniqueKey = normalizedRefType + ":" + item.refId();
+            if (!seen.add(uniqueKey)) {
+                continue;
+            }
+
+            ProjectIdeaRelatedRef row = new ProjectIdeaRelatedRef();
+            row.setProjectIdeaId(id);
+            row.setRefType(normalizedRefType);
+            row.setRefId(item.refId());
+            row.setSortOrder(item.sortOrder() == null ? defaultSortOrder : item.sortOrder());
+            rows.add(row);
+            defaultSortOrder++;
+        }
+
+        if (!rows.isEmpty()) {
+            projectIdeaRelatedRefRepository.saveAll(rows);
+        }
     }
 
     @Override
@@ -174,17 +278,17 @@ public class ProjectIdeaServiceImpl implements ProjectIdeaService {
         if (isBlank(request.content())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "content는 필수입니다.");
         }
-        if (request.teamId() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "teamId는 필수입니다.");
-        }
+        TeamScopeUtil.requireTeamId(request.teamId());
         if (request.proposedBy() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "proposedBy는 필수입니다.");
         }
     }
 
     private ProjectIdea getIdeaOrThrow(Long id) {
-        return projectIdeaRepository.findById(id)
+        ProjectIdea idea = projectIdeaRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "아이디어를 찾을 수 없습니다."));
+        TeamScopeUtil.ensureAccessible(idea.getTeamId());
+        return idea;
     }
 
     private String normalizeCategory(String rawCategory) {
@@ -204,6 +308,29 @@ public class ProjectIdeaServiceImpl implements ProjectIdeaService {
             case "제안됨", "검토중", "채택", "보류", "기각" -> status;
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "유효하지 않은 status입니다.");
         };
+    }
+
+    private String normalizeRefType(String rawRefType) {
+        String refType = rawRefType.trim().toUpperCase(Locale.ROOT);
+        return switch (refType) {
+            case "WORK_REQUEST", "TECH_TASK", "TEST_SCENARIO", "DEFECT", "DEPLOYMENT", "MEETING_NOTE", "KNOWLEDGE_BASE" ->
+                    refType;
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "유효하지 않은 refType입니다.");
+        };
+    }
+
+    private String toFallbackRefNo(String refType, Long refId) {
+        String prefix = switch (refType) {
+            case "WORK_REQUEST" -> "WR";
+            case "TECH_TASK" -> "TK";
+            case "TEST_SCENARIO" -> "TS";
+            case "DEFECT" -> "DF";
+            case "DEPLOYMENT" -> "DP";
+            case "MEETING_NOTE" -> "MN";
+            case "KNOWLEDGE_BASE" -> "KB";
+            default -> "REF";
+        };
+        return prefix + "-" + refId;
     }
 
     private String toJsonList(List<String> values) {
@@ -270,5 +397,53 @@ public class ProjectIdeaServiceImpl implements ProjectIdeaService {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private void notifyStatusChanged(ProjectIdea entity, String previousStatus) {
+        if (notificationEventService == null) {
+            return;
+        }
+
+        String currentStatus = entity.getStatus();
+        if (currentStatus == null || currentStatus.equals(previousStatus)) {
+            return;
+        }
+
+        String type = "채택".equals(currentStatus) ? "아이디어채택" : "상태변경";
+        String title = "채택".equals(currentStatus) ? "아이디어 채택" : "아이디어 상태 변경";
+
+        notificationEventService.create(
+                entity.getProposedBy(),
+                type,
+                title,
+                entity.getIdeaNo() + " 상태가 '" + currentStatus + "'(으)로 변경되었습니다.",
+                "PROJECT_IDEA",
+                entity.getId()
+        );
+    }
+
+    private void syncDocumentIndex(ProjectIdea entity) {
+        if (documentIndexSyncService == null) {
+            return;
+        }
+        documentIndexSyncService.upsert(
+                "PROJECT_IDEA",
+                entity.getId(),
+                entity.getTeamId(),
+                entity.getIdeaNo(),
+                entity.getTitle(),
+                entity.getStatus()
+        );
+    }
+
+    private void deleteDocumentIndex(ProjectIdea entity) {
+        if (documentIndexSyncService == null) {
+            return;
+        }
+        documentIndexSyncService.delete(
+                "PROJECT_IDEA",
+                entity.getId(),
+                entity.getTeamId()
+        );
     }
 }

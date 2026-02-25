@@ -8,5 +8,7 @@ public interface IdeaVoteRepository extends JpaRepository<IdeaVote, Long> {
 
     long countByIdeaId(Long ideaId);
 
+    long deleteByIdeaId(Long ideaId);
+
     long deleteByIdeaIdAndUserId(Long ideaId, Long userId);
 }

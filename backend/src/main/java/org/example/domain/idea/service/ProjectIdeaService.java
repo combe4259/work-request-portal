@@ -3,10 +3,14 @@ package org.example.domain.idea.service;
 import org.example.domain.idea.dto.ProjectIdeaCreateRequest;
 import org.example.domain.idea.dto.ProjectIdeaDetailResponse;
 import org.example.domain.idea.dto.ProjectIdeaListResponse;
+import org.example.domain.idea.dto.ProjectIdeaRelatedRefResponse;
+import org.example.domain.idea.dto.ProjectIdeaRelatedRefsUpdateRequest;
 import org.example.domain.idea.dto.ProjectIdeaStatusUpdateRequest;
 import org.example.domain.idea.dto.ProjectIdeaUpdateRequest;
 import org.example.domain.idea.dto.ProjectIdeaVoteResponse;
 import org.springframework.data.domain.Page;
+
+import java.util.List;
 
 public interface ProjectIdeaService {
     Page<ProjectIdeaListResponse> findPage(int page, int size);
@@ -17,7 +21,13 @@ public interface ProjectIdeaService {
 
     void update(Long id, ProjectIdeaUpdateRequest request);
 
+    void delete(Long id);
+
     void updateStatus(Long id, ProjectIdeaStatusUpdateRequest request);
+
+    List<ProjectIdeaRelatedRefResponse> getRelatedRefs(Long id);
+
+    void replaceRelatedRefs(Long id, ProjectIdeaRelatedRefsUpdateRequest request);
 
     ProjectIdeaVoteResponse likeIdea(Long id, String authorizationHeader);
 
