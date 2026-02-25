@@ -14,6 +14,18 @@ interface AuthState {
   logout: () => void
 }
 
+function resolveCurrentTeam(teams: Team[], currentTeam: Team | null): Team | null {
+  if (teams.length === 0) {
+    return null
+  }
+
+  if (!currentTeam) {
+    return teams[0]
+  }
+
+  return teams.find((team) => team.id === currentTeam.id) ?? teams[0]
+}
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
@@ -28,9 +40,7 @@ export const useAuthStore = create<AuthState>()(
           user,
           token,
           teams,
-          currentTeam: state.currentTeam && teams.some((team) => team.id === state.currentTeam?.id)
-            ? state.currentTeam
-            : null,
+          currentTeam: resolveCurrentTeam(teams, state.currentTeam),
         }))
       },
 
@@ -38,9 +48,7 @@ export const useAuthStore = create<AuthState>()(
 
       setTeams: (teams) => set((state) => ({
         teams,
-        currentTeam: state.currentTeam && teams.some((team) => team.id === state.currentTeam?.id)
-          ? state.currentTeam
-          : (teams[0] ?? null),
+        currentTeam: resolveCurrentTeam(teams, state.currentTeam),
       })),
 
       addTeam: (team) => set((state) => {
