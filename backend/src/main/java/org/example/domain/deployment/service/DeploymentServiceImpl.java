@@ -1,5 +1,7 @@
 package org.example.domain.deployment.service;
 
+import org.example.domain.activityLog.service.ActivityLogCreateCommand;
+import org.example.domain.activityLog.service.ActivityLogService;
 import org.example.domain.documentIndex.service.DocumentIndexSyncService;
 import org.example.domain.defect.entity.Defect;
 import org.example.domain.defect.repository.DefectRepository;
@@ -28,8 +30,10 @@ import org.example.domain.testScenario.entity.TestScenario;
 import org.example.domain.testScenario.repository.TestScenarioRepository;
 import org.example.domain.workRequest.entity.WorkRequest;
 import org.example.domain.workRequest.repository.WorkRequestRepository;
+import org.example.global.team.TeamRequestContext;
 import org.example.global.team.TeamScopeUtil;
 import org.example.global.util.DocumentNoGenerator;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -58,6 +62,8 @@ public class DeploymentServiceImpl implements DeploymentService {
     private final DocumentNoGenerator documentNoGenerator;
     private final NotificationEventService notificationEventService;
     private final DocumentIndexSyncService documentIndexSyncService;
+    @Autowired(required = false)
+    private ActivityLogService activityLogService;
 
     public DeploymentServiceImpl(
             DeploymentRepository deploymentRepository,
@@ -124,6 +130,7 @@ public class DeploymentServiceImpl implements DeploymentService {
             persistSteps(saved.getId(), request.steps());
         }
 
+        recordCreated(saved);
         notifyManagerAssigned(saved);
         return saved.getId();
     }
@@ -174,6 +181,9 @@ public class DeploymentServiceImpl implements DeploymentService {
             persistSteps(id, request.steps());
         }
         syncDocumentIndex(deployment);
+        recordUpdated(deployment);
+        recordManagerChanged(deployment, previousManagerId);
+        recordStatusChanged(deployment, previousStatus);
 
         notifyManagerChanged(deployment, previousManagerId);
         notifyStatusChanged(deployment, previousStatus);
@@ -184,6 +194,7 @@ public class DeploymentServiceImpl implements DeploymentService {
     public void delete(Long id) {
         Deployment deployment = getDeploymentOrThrow(id);
 
+        recordDeleted(deployment);
         deploymentRelatedRefRepository.deleteByDeploymentId(id);
         deploymentStepRepository.deleteByDeploymentId(id);
         deploymentRepository.delete(deployment);
@@ -202,6 +213,7 @@ public class DeploymentServiceImpl implements DeploymentService {
         deployment.setStatus(normalizeStatus(request.status()));
         deployment.setStatusNote(normalizeNullable(request.statusNote()));
         syncDocumentIndex(deployment);
+        recordStatusChanged(deployment, previousStatus);
 
         notifyStatusChanged(deployment, previousStatus);
     }
@@ -537,6 +549,81 @@ public class DeploymentServiceImpl implements DeploymentService {
                 "DEPLOYMENT",
                 entity.getId()
         );
+    }
+
+    private void recordCreated(Deployment entity) {
+        recordActivity(entity, "CREATED", null, null, null, entity.getDeployNo() + " 배포가 등록되었습니다.");
+    }
+
+    private void recordUpdated(Deployment entity) {
+        recordActivity(entity, "UPDATED", null, null, null, entity.getDeployNo() + " 배포 내용이 수정되었습니다.");
+    }
+
+    private void recordStatusChanged(Deployment entity, String previousStatus) {
+        String currentStatus = entity.getStatus();
+        if (currentStatus == null || currentStatus.equals(previousStatus)) {
+            return;
+        }
+
+        recordActivity(
+                entity,
+                "STATUS_CHANGED",
+                "status",
+                previousStatus,
+                currentStatus,
+                entity.getDeployNo() + " 상태가 '" + currentStatus + "'(으)로 변경되었습니다."
+        );
+    }
+
+    private void recordManagerChanged(Deployment entity, Long previousManagerId) {
+        Long currentManagerId = entity.getManagerId();
+        if ((previousManagerId == null && currentManagerId == null)
+                || (previousManagerId != null && previousManagerId.equals(currentManagerId))) {
+            return;
+        }
+
+        recordActivity(
+                entity,
+                "ASSIGNEE_CHANGED",
+                "managerId",
+                previousManagerId == null ? null : String.valueOf(previousManagerId),
+                currentManagerId == null ? null : String.valueOf(currentManagerId),
+                entity.getDeployNo() + " 담당자가 변경되었습니다."
+        );
+    }
+
+    private void recordDeleted(Deployment entity) {
+        recordActivity(entity, "DELETED", null, null, null, entity.getDeployNo() + " 배포가 삭제되었습니다.");
+    }
+
+    private void recordActivity(
+            Deployment entity,
+            String actionType,
+            String fieldName,
+            String beforeValue,
+            String afterValue,
+            String message
+    ) {
+        if (activityLogService == null || entity == null || entity.getId() == null || entity.getTeamId() == null) {
+            return;
+        }
+
+        Long actorId = TeamRequestContext.getCurrentUserId();
+        try {
+            activityLogService.record(new ActivityLogCreateCommand(
+                    entity.getTeamId(),
+                    "DEPLOYMENT",
+                    entity.getId(),
+                    actionType,
+                    actorId,
+                    fieldName,
+                    beforeValue,
+                    afterValue,
+                    message
+            ));
+        } catch (RuntimeException ignored) {
+            // 처리 이력 저장 실패가 본 작업 트랜잭션을 깨지 않도록 방어한다.
+        }
     }
 
     private record RefMetadata(String refNo, String title) {

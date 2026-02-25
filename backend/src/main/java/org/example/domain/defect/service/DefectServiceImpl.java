@@ -1,5 +1,7 @@
 package org.example.domain.defect.service;
 
+import org.example.domain.activityLog.service.ActivityLogCreateCommand;
+import org.example.domain.activityLog.service.ActivityLogService;
 import org.example.domain.documentIndex.service.DocumentIndexSyncService;
 import org.example.domain.notification.service.NotificationEventService;
 import org.example.domain.defect.dto.DefectCreateRequest;
@@ -10,8 +12,10 @@ import org.example.domain.defect.dto.DefectUpdateRequest;
 import org.example.domain.defect.entity.Defect;
 import org.example.domain.defect.mapper.DefectMapper;
 import org.example.domain.defect.repository.DefectRepository;
+import org.example.global.team.TeamRequestContext;
 import org.example.global.team.TeamScopeUtil;
 import org.example.global.util.DocumentNoGenerator;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -30,6 +34,8 @@ public class DefectServiceImpl implements DefectService {
     private final DocumentNoGenerator documentNoGenerator;
     private final NotificationEventService notificationEventService;
     private final DocumentIndexSyncService documentIndexSyncService;
+    @Autowired(required = false)
+    private ActivityLogService activityLogService;
 
     public DefectServiceImpl(
             DefectRepository defectRepository,
@@ -78,6 +84,7 @@ public class DefectServiceImpl implements DefectService {
 
         Defect saved = defectRepository.save(entity);
         syncDocumentIndex(saved);
+        recordCreated(saved);
         notifyAssigneeAssigned(saved);
         return saved.getId();
     }
@@ -117,6 +124,9 @@ public class DefectServiceImpl implements DefectService {
             normalizeRelatedRef(entity, request.relatedRefType(), request.relatedRefId());
         }
         syncDocumentIndex(entity);
+        recordUpdated(entity);
+        recordAssigneeChanged(entity, previousAssigneeId);
+        recordStatusChanged(entity, previousStatus);
 
         notifyAssigneeChanged(entity, previousAssigneeId);
         notifyStatusChanged(entity, previousStatus);
@@ -129,6 +139,7 @@ public class DefectServiceImpl implements DefectService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "결함을 찾을 수 없습니다."));
         TeamScopeUtil.ensureAccessible(entity.getTeamId());
 
+        recordDeleted(entity);
         defectRepository.delete(entity);
         deleteDocumentIndex(entity);
     }
@@ -150,6 +161,7 @@ public class DefectServiceImpl implements DefectService {
             entity.setStatusNote(normalizeNullable(request.statusNote()));
         }
         syncDocumentIndex(entity);
+        recordStatusChanged(entity, previousStatus);
 
         notifyStatusChanged(entity, previousStatus);
     }
@@ -258,6 +270,81 @@ public class DefectServiceImpl implements DefectService {
                 "DEFECT",
                 entity.getId()
         );
+    }
+
+    private void recordCreated(Defect entity) {
+        recordActivity(entity, "CREATED", null, null, null, entity.getDefectNo() + " 결함이 등록되었습니다.");
+    }
+
+    private void recordUpdated(Defect entity) {
+        recordActivity(entity, "UPDATED", null, null, null, entity.getDefectNo() + " 결함 내용이 수정되었습니다.");
+    }
+
+    private void recordStatusChanged(Defect entity, String previousStatus) {
+        String currentStatus = entity.getStatus();
+        if (currentStatus == null || currentStatus.equals(previousStatus)) {
+            return;
+        }
+
+        recordActivity(
+                entity,
+                "STATUS_CHANGED",
+                "status",
+                previousStatus,
+                currentStatus,
+                entity.getDefectNo() + " 상태가 '" + currentStatus + "'(으)로 변경되었습니다."
+        );
+    }
+
+    private void recordAssigneeChanged(Defect entity, Long previousAssigneeId) {
+        Long currentAssigneeId = entity.getAssigneeId();
+        if ((previousAssigneeId == null && currentAssigneeId == null)
+                || (previousAssigneeId != null && previousAssigneeId.equals(currentAssigneeId))) {
+            return;
+        }
+
+        recordActivity(
+                entity,
+                "ASSIGNEE_CHANGED",
+                "assigneeId",
+                previousAssigneeId == null ? null : String.valueOf(previousAssigneeId),
+                currentAssigneeId == null ? null : String.valueOf(currentAssigneeId),
+                entity.getDefectNo() + " 담당자가 변경되었습니다."
+        );
+    }
+
+    private void recordDeleted(Defect entity) {
+        recordActivity(entity, "DELETED", null, null, null, entity.getDefectNo() + " 결함이 삭제되었습니다.");
+    }
+
+    private void recordActivity(
+            Defect entity,
+            String actionType,
+            String fieldName,
+            String beforeValue,
+            String afterValue,
+            String message
+    ) {
+        if (activityLogService == null || entity == null || entity.getId() == null || entity.getTeamId() == null) {
+            return;
+        }
+
+        Long actorId = TeamRequestContext.getCurrentUserId();
+        try {
+            activityLogService.record(new ActivityLogCreateCommand(
+                    entity.getTeamId(),
+                    "DEFECT",
+                    entity.getId(),
+                    actionType,
+                    actorId,
+                    fieldName,
+                    beforeValue,
+                    afterValue,
+                    message
+            ));
+        } catch (RuntimeException ignored) {
+            // 처리 이력 저장 실패가 본 작업 트랜잭션을 깨지 않도록 방어한다.
+        }
     }
 
     private void syncDocumentIndex(Defect entity) {
