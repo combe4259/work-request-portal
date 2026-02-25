@@ -1,11 +1,16 @@
-import { useState, useRef, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { ErrorState, LoadingState } from '@/components/common/AsyncState'
 import { FormField } from '@/components/common/FormField'
 import { inputCls, textareaCls, selectCls } from '@/lib/formStyles'
-import { useCreateDeploymentMutation } from '@/features/deployment/mutations'
+import { useTeamMembersQuery } from '@/features/auth/queries'
+import { useDocumentIndexQuery } from '@/features/document-index/queries'
+import { useCreateDeploymentMutation, useUpdateDeploymentMutation } from '@/features/deployment/mutations'
+import { useDeploymentDetailQuery, useDeploymentRelatedRefsQuery, useDeploymentStepsQuery } from '@/features/deployment/queries'
+import { useAuthStore } from '@/stores/authStore'
 
 // ── 스키마 ──────────────────────────────────────────
 const schema = z.object({
@@ -21,30 +26,44 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>
 
-const MANAGERS = ['최인프라', '김개발', '이설계', '박테스터']
-
-const ALL_DOCS = [
-  { docNo: 'WR-051', title: '모바일 PDA 화면 레이아웃 개선 요청' },
-  { docNo: 'WR-050', title: '신규 계좌 개설 프로세스 자동화' },
-  { docNo: 'WR-046', title: '주문 내역 엑셀 다운로드 기능 추가' },
-  { docNo: 'TK-021', title: '계좌 조회 서비스 레이어 리팩토링' },
-  { docNo: 'TK-020', title: 'N+1 쿼리 문제 해결 — 잔고 조회 API' },
-  { docNo: 'DF-034', title: 'Galaxy S23에서 메인 메뉴 버튼 화면 밖 이탈' },
-  { docNo: 'DF-030', title: '로그인 세션 만료 후 이전 페이지 캐시 노출' },
-  { docNo: 'DF-029', title: '엑셀 다운로드 시 일부 특수문자 깨짐 현상' },
-]
+const ALLOWED_REF_TYPES = [
+  'WORK_REQUEST',
+  'TECH_TASK',
+  'TEST_SCENARIO',
+  'DEFECT',
+  'DEPLOYMENT',
+  'KNOWLEDGE_BASE',
+] as const
 
 let stepIdCounter = 3
 
 export default function DeploymentFormPage() {
   const navigate = useNavigate()
+  const { id } = useParams<{ id: string }>()
+  const isEdit = id != null
+  const numericId = Number(id)
+  const validEditId = isEdit && Number.isInteger(numericId) && numericId > 0 ? numericId : undefined
   const createDeployment = useCreateDeploymentMutation()
+  const updateDeployment = useUpdateDeploymentMutation()
+  const currentUser = useAuthStore((state) => state.user)
+  const currentTeam = useAuthStore((state) => state.currentTeam)
+  const teamMembersQuery = useTeamMembersQuery(currentTeam?.id)
+  const detailQuery = useDeploymentDetailQuery(validEditId)
+  const relatedRefsQuery = useDeploymentRelatedRefsQuery(validEditId)
+  const stepsQuery = useDeploymentStepsQuery(validEditId)
 
   // 포함 항목 (multi)
   const [includedDocs, setIncludedDocs] = useState<{ docNo: string; title: string }[]>([])
   const [docSearch, setDocSearch] = useState('')
   const [docDropOpen, setDocDropOpen] = useState(false)
   const docRef = useRef<HTMLDivElement>(null)
+  const documentIndexQuery = useDocumentIndexQuery({
+    q: docSearch,
+    types: [...ALLOWED_REF_TYPES],
+    teamId: currentTeam?.id,
+    enabled: docDropOpen && Boolean(currentTeam?.id),
+    size: 40,
+  })
 
   // 배포 절차
   const [steps, setSteps] = useState<{ id: number; text: string }[]>([
@@ -64,11 +83,22 @@ export default function DeploymentFormPage() {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const filteredDocs = ALL_DOCS.filter(
+  const filteredDocs = (documentIndexQuery.data ?? []).filter(
     (d) =>
       !includedDocs.find((r) => r.docNo === d.docNo) &&
       (d.docNo.toLowerCase().includes(docSearch.toLowerCase()) || d.title.includes(docSearch))
   )
+
+  const managerOptions = useMemo(() => {
+    const names = new Set<string>()
+    if (currentUser?.name) {
+      names.add(currentUser.name)
+    }
+    ;(teamMembersQuery.data ?? []).forEach((member) => {
+      names.add(member.name)
+    })
+    return Array.from(names)
+  }, [currentUser?.name, teamMembersQuery.data])
 
   const addDoc = (doc: { docNo: string; title: string }) => {
     setIncludedDocs((prev) => [...prev, doc])
@@ -101,15 +131,79 @@ export default function DeploymentFormPage() {
     register,
     handleSubmit,
     watch,
+    reset,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { type: '정기배포', env: '개발' },
   })
 
+  useEffect(() => {
+    if (!detailQuery.data) {
+      return
+    }
+
+    reset({
+      title: detailQuery.data.title,
+      version: detailQuery.data.version,
+      type: detailQuery.data.type,
+      env: detailQuery.data.env,
+      deployDate: detailQuery.data.deployDate,
+      manager: detailQuery.data.manager === '미배정' ? '' : detailQuery.data.manager,
+      overview: detailQuery.data.overview,
+      rollback: detailQuery.data.rollbackPlan,
+    })
+  }, [detailQuery.data, reset])
+
+  useEffect(() => {
+    if (!relatedRefsQuery.data) {
+      return
+    }
+    setIncludedDocs(
+      relatedRefsQuery.data.map((item) => ({
+        docNo: item.refNo,
+        title: item.title ?? item.refNo,
+      }))
+    )
+  }, [relatedRefsQuery.data])
+
+  useEffect(() => {
+    if (!stepsQuery.data) {
+      return
+    }
+    setSteps(
+      stepsQuery.data.length > 0
+        ? stepsQuery.data.map((step, index) => ({
+          id: step.id > 0 ? step.id : index + 1,
+          text: step.content,
+        }))
+        : [{ id: 1, text: '' }]
+    )
+    stepIdCounter = Math.max(stepIdCounter, stepsQuery.data.length + 1)
+  }, [stepsQuery.data])
+
   const envValue = watch('env')
 
   const onSubmit = async (data: FormValues) => {
+    if (validEditId != null && detailQuery.data) {
+      await updateDeployment.mutateAsync({
+        id: validEditId,
+        title: data.title,
+        version: data.version,
+        type: data.type,
+        env: data.env,
+        status: detailQuery.data.status,
+        deployDate: data.deployDate,
+        manager: data.manager,
+        overview: data.overview,
+        rollback: data.rollback,
+        includedDocs: includedDocs.map((doc) => doc.docNo),
+        steps: steps.map((step) => step.text.trim()).filter((step) => step.length > 0),
+      })
+      navigate(`/deployments/${validEditId}`)
+      return
+    }
+
     await createDeployment.mutateAsync({
       title: data.title,
       version: data.version,
@@ -125,6 +219,44 @@ export default function DeploymentFormPage() {
     navigate('/deployments')
   }
 
+  if (isEdit && validEditId == null) {
+    return (
+      <div className="p-6">
+        <ErrorState
+          title="잘못된 접근입니다"
+          description="배포 ID가 올바르지 않습니다."
+          actionLabel="목록으로 이동"
+          onAction={() => navigate('/deployments')}
+        />
+      </div>
+    )
+  }
+
+  if (isEdit && (detailQuery.isPending || relatedRefsQuery.isPending || stepsQuery.isPending)) {
+    return (
+      <div className="p-6">
+        <LoadingState title="배포 정보를 불러오는 중입니다" description="잠시만 기다려주세요." />
+      </div>
+    )
+  }
+
+  if (isEdit && (detailQuery.isError || !detailQuery.data)) {
+    return (
+      <div className="p-6">
+        <ErrorState
+          title="배포 정보를 불러오지 못했습니다"
+          description="잠시 후 다시 시도해주세요."
+          actionLabel="다시 시도"
+          onAction={() => {
+            void detailQuery.refetch()
+          }}
+        />
+      </div>
+    )
+  }
+
+  const isMutating = isSubmitting || createDeployment.isPending || updateDeployment.isPending
+
   return (
     <div className="min-h-full p-6 flex flex-col items-center">
       <div className="w-full max-w-[720px]">
@@ -138,8 +270,8 @@ export default function DeploymentFormPage() {
             <BackIcon />
           </button>
           <div>
-            <h1 className="text-[18px] font-bold text-gray-900">배포 등록</h1>
-            <p className="text-[12px] text-gray-400 mt-0.5">새로운 배포 계획을 등록합니다</p>
+            <h1 className="text-[18px] font-bold text-gray-900">{isEdit ? '배포 수정' : '배포 등록'}</h1>
+            <p className="text-[12px] text-gray-400 mt-0.5">{isEdit ? '배포 계획을 수정합니다' : '새로운 배포 계획을 등록합니다'}</p>
           </div>
         </div>
 
@@ -201,7 +333,8 @@ export default function DeploymentFormPage() {
             <div className="grid grid-cols-2 gap-4">
               <FormField label="배포 담당자">
                 <select {...register('manager')} className={selectCls(false)}>
-                  {MANAGERS.map((m) => <option key={m} value={m}>{m}</option>)}
+                  <option value="">미배정</option>
+                  {managerOptions.map((name) => <option key={name} value={name}>{name}</option>)}
                 </select>
               </FormField>
 
@@ -378,10 +511,10 @@ export default function DeploymentFormPage() {
             </button>
             <button
               type="submit"
-              disabled={isSubmitting || createDeployment.isPending}
+              disabled={isMutating}
               className="h-9 px-5 text-[13px] font-semibold text-white bg-brand hover:bg-brand-hover rounded-lg transition-colors disabled:opacity-60 flex items-center gap-2"
             >
-              {isSubmitting || createDeployment.isPending ? <><SpinnerIcon />등록 중...</> : '등록하기'}
+              {isMutating ? <><SpinnerIcon />{isEdit ? '수정 중...' : '등록 중...'}</> : isEdit ? '수정 완료' : '등록하기'}
             </button>
           </div>
         </form>

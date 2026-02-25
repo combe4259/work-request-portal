@@ -1,5 +1,7 @@
 import api from '@/lib/api'
+import { toRelatedRefsPayload } from '@/lib/relatedRefs'
 import { useAuthStore } from '@/stores/authStore'
+import { resolveTeamMemberIdByName } from '@/features/auth/memberResolver'
 import type { Deployment, DeployEnv, DeployStatus, DeployType } from '@/types/deployment'
 
 export type DeploymentSortKey = 'docNo' | 'deployDate' | 'status'
@@ -44,6 +46,49 @@ export interface CreateDeploymentInput {
   steps: string[]
 }
 
+export interface DeploymentRelatedRef {
+  refType: string
+  refId: number
+  refNo: string
+  title: string | null
+}
+
+export interface DeploymentStep {
+  id: number
+  stepOrder: number
+  content: string
+  isDone: boolean
+}
+
+export interface DeploymentDetail {
+  id: string
+  docNo: string
+  title: string
+  version: string
+  type: DeployType
+  env: DeployEnv
+  status: DeployStatus
+  manager: string
+  deployDate: string
+  overview: string
+  rollbackPlan: string
+}
+
+export interface UpdateDeploymentInput {
+  id: string | number
+  title: string
+  version: string
+  type: DeployType
+  env: DeployEnv
+  status: DeployStatus
+  deployDate: string
+  manager?: string
+  overview?: string
+  rollback?: string
+  includedDocs: string[]
+  steps: string[]
+}
+
 interface ApiPageResponse<T> {
   content: T[]
 }
@@ -70,6 +115,8 @@ interface ApiDeploymentDetailResponse {
   status: DeployStatus
   managerId: number | null
   scheduledAt: string | null
+  overview: string | null
+  rollbackPlan: string | null
 }
 
 interface ApiCreateDeploymentRequest {
@@ -95,6 +142,43 @@ interface ApiCreateDeploymentResponse {
   id: number
 }
 
+interface ApiDeploymentStepResponse {
+  id: number
+  stepOrder: number
+  content: string
+  isDone: boolean
+}
+
+interface ApiUpdateDeploymentRequest {
+  title?: string
+  overview?: string | null
+  rollbackPlan?: string | null
+  version?: string
+  type?: DeployType
+  environment?: DeployEnv
+  status?: DeployStatus
+  managerId?: number | null
+  scheduledAt?: string
+  relatedRefs?: Array<{
+    refType: string
+    refId: number
+    sortOrder: number
+  }>
+  steps?: string[]
+}
+
+interface ApiUpdateDeploymentStatusRequest {
+  status: DeployStatus
+  statusNote?: string
+}
+
+interface ApiDeploymentRelatedRefResponse {
+  refType: string
+  refId: number
+  refNo: string | null
+  title: string | null
+}
+
 const STATUS_ORDER: Record<string, number> = {
   진행중: 0,
   대기: 1,
@@ -105,6 +189,27 @@ const STATUS_ORDER: Record<string, number> = {
 
 const LIST_FETCH_SIZE = 500
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
+
+function toFallbackDocNo(refType: string, refId: number): string {
+  const prefix = refType === 'WORK_REQUEST'
+    ? 'WR'
+    : refType === 'TECH_TASK'
+      ? 'TK'
+      : refType === 'TEST_SCENARIO'
+        ? 'TS'
+        : refType === 'DEFECT'
+          ? 'DF'
+          : refType === 'DEPLOYMENT'
+            ? 'DP'
+            : refType === 'MEETING_NOTE'
+              ? 'MN'
+              : refType === 'PROJECT_IDEA'
+                ? 'ID'
+                : refType === 'KNOWLEDGE_BASE'
+                  ? 'KB'
+                  : 'DOC'
+  return `${prefix}-${refId}`
+}
 
 function mapUserLabel(userId: number | null | undefined, fallbackText: string): string {
   if (userId == null) {
@@ -127,32 +232,6 @@ function startOfDay(date: Date): Date {
   const next = new Date(date)
   next.setHours(0, 0, 0, 0)
   return next
-}
-
-function parseRelatedRef(docNo: string, sortOrder: number): { refType: string; refId: number; sortOrder: number } | null {
-  const [prefix, idText] = docNo.split('-')
-  const refId = Number(idText)
-  if (!prefix || !Number.isFinite(refId)) {
-    return null
-  }
-
-  if (prefix === 'WR') {
-    return { refType: 'WORK_REQUEST', refId, sortOrder }
-  }
-  if (prefix === 'TK') {
-    return { refType: 'TECH_TASK', refId, sortOrder }
-  }
-  if (prefix === 'TS') {
-    return { refType: 'TEST_SCENARIO', refId, sortOrder }
-  }
-  if (prefix === 'DF') {
-    return { refType: 'DEFECT', refId, sortOrder }
-  }
-  if (prefix === 'DP') {
-    return { refType: 'DEPLOYMENT', refId, sortOrder }
-  }
-
-  return null
 }
 
 function mapListItem(item: ApiDeploymentListItem): Deployment {
@@ -245,11 +324,9 @@ export async function createDeployment(input: CreateDeploymentInput): Promise<De
     throw new Error('현재 로그인 사용자 또는 팀 정보가 없습니다.')
   }
 
-  const relatedRefs = input.includedDocs
-    .map((docNo, index) => parseRelatedRef(docNo, index + 1))
-    .filter((item): item is { refType: string; refId: number; sortOrder: number } => item !== null)
+  const relatedRefs = toRelatedRefsPayload(input.includedDocs)
 
-  const managerId = input.manager && user.name === input.manager ? user.id : null
+  const managerId = await resolveTeamMemberIdByName(currentTeam.id, input.manager)
 
   const payload: ApiCreateDeploymentRequest = {
     title: input.title,
@@ -280,4 +357,77 @@ export async function createDeployment(input: CreateDeploymentInput): Promise<De
     manager: mapUserLabel(detail.data.managerId, '미배정'),
     deployDate: toDateOnly(detail.data.scheduledAt),
   }
+}
+
+export async function listDeploymentRelatedRefs(id: string | number): Promise<DeploymentRelatedRef[]> {
+  const { data } = await api.get<ApiDeploymentRelatedRefResponse[]>(`/deployments/${id}/related-refs`)
+  return data.map((item) => ({
+    refType: item.refType,
+    refId: item.refId,
+    refNo: item.refNo?.trim() || toFallbackDocNo(item.refType, item.refId),
+    title: item.title,
+  }))
+}
+
+export async function getDeployment(id: string | number): Promise<DeploymentDetail> {
+  const { data } = await api.get<ApiDeploymentDetailResponse>(`/deployments/${id}`)
+  return {
+    id: String(data.id),
+    docNo: data.deployNo,
+    title: data.title,
+    version: data.version,
+    type: data.type,
+    env: data.environment,
+    status: data.status,
+    manager: mapUserLabel(data.managerId, '미배정'),
+    deployDate: toDateOnly(data.scheduledAt),
+    overview: data.overview ?? '',
+    rollbackPlan: data.rollbackPlan ?? '',
+  }
+}
+
+export async function listDeploymentSteps(id: string | number): Promise<DeploymentStep[]> {
+  const { data } = await api.get<ApiDeploymentStepResponse[]>(`/deployments/${id}/steps`)
+  return data.map((item) => ({
+    id: item.id,
+    stepOrder: item.stepOrder,
+    content: item.content,
+    isDone: item.isDone,
+  }))
+}
+
+export async function updateDeployment(input: UpdateDeploymentInput): Promise<void> {
+  const auth = useAuthStore.getState()
+  const currentTeam = auth.currentTeam ?? auth.teams[0]
+  if (!currentTeam) {
+    throw new Error('현재 선택된 팀 정보가 없습니다.')
+  }
+
+  const managerId = await resolveTeamMemberIdByName(currentTeam.id, input.manager)
+  const relatedRefs = toRelatedRefsPayload(input.includedDocs)
+
+  const payload: ApiUpdateDeploymentRequest = {
+    title: input.title,
+    overview: input.overview?.trim() ? input.overview : null,
+    rollbackPlan: input.rollback?.trim() ? input.rollback : null,
+    version: input.version,
+    type: input.type,
+    environment: input.env,
+    status: input.status,
+    managerId,
+    scheduledAt: input.deployDate,
+    relatedRefs,
+    steps: input.steps.filter((step) => step.trim().length > 0),
+  }
+
+  await api.put(`/deployments/${input.id}`, payload)
+}
+
+export async function updateDeploymentStatus(id: string | number, status: DeployStatus, statusNote?: string): Promise<void> {
+  const payload: ApiUpdateDeploymentStatusRequest = { status, statusNote }
+  await api.patch(`/deployments/${id}/status`, payload)
+}
+
+export async function deleteDeployment(id: string | number): Promise<void> {
+  await api.delete(`/deployments/${id}`)
 }
