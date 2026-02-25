@@ -10,6 +10,7 @@ import org.example.domain.meetingNote.dto.MeetingNoteUpdateRequest;
 import org.example.domain.meetingNote.service.MeetingNoteService;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -58,6 +59,12 @@ public class MeetingNoteController {
             @RequestBody MeetingNoteUpdateRequest request
     ) {
         meetingNoteService.update(id, request);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteMeetingNote(@PathVariable Long id) {
+        meetingNoteService.delete(id);
         return ResponseEntity.noContent().build();
     }
 

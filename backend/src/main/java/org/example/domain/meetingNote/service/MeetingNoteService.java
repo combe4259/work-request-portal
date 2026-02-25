@@ -20,6 +20,8 @@ public interface MeetingNoteService {
 
     void update(Long id, MeetingNoteUpdateRequest request);
 
+    void delete(Long id);
+
     List<MeetingActionItemResponse> getActionItems(Long id);
 
     List<Long> getAttendeeIds(Long id);

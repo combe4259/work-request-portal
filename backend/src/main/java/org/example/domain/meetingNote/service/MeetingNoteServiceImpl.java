@@ -3,6 +3,7 @@ package org.example.domain.meetingNote.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.example.domain.documentIndex.service.DocumentIndexSyncService;
 import org.example.domain.defect.entity.Defect;
 import org.example.domain.defect.repository.DefectRepository;
 import org.example.domain.deployment.entity.Deployment;
@@ -32,6 +33,7 @@ import org.example.domain.testScenario.entity.TestScenario;
 import org.example.domain.testScenario.repository.TestScenarioRepository;
 import org.example.domain.workRequest.entity.WorkRequest;
 import org.example.domain.workRequest.repository.WorkRequestRepository;
+import org.example.global.team.TeamScopeUtil;
 import org.example.global.util.DocumentNoGenerator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -62,6 +64,7 @@ public class MeetingNoteServiceImpl implements MeetingNoteService {
     private final KnowledgeBaseArticleRepository knowledgeBaseArticleRepository;
     private final DocumentNoGenerator documentNoGenerator;
     private final ObjectMapper objectMapper;
+    private final DocumentIndexSyncService documentIndexSyncService;
 
     public MeetingNoteServiceImpl(
             MeetingNoteRepository meetingNoteRepository,
@@ -75,7 +78,8 @@ public class MeetingNoteServiceImpl implements MeetingNoteService {
             DeploymentRepository deploymentRepository,
             KnowledgeBaseArticleRepository knowledgeBaseArticleRepository,
             DocumentNoGenerator documentNoGenerator,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            DocumentIndexSyncService documentIndexSyncService
     ) {
         this.meetingNoteRepository = meetingNoteRepository;
         this.meetingActionItemRepository = meetingActionItemRepository;
@@ -89,12 +93,16 @@ public class MeetingNoteServiceImpl implements MeetingNoteService {
         this.knowledgeBaseArticleRepository = knowledgeBaseArticleRepository;
         this.documentNoGenerator = documentNoGenerator;
         this.objectMapper = objectMapper;
+        this.documentIndexSyncService = documentIndexSyncService;
     }
 
     @Override
     public Page<MeetingNoteListResponse> findPage(int page, int size) {
         PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
-        return meetingNoteRepository.findAll(pageable)
+        Long teamId = TeamScopeUtil.currentTeamId();
+        return (teamId == null
+                ? meetingNoteRepository.findAll(pageable)
+                : meetingNoteRepository.findByTeamId(teamId, pageable))
                 .map(entity -> {
                     long actionTotal = meetingActionItemRepository.countByMeetingNoteId(entity.getId());
                     long actionDone = meetingActionItemRepository.countByMeetingNoteIdAndStatus(entity.getId(), "완료");
@@ -131,9 +139,11 @@ public class MeetingNoteServiceImpl implements MeetingNoteService {
                 normalizeContent(request.content())
         );
         entity.setNoteNo(documentNoGenerator.next("MN"));
+        entity.setTeamId(TeamScopeUtil.requireTeamId(request.teamId()));
         entity.setLocation(normalizeNullable(request.location()));
 
         MeetingNote saved = meetingNoteRepository.save(entity);
+        syncDocumentIndex(saved);
 
         if (request.actionItems() != null) {
             persistActionItems(saved.getId(), request.actionItems());
@@ -180,6 +190,19 @@ public class MeetingNoteServiceImpl implements MeetingNoteService {
         if (request.relatedRefs() != null) {
             persistRelatedRefs(id, request.relatedRefs());
         }
+        syncDocumentIndex(entity);
+    }
+
+    @Override
+    @Transactional
+    public void delete(Long id) {
+        MeetingNote entity = getMeetingNoteOrThrow(id);
+
+        meetingActionItemRepository.deleteByMeetingNoteId(id);
+        meetingAttendeeRepository.deleteByMeetingNoteId(id);
+        meetingNoteRelatedRefRepository.deleteByMeetingNoteId(id);
+        meetingNoteRepository.delete(entity);
+        deleteDocumentIndex(entity);
     }
 
     @Override
@@ -238,9 +261,7 @@ public class MeetingNoteServiceImpl implements MeetingNoteService {
         if (request.facilitatorId() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "facilitatorId는 필수입니다.");
         }
-        if (request.teamId() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "teamId는 필수입니다.");
-        }
+        TeamScopeUtil.requireTeamId(request.teamId());
         if (request.createdBy() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "createdBy는 필수입니다.");
         }
@@ -350,14 +371,21 @@ public class MeetingNoteServiceImpl implements MeetingNoteService {
     }
 
     private MeetingNote getMeetingNoteOrThrow(Long id) {
-        return meetingNoteRepository.findById(id)
+        MeetingNote note = meetingNoteRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "회의록을 찾을 수 없습니다."));
+        TeamScopeUtil.ensureAccessible(note.getTeamId());
+        return note;
     }
 
     private void ensureMeetingNoteExists(Long id) {
-        if (!meetingNoteRepository.existsById(id)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "회의록을 찾을 수 없습니다.");
+        Long scopedTeamId = TeamScopeUtil.currentTeamId();
+        if (scopedTeamId == null) {
+            if (!meetingNoteRepository.existsById(id)) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "회의록을 찾을 수 없습니다.");
+            }
+            return;
         }
+        getMeetingNoteOrThrow(id);
     }
 
     private String normalizeActionStatus(String rawStatus) {
@@ -501,5 +529,30 @@ public class MeetingNoteServiceImpl implements MeetingNoteService {
     }
 
     private record RefMetadata(String refNo, String title) {
+    }
+
+    private void syncDocumentIndex(MeetingNote entity) {
+        if (documentIndexSyncService == null) {
+            return;
+        }
+        documentIndexSyncService.upsert(
+                "MEETING_NOTE",
+                entity.getId(),
+                entity.getTeamId(),
+                entity.getNoteNo(),
+                entity.getTitle(),
+                null
+        );
+    }
+
+    private void deleteDocumentIndex(MeetingNote entity) {
+        if (documentIndexSyncService == null) {
+            return;
+        }
+        documentIndexSyncService.delete(
+                "MEETING_NOTE",
+                entity.getId(),
+                entity.getTeamId()
+        );
     }
 }
