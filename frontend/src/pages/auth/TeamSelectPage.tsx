@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import AuthLayout from '@/components/layout/AuthLayout'
+import InviteCodeCard from '@/components/team/InviteCodeCard'
 import { useCreateTeamMutation, useJoinTeamMutation } from '@/features/auth/mutations'
 import { useAuthStore } from '@/stores/authStore'
 import type { Team } from '@/types/auth'
@@ -37,9 +38,16 @@ type JoinTeamValues = z.infer<typeof joinTeamSchema>
 export default function TeamSelectPage() {
   const navigate = useNavigate()
   const [mode, setMode] = useState<Mode>(null)
+  const [createdTeam, setCreatedTeam] = useState<Team | null>(null)
   const { teams, addTeam, setCurrentTeam } = useAuthStore()
 
-  const handleSuccess = (team: Team) => {
+  const handleCreateSuccess = (team: Team) => {
+    addTeam(team)
+    setCreatedTeam(team)
+    setMode('create')
+  }
+
+  const handleJoinSuccess = (team: Team) => {
     addTeam(team)
     navigate('/dashboard', { replace: true })
   }
@@ -95,10 +103,28 @@ export default function TeamSelectPage() {
 
       {/* 인라인 폼 */}
       {mode === 'create' && (
-        <CreateTeamForm onSuccess={handleSuccess} />
+        <div className="space-y-3">
+          <CreateTeamForm onSuccess={handleCreateSuccess} />
+          {createdTeam && (
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <InviteCodeCard
+                inviteCode={createdTeam.inviteCode}
+                title="생성된 팀 초대 코드"
+                description="팀원을 초대할 때 아래 코드를 공유하세요."
+              />
+              <Button
+                type="button"
+                onClick={() => navigate('/dashboard', { replace: true })}
+                className="w-full mt-3 h-9 bg-brand hover:bg-brand-hover text-white text-sm font-semibold transition-colors"
+              >
+                대시보드로 이동
+              </Button>
+            </div>
+          )}
+        </div>
       )}
       {mode === 'join' && (
-        <JoinTeamForm onSuccess={handleSuccess} />
+        <JoinTeamForm onSuccess={handleJoinSuccess} />
       )}
 
       <div className="mt-6 pt-5 border-t border-gray-100">

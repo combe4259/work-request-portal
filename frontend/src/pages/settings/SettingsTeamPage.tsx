@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { EmptyState, ErrorState, LoadingState } from '@/components/common/AsyncState'
+import InviteCodeCard from '@/components/team/InviteCodeCard'
 import { useRemoveTeamMemberMutation, useUpdateTeamMemberRoleMutation } from '@/features/auth/mutations'
 import { useTeamMembersQuery } from '@/features/auth/queries'
 import { useAuthStore } from '@/stores/authStore'
@@ -23,12 +24,14 @@ const ROLE_OPTIONS: TeamRole[] = ['OWNER', 'ADMIN', 'MEMBER']
 
 export default function SettingsTeamPage() {
   const navigate = useNavigate()
-  const { currentTeam, user } = useAuthStore()
+  const { currentTeam, teams, user } = useAuthStore()
   const [confirmId, setConfirmId] = useState<number | null>(null)
   const [updatingRoleUserId, setUpdatingRoleUserId] = useState<number | null>(null)
   const [serverError, setServerError] = useState<string | null>(null)
 
   const teamId = currentTeam?.id
+  const canManageMembers = currentTeam?.teamRole === 'OWNER'
+  const inviteCode = currentTeam?.inviteCode ?? teams.find((team) => team.id === teamId)?.inviteCode
   const membersQuery = useTeamMembersQuery(teamId)
   const removeMutation = useRemoveTeamMemberMutation(teamId)
   const updateRoleMutation = useUpdateTeamMemberRoleMutation(teamId)
@@ -90,6 +93,14 @@ export default function SettingsTeamPage() {
         </div>
       )}
 
+      <div className="mb-4">
+        <InviteCodeCard
+          inviteCode={inviteCode}
+          title="팀 초대 코드"
+          description="새 멤버에게 이 코드를 전달하면 팀에 참여할 수 있습니다."
+        />
+      </div>
+
       <div className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_12px_rgba(30,58,138,0.07)] overflow-hidden">
         {membersQuery.isPending ? (
           <LoadingState title="팀 멤버를 불러오는 중입니다" description="잠시만 기다려주세요." />
@@ -107,7 +118,12 @@ export default function SettingsTeamPage() {
         ) : (
           <>
             <div className="px-5 py-3 bg-gray-50/70 border-b border-gray-100">
-              <p className="text-[12px] text-gray-500">총 {membersQuery.data?.length ?? 0}명</p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[12px] text-gray-500">총 {membersQuery.data?.length ?? 0}명</p>
+                {!canManageMembers && (
+                  <p className="text-[11px] text-gray-400">멤버 권한 변경/제거는 OWNER만 가능합니다.</p>
+                )}
+              </div>
             </div>
 
             <table className="w-full">
@@ -140,9 +156,9 @@ export default function SettingsTeamPage() {
 
                     <td className="px-4 py-3">
                       {member.userId === user?.id ? (
-                        <span className={`inline-flex text-[11px] font-medium px-2 py-0.5 rounded-full ${ROLE_BADGE[member.teamRole] ?? 'bg-gray-100 text-gray-500'}`}>
-                          {ROLE_LABEL[member.teamRole] ?? member.teamRole}
-                        </span>
+                        <RoleBadge role={member.teamRole} />
+                      ) : !canManageMembers ? (
+                        <RoleBadge role={member.teamRole} />
                       ) : (
                         <select
                           value={member.teamRole}
@@ -167,6 +183,8 @@ export default function SettingsTeamPage() {
                     <td className="px-4 py-3 text-right">
                       {member.userId === user?.id ? (
                         <span className="text-[11px] text-gray-400">나</span>
+                      ) : !canManageMembers ? (
+                        <span className="text-[11px] text-gray-300">-</span>
                       ) : confirmId === member.userId ? (
                         <div className="flex items-center justify-end gap-2">
                           <span className="text-[11px] text-gray-500">제거할까요?</span>
@@ -203,6 +221,14 @@ export default function SettingsTeamPage() {
         )}
       </div>
     </div>
+  )
+}
+
+function RoleBadge({ role }: { role: string }) {
+  return (
+    <span className={`inline-flex text-[11px] font-medium px-2 py-0.5 rounded-full ${ROLE_BADGE[role] ?? 'bg-gray-100 text-gray-500'}`}>
+      {ROLE_LABEL[role] ?? role}
+    </span>
   )
 }
 
