@@ -19,6 +19,7 @@ import org.example.domain.techTask.repository.TechTaskRelatedRefRepository;
 import org.example.domain.techTask.repository.TechTaskRepository;
 import org.example.domain.workRequest.entity.WorkRequest;
 import org.example.domain.workRequest.repository.WorkRequestRepository;
+import org.example.global.util.DocumentNoGenerator;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -59,6 +60,9 @@ class TechTaskServiceImplTest {
 
     @Mock
     private WorkRequestRepository workRequestRepository;
+
+    @Mock
+    private DocumentNoGenerator documentNoGenerator;
 
     @InjectMocks
     private TechTaskServiceImpl techTaskService;
@@ -141,6 +145,7 @@ class TechTaskServiceImplTest {
             task.setId(100L);
             return task;
         });
+        when(documentNoGenerator.next("TK")).thenReturn("TK-001");
 
         Long createdId = techTaskService.create(request);
 
@@ -148,7 +153,7 @@ class TechTaskServiceImplTest {
         TechTask saved = techTaskCaptor.getValue();
 
         assertThat(createdId).isEqualTo(100L);
-        assertThat(saved.getTaskNo()).startsWith("TK-");
+        assertThat(saved.getTaskNo()).isEqualTo("TK-001");
         assertThat(saved.getType()).isEqualTo("기타");
         assertThat(saved.getPriority()).isEqualTo("보통");
         assertThat(saved.getStatus()).isEqualTo("접수대기");

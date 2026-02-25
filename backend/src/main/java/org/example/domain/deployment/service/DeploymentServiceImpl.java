@@ -26,6 +26,7 @@ import org.example.domain.testScenario.entity.TestScenario;
 import org.example.domain.testScenario.repository.TestScenarioRepository;
 import org.example.domain.workRequest.entity.WorkRequest;
 import org.example.domain.workRequest.repository.WorkRequestRepository;
+import org.example.global.util.DocumentNoGenerator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -51,6 +52,7 @@ public class DeploymentServiceImpl implements DeploymentService {
     private final TechTaskRepository techTaskRepository;
     private final TestScenarioRepository testScenarioRepository;
     private final DefectRepository defectRepository;
+    private final DocumentNoGenerator documentNoGenerator;
 
     public DeploymentServiceImpl(
             DeploymentRepository deploymentRepository,
@@ -59,7 +61,8 @@ public class DeploymentServiceImpl implements DeploymentService {
             WorkRequestRepository workRequestRepository,
             TechTaskRepository techTaskRepository,
             TestScenarioRepository testScenarioRepository,
-            DefectRepository defectRepository
+            DefectRepository defectRepository,
+            DocumentNoGenerator documentNoGenerator
     ) {
         this.deploymentRepository = deploymentRepository;
         this.deploymentRelatedRefRepository = deploymentRelatedRefRepository;
@@ -68,6 +71,7 @@ public class DeploymentServiceImpl implements DeploymentService {
         this.techTaskRepository = techTaskRepository;
         this.testScenarioRepository = testScenarioRepository;
         this.defectRepository = defectRepository;
+        this.documentNoGenerator = documentNoGenerator;
     }
 
     @Override
@@ -89,7 +93,7 @@ public class DeploymentServiceImpl implements DeploymentService {
         validateCreateRequest(request);
 
         Deployment deployment = DeploymentMapper.fromCreateRequest(request);
-        deployment.setDeployNo("DP-" + System.currentTimeMillis());
+        deployment.setDeployNo(documentNoGenerator.next("DP"));
         deployment.setType(normalizeType(request.type()));
         deployment.setEnvironment(normalizeEnvironment(request.environment()));
         deployment.setStatus(normalizeStatus(request.status()));

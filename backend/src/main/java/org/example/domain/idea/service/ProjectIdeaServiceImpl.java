@@ -17,6 +17,7 @@ import org.example.domain.idea.repository.ProjectIdeaRepository;
 import org.example.domain.user.entity.PortalUser;
 import org.example.domain.user.repository.PortalUserRepository;
 import org.example.global.security.JwtTokenProvider;
+import org.example.global.util.DocumentNoGenerator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -35,6 +36,7 @@ public class ProjectIdeaServiceImpl implements ProjectIdeaService {
     private final IdeaVoteRepository ideaVoteRepository;
     private final PortalUserRepository portalUserRepository;
     private final JwtTokenProvider jwtTokenProvider;
+    private final DocumentNoGenerator documentNoGenerator;
     private final ObjectMapper objectMapper;
 
     public ProjectIdeaServiceImpl(
@@ -42,12 +44,14 @@ public class ProjectIdeaServiceImpl implements ProjectIdeaService {
             IdeaVoteRepository ideaVoteRepository,
             PortalUserRepository portalUserRepository,
             JwtTokenProvider jwtTokenProvider,
+            DocumentNoGenerator documentNoGenerator,
             ObjectMapper objectMapper
     ) {
         this.projectIdeaRepository = projectIdeaRepository;
         this.ideaVoteRepository = ideaVoteRepository;
         this.portalUserRepository = portalUserRepository;
         this.jwtTokenProvider = jwtTokenProvider;
+        this.documentNoGenerator = documentNoGenerator;
         this.objectMapper = objectMapper;
     }
 
@@ -73,7 +77,7 @@ public class ProjectIdeaServiceImpl implements ProjectIdeaService {
         String benefitsJson = toJsonList(request.benefits());
 
         ProjectIdea entity = ProjectIdeaMapper.fromCreateRequest(request, benefitsJson);
-        entity.setIdeaNo("ID-" + System.currentTimeMillis());
+        entity.setIdeaNo(documentNoGenerator.next("ID"));
         entity.setCategory(normalizeCategory(request.category()));
         entity.setStatus(normalizeStatus(defaultIfBlank(request.status(), "제안됨")));
         entity.setStatusNote(normalizeNullable(request.statusNote()));

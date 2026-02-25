@@ -9,6 +9,7 @@ import org.example.domain.workRequest.entity.WorkRequest;
 import org.example.domain.workRequest.mapper.WorkRequestMapper;
 import org.example.domain.workRequest.repository.WorkRequestQueryRepository;
 import org.example.domain.workRequest.repository.WorkRequestRepository;
+import org.example.global.util.DocumentNoGenerator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -22,13 +23,16 @@ public class WorkRequestServiceImpl implements WorkRequestService {
     private final WorkRequestRepository workRequestRepository;
     @SuppressWarnings("unused")
     private final WorkRequestQueryRepository workRequestQueryRepository;
+    private final DocumentNoGenerator documentNoGenerator;
 
     public WorkRequestServiceImpl(
             WorkRequestRepository workRequestRepository,
-            WorkRequestQueryRepository workRequestQueryRepository
+            WorkRequestQueryRepository workRequestQueryRepository,
+            DocumentNoGenerator documentNoGenerator
     ) {
         this.workRequestRepository = workRequestRepository;
         this.workRequestQueryRepository = workRequestQueryRepository;
+        this.documentNoGenerator = documentNoGenerator;
     }
 
     @Override
@@ -50,8 +54,7 @@ public class WorkRequestServiceImpl implements WorkRequestService {
     public Long create(WorkRequestCreateRequest request) {
         WorkRequest entity = WorkRequestMapper.fromCreateRequest(request);
 
-        // TODO: document_sequences 기반 채번으로 대체
-        entity.setRequestNo("WR-" + (System.currentTimeMillis() / 1000));
+        entity.setRequestNo(documentNoGenerator.next("WR"));
         entity.setType(defaultIfBlank(request.type(), "기능개선"));
         entity.setPriority(defaultIfBlank(request.priority(), "보통"));
         entity.setStatus(defaultIfBlank(request.status(), "접수대기"));

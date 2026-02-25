@@ -20,6 +20,7 @@ import org.example.domain.techTask.repository.TechTaskRelatedRefRepository;
 import org.example.domain.techTask.repository.TechTaskRepository;
 import org.example.domain.workRequest.entity.WorkRequest;
 import org.example.domain.workRequest.repository.WorkRequestRepository;
+import org.example.global.util.DocumentNoGenerator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -41,17 +42,20 @@ public class TechTaskServiceImpl implements TechTaskService {
     private final TechTaskRelatedRefRepository techTaskRelatedRefRepository;
     private final TechTaskPrLinkRepository techTaskPrLinkRepository;
     private final WorkRequestRepository workRequestRepository;
+    private final DocumentNoGenerator documentNoGenerator;
 
     public TechTaskServiceImpl(
             TechTaskRepository techTaskRepository,
             TechTaskRelatedRefRepository techTaskRelatedRefRepository,
             TechTaskPrLinkRepository techTaskPrLinkRepository,
-            WorkRequestRepository workRequestRepository
+            WorkRequestRepository workRequestRepository,
+            DocumentNoGenerator documentNoGenerator
     ) {
         this.techTaskRepository = techTaskRepository;
         this.techTaskRelatedRefRepository = techTaskRelatedRefRepository;
         this.techTaskPrLinkRepository = techTaskPrLinkRepository;
         this.workRequestRepository = workRequestRepository;
+        this.documentNoGenerator = documentNoGenerator;
     }
 
     @Override
@@ -73,8 +77,7 @@ public class TechTaskServiceImpl implements TechTaskService {
     public Long create(TechTaskCreateRequest request) {
         TechTask entity = TechTaskMapper.fromCreateRequest(request);
 
-        // TODO: document_sequences 기반 채번으로 대체
-        entity.setTaskNo("TK-" + (System.currentTimeMillis() / 1000));
+        entity.setTaskNo(documentNoGenerator.next("TK"));
         entity.setType(defaultIfBlank(request.type(), "기타"));
         entity.setPriority(defaultIfBlank(request.priority(), "보통"));
         entity.setStatus(defaultIfBlank(request.status(), "접수대기"));

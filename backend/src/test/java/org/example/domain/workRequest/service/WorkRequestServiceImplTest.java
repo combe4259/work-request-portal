@@ -8,6 +8,7 @@ import org.example.domain.workRequest.dto.WorkRequestUpdateRequest;
 import org.example.domain.workRequest.entity.WorkRequest;
 import org.example.domain.workRequest.repository.WorkRequestQueryRepository;
 import org.example.domain.workRequest.repository.WorkRequestRepository;
+import org.example.global.util.DocumentNoGenerator;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,6 +41,9 @@ class WorkRequestServiceImplTest {
 
     @Mock
     private WorkRequestQueryRepository workRequestQueryRepository;
+
+    @Mock
+    private DocumentNoGenerator documentNoGenerator;
 
     @InjectMocks
     private WorkRequestServiceImpl workRequestService;
@@ -121,6 +125,7 @@ class WorkRequestServiceImplTest {
             wr.setId(100L);
             return wr;
         });
+        when(documentNoGenerator.next("WR")).thenReturn("WR-001");
 
         Long createdId = workRequestService.create(request);
 
@@ -128,7 +133,7 @@ class WorkRequestServiceImplTest {
         WorkRequest saved = workRequestCaptor.getValue();
 
         assertThat(createdId).isEqualTo(100L);
-        assertThat(saved.getRequestNo()).startsWith("WR-");
+        assertThat(saved.getRequestNo()).isEqualTo("WR-001");
         assertThat(saved.getType()).isEqualTo("기능개선");
         assertThat(saved.getPriority()).isEqualTo("보통");
         assertThat(saved.getStatus()).isEqualTo("접수대기");

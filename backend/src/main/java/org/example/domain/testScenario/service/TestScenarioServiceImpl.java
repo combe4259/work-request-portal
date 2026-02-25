@@ -8,6 +8,7 @@ import org.example.domain.testScenario.dto.TestScenarioUpdateRequest;
 import org.example.domain.testScenario.entity.TestScenario;
 import org.example.domain.testScenario.mapper.TestScenarioMapper;
 import org.example.domain.testScenario.repository.TestScenarioRepository;
+import org.example.global.util.DocumentNoGenerator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -21,9 +22,14 @@ import org.springframework.web.server.ResponseStatusException;
 public class TestScenarioServiceImpl implements TestScenarioService {
 
     private final TestScenarioRepository testScenarioRepository;
+    private final DocumentNoGenerator documentNoGenerator;
 
-    public TestScenarioServiceImpl(TestScenarioRepository testScenarioRepository) {
+    public TestScenarioServiceImpl(
+            TestScenarioRepository testScenarioRepository,
+            DocumentNoGenerator documentNoGenerator
+    ) {
         this.testScenarioRepository = testScenarioRepository;
+        this.documentNoGenerator = documentNoGenerator;
     }
 
     @Override
@@ -47,8 +53,7 @@ public class TestScenarioServiceImpl implements TestScenarioService {
 
         TestScenario entity = TestScenarioMapper.fromCreateRequest(request);
 
-        // TODO: document_sequences 기반 채번으로 대체
-        entity.setScenarioNo("TS-" + System.currentTimeMillis());
+        entity.setScenarioNo(documentNoGenerator.next("TS"));
         entity.setType(defaultIfBlank(request.type(), "기능"));
         entity.setPriority(defaultIfBlank(request.priority(), "보통"));
         entity.setStatus(defaultIfBlank(request.status(), "작성중"));

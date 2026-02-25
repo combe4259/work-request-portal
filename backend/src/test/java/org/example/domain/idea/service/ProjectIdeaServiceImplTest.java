@@ -14,6 +14,7 @@ import org.example.domain.idea.repository.ProjectIdeaRepository;
 import org.example.domain.user.entity.PortalUser;
 import org.example.domain.user.repository.PortalUserRepository;
 import org.example.global.security.JwtTokenProvider;
+import org.example.global.util.DocumentNoGenerator;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -54,6 +55,9 @@ class ProjectIdeaServiceImplTest {
 
     @Mock
     private JwtTokenProvider jwtTokenProvider;
+
+    @Mock
+    private DocumentNoGenerator documentNoGenerator;
 
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();
@@ -131,6 +135,7 @@ class ProjectIdeaServiceImplTest {
             row.setId(100L);
             return row;
         });
+        when(documentNoGenerator.next("ID")).thenReturn("ID-001");
 
         Long createdId = projectIdeaService.create(request);
 
@@ -138,7 +143,7 @@ class ProjectIdeaServiceImplTest {
         ProjectIdea saved = projectIdeaCaptor.getValue();
 
         assertThat(createdId).isEqualTo(100L);
-        assertThat(saved.getIdeaNo()).startsWith("ID-");
+        assertThat(saved.getIdeaNo()).isEqualTo("ID-001");
         assertThat(saved.getCategory()).isEqualTo("기타");
         assertThat(saved.getStatus()).isEqualTo("제안됨");
         assertThat(saved.getStatusNote()).isNull();

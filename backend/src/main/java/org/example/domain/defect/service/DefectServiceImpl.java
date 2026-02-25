@@ -8,6 +8,7 @@ import org.example.domain.defect.dto.DefectUpdateRequest;
 import org.example.domain.defect.entity.Defect;
 import org.example.domain.defect.mapper.DefectMapper;
 import org.example.domain.defect.repository.DefectRepository;
+import org.example.global.util.DocumentNoGenerator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -23,9 +24,14 @@ import java.util.Locale;
 public class DefectServiceImpl implements DefectService {
 
     private final DefectRepository defectRepository;
+    private final DocumentNoGenerator documentNoGenerator;
 
-    public DefectServiceImpl(DefectRepository defectRepository) {
+    public DefectServiceImpl(
+            DefectRepository defectRepository,
+            DocumentNoGenerator documentNoGenerator
+    ) {
         this.defectRepository = defectRepository;
+        this.documentNoGenerator = documentNoGenerator;
     }
 
     @Override
@@ -49,8 +55,7 @@ public class DefectServiceImpl implements DefectService {
 
         Defect entity = DefectMapper.fromCreateRequest(request);
 
-        // TODO: document_sequences 기반 채번으로 대체
-        entity.setDefectNo("DF-" + System.currentTimeMillis());
+        entity.setDefectNo(documentNoGenerator.next("DF"));
         entity.setType(defaultIfBlank(request.type(), "기능"));
         entity.setSeverity(defaultIfBlank(request.severity(), "보통"));
         entity.setStatus(defaultIfBlank(request.status(), "접수"));
