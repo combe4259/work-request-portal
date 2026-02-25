@@ -3,7 +3,9 @@ import { Client } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ErrorState, LoadingState } from '@/components/common/AsyncState'
+import ConfirmDialog from '@/components/common/ConfirmDialog'
 import { useTeamMembersQuery } from '@/features/auth/queries'
+import { useDeleteMeetingNoteMutation } from '@/features/meeting-note/mutations'
 import { useMeetingNoteDetailQuery } from '@/features/meeting-note/queries'
 import { updateMeetingNote } from '@/features/meeting-note/service'
 import { useAuthStore } from '@/stores/authStore'
@@ -121,6 +123,8 @@ export default function MeetingNoteDetailPage() {
   const saveSeqRef = useRef(0)
   const currentUser = useAuthStore((state) => state.user)
   const currentTeam = useAuthStore((state) => state.currentTeam)
+  const deleteMeetingNote = useDeleteMeetingNoteMutation()
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const { data: fetchedDoc, isPending, isError, refetch } = useMeetingNoteDetailQuery(hasValidId ? numericId : undefined)
   const teamMembersQuery = useTeamMembersQuery(currentTeam?.id)
   const isDocLoaded = fetchedDoc != null
@@ -551,6 +555,15 @@ export default function MeetingNoteDetailPage() {
               </div>
               <span className="text-[11px] text-gray-400">{collaborators.length}명 편집 중</span>
             </div>
+
+            <button
+              type="button"
+              onClick={() => setDeleteOpen(true)}
+              className="h-8 px-3 rounded-lg border border-rose-200 text-[12px] font-semibold text-rose-600 hover:bg-rose-50 transition-colors"
+              disabled={deleteMeetingNote.isPending}
+            >
+              삭제
+            </button>
           </div>
         </div>
 
@@ -846,6 +859,21 @@ export default function MeetingNoteDetailPage() {
           </DocSection>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="회의록을 삭제할까요?"
+        description="삭제 후에는 복구할 수 없습니다."
+        confirmText={deleteMeetingNote.isPending ? '삭제 중...' : '삭제'}
+        cancelText="취소"
+        onConfirm={() => {
+          if (!hasValidId) return
+          void deleteMeetingNote.mutateAsync(numericId).then(() => {
+            navigate('/meeting-notes')
+          })
+        }}
+      />
     </div>
   )
 }

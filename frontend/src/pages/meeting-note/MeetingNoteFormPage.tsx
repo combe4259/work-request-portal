@@ -1,12 +1,13 @@
+import { useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { FormField } from '@/components/common/FormField'
 import { inputCls, selectCls } from '@/lib/formStyles'
+import { useTeamMembersQuery } from '@/features/auth/queries'
 import { useCreateMeetingNoteMutation } from '@/features/meeting-note/mutations'
-
-const FACILITATORS = ['박PM', '이설계', '김개발', '최설계', '최HR', '박디자인']
+import { useAuthStore } from '@/stores/authStore'
 
 const schema = z.object({
   title: z.string().min(1, '회의 제목을 입력해주세요'),
@@ -19,15 +20,38 @@ type FormValues = z.infer<typeof schema>
 export default function MeetingNoteFormPage() {
   const navigate = useNavigate()
   const createMeetingNote = useCreateMeetingNoteMutation()
+  const currentUser = useAuthStore((state) => state.user)
+  const currentTeam = useAuthStore((state) => state.currentTeam)
+  const teamMembersQuery = useTeamMembersQuery(currentTeam?.id)
 
-  const { register, handleSubmit, formState: { errors } } = useForm<FormValues>({
+  const facilitatorOptions = useMemo(() => {
+    const names = new Set<string>()
+    if (currentUser?.name) {
+      names.add(currentUser.name)
+    }
+    ;(teamMembersQuery.data ?? []).forEach((member) => {
+      names.add(member.name)
+    })
+    return Array.from(names)
+  }, [currentUser?.name, teamMembersQuery.data])
+
+  const { register, handleSubmit, getValues, setValue, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       title: '',
       date: new Date().toISOString().split('T')[0],
-      facilitator: FACILITATORS[0],
+      facilitator: currentUser?.name ?? '',
     },
   })
+
+  useEffect(() => {
+    if (facilitatorOptions.length === 0) {
+      return
+    }
+    if (!getValues('facilitator')) {
+      setValue('facilitator', facilitatorOptions[0])
+    }
+  }, [facilitatorOptions, getValues, setValue])
 
   const onSubmit = async (data: FormValues) => {
     const created = await createMeetingNote.mutateAsync({
@@ -82,8 +106,9 @@ export default function MeetingNoteFormPage() {
 
             <FormField label="진행자" required error={errors.facilitator?.message}>
               <select {...register('facilitator')} className={selectCls(!!errors.facilitator)}>
-                {FACILITATORS.map((f) => (
-                  <option key={f} value={f}>{f}</option>
+                <option value="">선택</option>
+                {facilitatorOptions.map((name) => (
+                  <option key={name} value={name}>{name}</option>
                 ))}
               </select>
             </FormField>

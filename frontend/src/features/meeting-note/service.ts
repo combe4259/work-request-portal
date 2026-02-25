@@ -1,5 +1,6 @@
 import api from '@/lib/api'
 import { useAuthStore } from '@/stores/authStore'
+import { resolveTeamMemberIdByName } from '@/features/auth/memberResolver'
 import type { ActionItem, MeetingNote, MeetingNoteDetail, RelatedDoc } from '@/types/meeting-note'
 
 export type MeetingNoteSortKey = 'docNo' | 'date'
@@ -327,10 +328,12 @@ export async function createMeetingNote(input: CreateMeetingNoteInput): Promise<
     throw new Error('현재 로그인 사용자 또는 팀 정보가 없습니다.')
   }
 
+  const facilitatorId = await resolveTeamMemberIdByName(currentTeam.id, input.facilitator)
+
   const payload: ApiMeetingNoteCreateRequest = {
     title: input.title,
     meetingDate: input.date,
-    facilitatorId: user.id,
+    facilitatorId: facilitatorId ?? user.id,
     agenda: [],
     content: '',
     decisions: [],
@@ -370,4 +373,8 @@ export async function updateMeetingNote(id: string | number, input: UpdateMeetin
   }
 
   await api.put(`/meeting-notes/${id}`, payload)
+}
+
+export async function deleteMeetingNote(id: string | number): Promise<void> {
+  await api.delete(`/meeting-notes/${id}`)
 }
