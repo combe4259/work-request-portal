@@ -1,12 +1,15 @@
+import { useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import type { ResourceCategory } from '@/types/resource'
 import { FormField } from '@/components/common/FormField'
+import { ErrorState, LoadingState } from '@/components/common/AsyncState'
 import { inputCls, textareaCls } from '@/lib/formStyles'
+import { useCreateResourceMutation, useUpdateResourceMutation } from '@/features/resource/mutations'
+import { useResourceQuery } from '@/features/resource/queries'
 
-// ── 스키마 ───────────────────────────────────────────
 const schema = z.object({
   title: z.string().min(1, '제목을 입력해주세요').max(100, '제목은 100자 이하여야 합니다'),
   url: z.string().min(1, 'URL을 입력해주세요').url('올바른 URL 형식이 아닙니다'),
@@ -16,56 +19,99 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>
 
-// ── Mock 기존 데이터 (편집 시 로드) ──────────────────
-const MOCK_EXISTING: Record<string, FormValues> = {
-  '1': { title: 'PDA 업무요청 포털 UI 디자인', url: 'https://www.figma.com/design/example-pda-portal', category: 'Figma', description: '전체 화면 레이아웃, 컴포넌트 라이브러리, 색상 가이드 포함.' },
-  '2': { title: '프론트엔드 소스 코드 저장소', url: 'https://github.com/example/work-request-portal', category: 'GitHub', description: 'React + TypeScript + Vite 기반 포털 프론트엔드.' },
-  '3': { title: '업무 프로세스 가이드', url: 'https://confluence.example.com/pages/work-process', category: 'Confluence', description: '업무요청 접수부터 완료까지 표준 프로세스 정의.' },
-  '4': { title: '기획 및 요구사항 문서', url: 'https://www.notion.so/example/requirements', category: 'Notion', description: '시스템 요구사항 정의서(SRS), 화면 기획서, 사용자 스토리 정리.' },
-  '5': { title: 'API 명세서 v2.1', url: 'https://confluence.example.com/pages/api-spec', category: 'Confluence', description: 'REST API 엔드포인트 목록, 요청/응답 스키마, 인증 방식 안내.' },
-  '6': { title: '테스트 계획서 2026 Q1', url: 'https://docs.example.com/test-plan-q1', category: '문서', description: '1분기 릴리즈 대상 기능 목록, 테스트 범위, 일정, 환경 구성 포함.' },
-  '7': { title: '인프라 아키텍처 다이어그램', url: 'https://www.figma.com/design/example-infra', category: 'Figma', description: 'AWS 기반 서비스 구성도, 네트워크 토폴로지 다이어그램.' },
-  '8': { title: '코딩 컨벤션 가이드', url: 'https://www.notion.so/example/coding-convention', category: 'Notion', description: 'TypeScript 스타일 가이드, 폴더 구조 규칙, 컴포넌트 네이밍.' },
-}
-
 const CATEGORY_STYLES: Record<ResourceCategory, { active: string; inactive: string }> = {
-  Figma:      { active: 'bg-pink-500 text-white border-pink-500',     inactive: 'bg-pink-50 text-pink-600 border-pink-100 hover:border-pink-300' },
-  GitHub:     { active: 'bg-gray-700 text-white border-gray-700',     inactive: 'bg-gray-100 text-gray-600 border-gray-200 hover:border-gray-400' },
-  Confluence: { active: 'bg-blue-500 text-white border-blue-500',     inactive: 'bg-blue-50 text-blue-600 border-blue-100 hover:border-blue-300' },
-  Notion:     { active: 'bg-slate-700 text-white border-slate-700',   inactive: 'bg-slate-100 text-slate-600 border-slate-200 hover:border-slate-400' },
-  '문서':     { active: 'bg-indigo-500 text-white border-indigo-500', inactive: 'bg-indigo-50 text-indigo-600 border-indigo-100 hover:border-indigo-300' },
-  '기타':     { active: 'bg-gray-500 text-white border-gray-500',     inactive: 'bg-gray-50 text-gray-500 border-gray-200 hover:border-gray-400' },
+  Figma: { active: 'bg-pink-500 text-white border-pink-500', inactive: 'bg-pink-50 text-pink-600 border-pink-100 hover:border-pink-300' },
+  GitHub: { active: 'bg-gray-700 text-white border-gray-700', inactive: 'bg-gray-100 text-gray-600 border-gray-200 hover:border-gray-400' },
+  Confluence: { active: 'bg-blue-500 text-white border-blue-500', inactive: 'bg-blue-50 text-blue-600 border-blue-100 hover:border-blue-300' },
+  Notion: { active: 'bg-slate-700 text-white border-slate-700', inactive: 'bg-slate-100 text-slate-600 border-slate-200 hover:border-slate-400' },
+  문서: { active: 'bg-indigo-500 text-white border-indigo-500', inactive: 'bg-indigo-50 text-indigo-600 border-indigo-100 hover:border-indigo-300' },
+  기타: { active: 'bg-gray-500 text-white border-gray-500', inactive: 'bg-gray-50 text-gray-500 border-gray-200 hover:border-gray-400' },
 }
 
 export default function ResourceFormPage() {
   const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
-  const isEdit = !!id
-  const existing = id ? MOCK_EXISTING[id] : undefined
+  const isEdit = id != null
+
+  const createResource = useCreateResourceMutation()
+  const updateResource = useUpdateResourceMutation()
+  const resourceQuery = useResourceQuery(id)
 
   const {
     register,
     handleSubmit,
+    reset,
     watch,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: existing ?? { category: 'Figma' },
+    defaultValues: { category: 'Figma' },
   })
+
+  useEffect(() => {
+    if (resourceQuery.data) {
+      reset({
+        title: resourceQuery.data.title,
+        url: resourceQuery.data.url,
+        category: resourceQuery.data.category,
+        description: resourceQuery.data.description,
+      })
+    }
+  }, [resourceQuery.data, reset])
 
   const urlValue = watch('url') ?? ''
   const descValue = watch('description') ?? ''
 
-  const onSubmit = async (_data: FormValues) => {
-    // TODO: API 연동
+  const onSubmit = async (data: FormValues) => {
+    if (isEdit && id) {
+      await updateResource.mutateAsync({
+        id,
+        title: data.title,
+        url: data.url,
+        category: data.category,
+        description: data.description,
+      })
+      navigate('/resources')
+      return
+    }
+
+    await createResource.mutateAsync({
+      title: data.title,
+      url: data.url,
+      category: data.category,
+      description: data.description,
+    })
     navigate('/resources')
   }
+
+  if (isEdit && resourceQuery.isPending) {
+    return (
+      <div className="p-6">
+        <LoadingState title="리소스 정보를 불러오는 중입니다" description="잠시만 기다려주세요." />
+      </div>
+    )
+  }
+
+  if (isEdit && resourceQuery.isError) {
+    return (
+      <div className="p-6">
+        <ErrorState
+          title="리소스 정보를 불러오지 못했습니다"
+          description="잠시 후 다시 시도해주세요."
+          actionLabel="다시 시도"
+          onAction={() => {
+            void resourceQuery.refetch()
+          }}
+        />
+      </div>
+    )
+  }
+
+  const isMutating = isSubmitting || createResource.isPending || updateResource.isPending
 
   return (
     <div className="min-h-full p-6 flex flex-col items-center">
       <div className="w-full max-w-[720px]">
-
-        {/* 헤더 */}
         <div className="flex items-center gap-3 mb-5">
           <button
             onClick={() => navigate(-1)}
@@ -81,17 +127,14 @@ export default function ResourceFormPage() {
 
         <form onSubmit={handleSubmit(onSubmit)} noValidate>
           <div className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_12px_rgba(30,58,138,0.07)] p-6 space-y-5">
-
-            {/* 제목 */}
             <FormField label="제목" required error={errors.title?.message}>
               <input
                 {...register('title')}
                 placeholder="리소스 제목을 입력해주세요"
-                className={inputCls(!!errors.title)}
+                className={inputCls(Boolean(errors.title))}
               />
             </FormField>
 
-            {/* URL */}
             <FormField label="URL" required error={errors.url?.message}>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
@@ -100,7 +143,7 @@ export default function ResourceFormPage() {
                 <input
                   {...register('url')}
                   placeholder="https://"
-                  className={`${inputCls(!!errors.url)} pl-8 font-mono`}
+                  className={`${inputCls(Boolean(errors.url))} pl-8 font-mono`}
                 />
               </div>
               {urlValue && !errors.url && (
@@ -115,16 +158,17 @@ export default function ResourceFormPage() {
               )}
             </FormField>
 
-            {/* 카테고리 */}
             <FormField label="카테고리" required error={errors.category?.message}>
               <div className="flex flex-wrap gap-2">
-                {(Object.keys(CATEGORY_STYLES) as ResourceCategory[]).map((cat) => (
-                  <label key={cat} className="cursor-pointer">
-                    <input type="radio" {...register('category')} value={cat} className="sr-only" />
-                    <span className={`inline-block px-3 py-1.5 rounded-lg border text-[12px] font-medium transition-colors ${
-                      watch('category') === cat ? CATEGORY_STYLES[cat].active : CATEGORY_STYLES[cat].inactive
-                    }`}>
-                      {cat}
+                {(Object.keys(CATEGORY_STYLES) as ResourceCategory[]).map((category) => (
+                  <label key={category} className="cursor-pointer">
+                    <input type="radio" {...register('category')} value={category} className="sr-only" />
+                    <span
+                      className={`inline-block px-3 py-1.5 rounded-lg border text-[12px] font-medium transition-colors ${
+                        watch('category') === category ? CATEGORY_STYLES[category].active : CATEGORY_STYLES[category].inactive
+                      }`}
+                    >
+                      {category}
                     </span>
                   </label>
                 ))}
@@ -133,22 +177,19 @@ export default function ResourceFormPage() {
 
             <div className="border-t border-gray-100" />
 
-            {/* 설명 */}
             <FormField label="설명" required error={errors.description?.message}>
               <div className="relative">
                 <textarea
                   {...register('description')}
                   placeholder="어떤 리소스인지 간략히 설명해주세요"
                   rows={3}
-                  className={`${textareaCls(!!errors.description)} resize-none`}
+                  className={`${textareaCls(Boolean(errors.description))} resize-none`}
                 />
                 <span className="absolute bottom-2.5 right-3 text-[11px] text-gray-300">{descValue.length} / 300</span>
               </div>
             </FormField>
-
           </div>
 
-          {/* 버튼 */}
           <div className="flex items-center justify-end gap-2 mt-4">
             <button
               type="button"
@@ -159,20 +200,27 @@ export default function ResourceFormPage() {
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isMutating}
               className="h-9 px-5 text-[13px] font-semibold text-white bg-brand hover:bg-brand-hover rounded-lg transition-colors disabled:opacity-60 flex items-center gap-2"
             >
-              {isSubmitting ? <><SpinnerIcon />{isEdit ? '수정 중...' : '등록 중...'}</> : isEdit ? '수정 완료' : '등록하기'}
+              {isMutating ? (
+                <>
+                  <SpinnerIcon />
+                  {isEdit ? '수정 중...' : '등록 중...'}
+                </>
+              ) : isEdit ? (
+                '수정 완료'
+              ) : (
+                '등록하기'
+              )}
             </button>
           </div>
         </form>
-
       </div>
     </div>
   )
 }
 
-// ── SVG 아이콘 ────────────────────────────────────────
 function BackIcon() {
   return <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M9 2.5L5 7L9 11.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
 }
