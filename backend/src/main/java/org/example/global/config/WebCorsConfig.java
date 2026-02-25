@@ -44,6 +44,6 @@ public class WebCorsConfig implements WebMvcConfigurer {
 
         registry.addInterceptor(teamAccessInterceptor)
                 .addPathPatterns("/api/**")
-                .excludePathPatterns("/api/auth/**", "/api/teams/**");
+                .excludePathPatterns("/api/auth/**", "/api/teams/**", "/api/users/me/**");
     }
 }

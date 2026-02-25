@@ -9,4 +9,6 @@ public interface PortalUserRepository extends JpaRepository<PortalUser, Long> {
     Optional<PortalUser> findByEmail(String email);
 
     boolean existsByEmail(String email);
+
+    boolean existsByEmailAndIdNot(String email, Long id);
 }

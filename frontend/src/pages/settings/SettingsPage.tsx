@@ -4,6 +4,15 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useProfileStore, AVATAR_COLOR_HEX } from '@/stores/profileStore'
 import { useAuthStore } from '@/stores/authStore'
+import {
+  changeMyPassword,
+  getMyPreferences,
+  getMyProfile,
+  updateMyPreferences,
+  updateMyProfile,
+  type SettingsRole,
+  type UserPreferencesResponse,
+} from '@/features/settings/service'
 
 // ── 탭 정의 ───────────────────────────────────────────
 type TabKey = 'profile' | 'notification' | 'security' | 'display'
@@ -18,6 +27,7 @@ const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
 // ── 프로필 스키마 ─────────────────────────────────────
 const ROLES = ['PM', 'CTO', '개발자', '디자이너', 'QA', '기획자'] as const
 type Role = typeof ROLES[number]
+const ROLE_SET = new Set<Role>(ROLES)
 
 const profileSchema = z.object({
   name:  z.string().min(1, '이름을 입력해주세요'),
@@ -62,15 +72,15 @@ const NOTIF_ITEMS = [
   { key: 'status',   label: '상태 변경',    desc: '담당 업무의 상태가 변경되면 알림' },
   { key: 'deploy',   label: '배포 완료',    desc: '연관 배포가 완료되면 알림' },
   { key: 'mention',  label: '멘션',         desc: '댓글에서 @멘션 되면 알림' },
-]
+] as const satisfies ReadonlyArray<{ key: keyof UserPreferencesResponse['notification']; label: string; desc: string }>
 
 // ── 화면 설정 옵션 ────────────────────────────────────
 const LANDING_OPTIONS = [
   { value: '/dashboard',    label: '대시보드' },
   { value: '/work-requests', label: '업무요청' },
   { value: '/tech-tasks',   label: '기술과제' },
-]
-const ROW_OPTIONS = [10, 20, 50]
+] as const satisfies ReadonlyArray<{ value: UserPreferencesResponse['display']['landing']; label: string }>
+const ROW_OPTIONS = [10, 20, 50] as const satisfies ReadonlyArray<UserPreferencesResponse['display']['rowCount']>
 
 // ── 공통 스타일 헬퍼 ──────────────────────────────────
 const inputCls = (hasError: boolean) =>
@@ -104,13 +114,40 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
 }
 
 // ── 저장 완료 토스트 ──────────────────────────────────
-function SaveToast({ visible }: { visible: boolean }) {
+function SaveToast({ visible, message, isError }: { visible: boolean; message: string; isError: boolean }) {
   return (
-    <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 bg-gray-900 text-white text-[12px] font-medium px-4 py-2.5 rounded-xl shadow-lg transition-all duration-300 ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}>
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" fill="#22C55E" /><path d="M4 7l2.5 2.5L10 5" stroke="white" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
-      저장되었습니다
+    <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 text-white text-[12px] font-medium px-4 py-2.5 rounded-xl shadow-lg transition-all duration-300 ${
+      isError ? 'bg-red-600' : 'bg-gray-900'
+    } ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}>
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <circle cx="7" cy="7" r="6" fill={isError ? '#F87171' : '#22C55E'} />
+        <path d={isError ? 'M4.6 4.6l4.8 4.8M9.4 4.6L4.6 9.4' : 'M4 7l2.5 2.5L10 5'} stroke="white" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      {message}
     </div>
   )
+}
+
+function normalizeRole(value: string | null | undefined): Role {
+  if (!value) {
+    return '개발자'
+  }
+  return ROLE_SET.has(value as Role) ? (value as Role) : '개발자'
+}
+
+function resolveErrorMessage(error: unknown, fallback: string): string {
+  if (typeof error === 'object' && error !== null) {
+    const responseMessage = (error as { response?: { data?: { message?: unknown } } }).response?.data?.message
+    if (typeof responseMessage === 'string' && responseMessage.trim().length > 0) {
+      return responseMessage
+    }
+  }
+
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message
+  }
+
+  return fallback
 }
 
 // ── 메인 ─────────────────────────────────────────────
@@ -119,23 +156,43 @@ export default function SettingsPage() {
   const { user } = useAuthStore()
   const [activeTab, setActiveTab] = useState<TabKey>('profile')
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [notifs, setNotifs] = useState<Record<string, boolean>>({
+  const toastTimerRef = useRef<number | null>(null)
+  const [notifs, setNotifs] = useState<UserPreferencesResponse['notification']>({
     assign: true, comment: true, deadline: true, status: false, deploy: true, mention: false,
   })
-  const [landing, setLanding] = useState('/dashboard')
-  const [rowCount, setRowCount] = useState(20)
-  const [toast, setToast] = useState(false)
+  const [landing, setLanding] = useState<UserPreferencesResponse['display']['landing']>('/dashboard')
+  const [rowCount, setRowCount] = useState<UserPreferencesResponse['display']['rowCount']>(20)
+  const [toast, setToast] = useState({ visible: false, message: '저장되었습니다', isError: false })
+  const [isLoading, setIsLoading] = useState(true)
+  const [isProfileSaving, setIsProfileSaving] = useState(false)
+  const [isPreferencesSaving, setIsPreferencesSaving] = useState(false)
+  const [isPasswordSaving, setIsPasswordSaving] = useState(false)
   const effectiveDisplayName = displayName || user?.name || ''
   const effectiveEmail = email || user?.email || ''
 
-  const showToast = () => {
-    setToast(true)
-    setTimeout(() => setToast(false), 2200)
+  const showToast = (message = '저장되었습니다', isError = false) => {
+    setToast({ visible: true, message, isError })
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current)
+    }
+    toastTimerRef.current = window.setTimeout(() => {
+      setToast((prev) => ({ ...prev, visible: false }))
+    }, 2200)
   }
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      showToast('이미지 파일만 업로드할 수 있습니다.', true)
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('프로필 사진은 5MB 이하만 업로드할 수 있습니다.', true)
+      return
+    }
+
     const reader = new FileReader()
     reader.onload = (ev) => updateProfile({ photoUrl: ev.target?.result as string })
     reader.readAsDataURL(file)
@@ -143,7 +200,7 @@ export default function SettingsPage() {
 
   const profileForm = useForm<ProfileForm>({
     resolver: zodResolver(profileSchema),
-    defaultValues: { name: effectiveDisplayName, email: effectiveEmail, role },
+    defaultValues: { name: effectiveDisplayName, email: effectiveEmail, role: normalizeRole(role) },
   })
   const { reset: resetProfileForm } = profileForm
 
@@ -152,21 +209,148 @@ export default function SettingsPage() {
     defaultValues: { current: '', next: '', confirm: '' },
   })
 
-  const onProfileSave = (data: ProfileForm) => {
-    updateProfile({ displayName: data.name, email: data.email, role: data.role })
-    showToast()
+  const onProfileSave = async (data: ProfileForm) => {
+    setIsProfileSaving(true)
+    try {
+      const response = await updateMyProfile({
+        name: data.name,
+        email: data.email,
+        role: data.role as SettingsRole,
+        avatarColor,
+        photoUrl,
+      })
+
+      const normalizedRole = normalizeRole(response.role)
+      updateProfile({
+        displayName: response.name,
+        email: response.email,
+        role: normalizedRole,
+        avatarColor: response.avatarColor,
+        photoUrl: response.photoUrl,
+      })
+      resetProfileForm({
+        name: response.name,
+        email: response.email,
+        role: normalizedRole,
+      })
+      showToast('프로필이 저장되었습니다.')
+    } catch (error) {
+      showToast(resolveErrorMessage(error, '프로필 저장에 실패했습니다.'), true)
+    } finally {
+      setIsProfileSaving(false)
+    }
   }
-  const onPwSave = () => { pwForm.reset(); showToast() }
+
+  const savePreferences = async () => {
+    setIsPreferencesSaving(true)
+    try {
+      const response = await updateMyPreferences({
+        notification: notifs,
+        display: {
+          landing,
+          rowCount,
+        },
+      })
+      setNotifs(response.notification)
+      setLanding(response.display.landing)
+      setRowCount(response.display.rowCount)
+      showToast('환경설정이 저장되었습니다.')
+    } catch (error) {
+      showToast(resolveErrorMessage(error, '환경설정 저장에 실패했습니다.'), true)
+    } finally {
+      setIsPreferencesSaving(false)
+    }
+  }
+
+  const onPwSave = async (data: PwForm) => {
+    setIsPasswordSaving(true)
+    try {
+      await changeMyPassword({
+        currentPassword: data.current,
+        newPassword: data.next,
+      })
+      pwForm.reset()
+      showToast('비밀번호가 변경되었습니다.')
+    } catch (error) {
+      showToast(resolveErrorMessage(error, '비밀번호 변경에 실패했습니다.'), true)
+    } finally {
+      setIsPasswordSaving(false)
+    }
+  }
+
+  useEffect(() => {
+    let mounted = true
+
+    const loadSettings = async () => {
+      setIsLoading(true)
+      try {
+        const [profileResponse, preferencesResponse] = await Promise.all([
+          getMyProfile(),
+          getMyPreferences(),
+        ])
+
+        if (!mounted) {
+          return
+        }
+
+        const normalizedRole = normalizeRole(profileResponse.role)
+        updateProfile({
+          displayName: profileResponse.name,
+          email: profileResponse.email,
+          role: normalizedRole,
+          avatarColor: profileResponse.avatarColor,
+          photoUrl: profileResponse.photoUrl,
+        })
+        resetProfileForm({
+          name: profileResponse.name,
+          email: profileResponse.email,
+          role: normalizedRole,
+        })
+
+        setNotifs(preferencesResponse.notification)
+        setLanding(preferencesResponse.display.landing)
+        setRowCount(preferencesResponse.display.rowCount)
+      } catch (error) {
+        if (mounted) {
+          showToast(resolveErrorMessage(error, '설정 정보를 불러오지 못했습니다.'), true)
+        }
+      } finally {
+        if (mounted) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    void loadSettings()
+
+    return () => {
+      mounted = false
+    }
+  }, [resetProfileForm, updateProfile])
 
   useEffect(() => {
     resetProfileForm({
       name: effectiveDisplayName,
       email: effectiveEmail,
-      role,
+      role: normalizeRole(role),
     })
   }, [effectiveDisplayName, effectiveEmail, role, resetProfileForm])
 
+  useEffect(() => () => {
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current)
+    }
+  }, [])
+
   const selectedColorHex = AVATAR_COLOR_HEX[avatarColor] ?? AVATAR_COLOR_HEX['brand']
+
+  if (isLoading) {
+    return (
+      <div className="p-4 sm:p-6">
+        <div className="text-sm text-gray-500">설정 정보를 불러오는 중입니다...</div>
+      </div>
+    )
+  }
 
   return (
     <div className="p-4 sm:p-6">
@@ -298,8 +482,12 @@ export default function SettingsPage() {
               </div>
 
               <div className="flex justify-end mt-4">
-                <button type="submit" className="h-9 px-5 text-[13px] font-semibold text-white bg-brand hover:bg-brand-hover rounded-lg transition-colors">
-                  저장
+                <button
+                  type="submit"
+                  disabled={isProfileSaving}
+                  className="h-9 px-5 text-[13px] font-semibold text-white bg-brand hover:bg-brand-hover disabled:opacity-60 disabled:cursor-not-allowed rounded-lg transition-colors"
+                >
+                  {isProfileSaving ? '저장 중...' : '저장'}
                 </button>
               </div>
             </form>
@@ -323,8 +511,13 @@ export default function SettingsPage() {
               </div>
 
               <div className="flex justify-end mt-4">
-                <button onClick={showToast} className="h-9 px-5 text-[13px] font-semibold text-white bg-brand hover:bg-brand-hover rounded-lg transition-colors">
-                  저장
+                <button
+                  type="button"
+                  disabled={isPreferencesSaving}
+                  onClick={() => void savePreferences()}
+                  className="h-9 px-5 text-[13px] font-semibold text-white bg-brand hover:bg-brand-hover disabled:opacity-60 disabled:cursor-not-allowed rounded-lg transition-colors"
+                >
+                  {isPreferencesSaving ? '저장 중...' : '저장'}
                 </button>
               </div>
             </div>
@@ -360,8 +553,12 @@ export default function SettingsPage() {
               </div>
 
               <div className="flex justify-end mt-4">
-                <button type="submit" className="h-9 px-5 text-[13px] font-semibold text-white bg-brand hover:bg-brand-hover rounded-lg transition-colors">
-                  비밀번호 변경
+                <button
+                  type="submit"
+                  disabled={isPasswordSaving}
+                  className="h-9 px-5 text-[13px] font-semibold text-white bg-brand hover:bg-brand-hover disabled:opacity-60 disabled:cursor-not-allowed rounded-lg transition-colors"
+                >
+                  {isPasswordSaving ? '변경 중...' : '비밀번호 변경'}
                 </button>
               </div>
             </form>
@@ -415,8 +612,13 @@ export default function SettingsPage() {
               </div>
 
               <div className="flex justify-end pt-2">
-                <button onClick={showToast} className="h-9 px-5 text-[13px] font-semibold text-white bg-brand hover:bg-brand-hover rounded-lg transition-colors">
-                  저장
+                <button
+                  type="button"
+                  disabled={isPreferencesSaving}
+                  onClick={() => void savePreferences()}
+                  className="h-9 px-5 text-[13px] font-semibold text-white bg-brand hover:bg-brand-hover disabled:opacity-60 disabled:cursor-not-allowed rounded-lg transition-colors"
+                >
+                  {isPreferencesSaving ? '저장 중...' : '저장'}
                 </button>
               </div>
             </div>
@@ -425,7 +627,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <SaveToast visible={toast} />
+      <SaveToast visible={toast.visible} message={toast.message} isError={toast.isError} />
     </div>
   )
 }
