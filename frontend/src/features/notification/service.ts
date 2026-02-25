@@ -2,6 +2,10 @@ import api from '@/lib/api'
 
 interface ApiPageResponse<T> {
   content: T[]
+  totalElements?: number
+  totalPages?: number
+  number?: number
+  size?: number
 }
 
 interface ApiNotificationListItem {
@@ -19,22 +23,45 @@ interface ApiNotificationListItem {
 
 export interface DashboardNotification {
   id: number
-  type: 'assign' | 'comment' | 'deadline' | 'complete'
+  type: 'assign' | 'comment' | 'deadline' | 'status' | 'complete'
+  rawType: string
+  title: string
+  message: string | null
   text: string
   time: string
+  createdAt: string | null
+  isRead: boolean
+  refType: string | null
+  refId: number | null
+}
+
+export interface NotificationListResult {
+  items: DashboardNotification[]
+  total: number
+  page: number
+  totalPages: number
+  size: number
 }
 
 function mapType(rawType: string): DashboardNotification['type'] {
-  if (rawType === '담당자배정' || rawType === '액션아이템배정') {
+  const value = rawType.trim()
+
+  if (value.includes('배정')) {
     return 'assign'
   }
-  if (rawType === '댓글등록' || rawType === '멘션') {
+  if (value.includes('댓글') || value.includes('멘션')) {
     return 'comment'
   }
-  if (rawType === '마감임박') {
+  if (value.includes('마감')) {
     return 'deadline'
   }
-  return 'complete'
+  if (value.includes('완료')) {
+    return 'complete'
+  }
+  if (value.includes('상태') || value.includes('실패') || value.includes('롤백') || value.includes('반려')) {
+    return 'status'
+  }
+  return 'status'
 }
 
 function formatRelativeTime(value: string | null | undefined): string {
@@ -78,19 +105,68 @@ function toDisplayText(item: ApiNotificationListItem): string {
   return item.title
 }
 
-export async function listDashboardNotifications(userId: number, size = 6): Promise<DashboardNotification[]> {
+function mapNotificationItem(item: ApiNotificationListItem): DashboardNotification {
+  return {
+    id: item.id,
+    type: mapType(item.type),
+    rawType: item.type,
+    title: item.title,
+    message: item.message,
+    text: toDisplayText(item),
+    time: formatRelativeTime(item.createdAt),
+    createdAt: item.createdAt,
+    isRead: item.isRead,
+    refType: item.refType,
+    refId: item.refId,
+  }
+}
+
+export async function listNotifications(
+  userId: number,
+  options?: {
+    read?: boolean
+    page?: number
+    size?: number
+  },
+): Promise<NotificationListResult> {
+  const page = options?.page ?? 0
+  const size = options?.size ?? 20
+
   const { data } = await api.get<ApiPageResponse<ApiNotificationListItem>>('/notifications', {
     params: {
       userId,
-      page: 0,
+      read: options?.read,
+      page,
       size,
     },
   })
 
-  return data.content.map((item) => ({
-    id: item.id,
-    type: mapType(item.type),
-    text: toDisplayText(item),
-    time: formatRelativeTime(item.createdAt),
-  }))
+  const items = data.content.map(mapNotificationItem)
+  return {
+    items,
+    total: data.totalElements ?? items.length,
+    page: (data.number ?? page) + 1,
+    totalPages: data.totalPages ?? 1,
+    size: data.size ?? size,
+  }
+}
+
+export async function listDashboardNotifications(userId: number, size = 6): Promise<DashboardNotification[]> {
+  const result = await listNotifications(userId, { page: 0, size })
+  return result.items
+}
+
+export async function updateNotificationReadState(id: number, read = true): Promise<void> {
+  await api.patch(`/notifications/${id}/read`, null, {
+    params: { read },
+  })
+}
+
+export async function updateAllNotificationsReadState(read = true, userId?: number): Promise<void> {
+  await api.patch('/notifications/read-all', null, {
+    params: {
+      read,
+      userId,
+    },
+  })
 }

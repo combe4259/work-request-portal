@@ -73,9 +73,13 @@ public class NotificationController {
 
     @PatchMapping("/read-all")
     public ResponseEntity<Void> updateAllReadState(
-            @RequestParam(defaultValue = "true") boolean read
+            @RequestParam(defaultValue = "true") boolean read,
+            @RequestParam(required = false) Long userId
     ) {
-        Long currentUserId = TeamRequestContext.getCurrentUserId();
+        Long currentUserId = userId;
+        if (currentUserId == null || currentUserId <= 0) {
+            currentUserId = TeamRequestContext.getCurrentUserId();
+        }
         if (currentUserId == null || currentUserId <= 0) {
             throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증 정보가 없습니다.");
         }

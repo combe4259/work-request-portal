@@ -31,6 +31,7 @@ import MeetingNoteDetailPage from '@/pages/meeting-note/MeetingNoteDetailPage'
 import StatisticsPage from '@/pages/statistics/StatisticsPage'
 import ResourcesPage from '@/pages/resource/ResourcesPage'
 import ResourceFormPage from '@/pages/resource/ResourceFormPage'
+import NotificationsPage from '@/pages/notification/NotificationsPage'
 import SettingsPage from '@/pages/settings/SettingsPage'
 import SettingsTeamPage from '@/pages/settings/SettingsTeamPage'
 import { RedirectIfAuthenticated, RequireAuth, RequireTeam } from './RouteGuards'
@@ -109,6 +110,7 @@ const router = createBrowserRouter([
       { path: '/resources', element: <ResourcesPage /> },
       { path: '/resources/new', element: <ResourceFormPage /> },
       { path: '/resources/:id/edit', element: <ResourceFormPage /> },
+      { path: '/notifications', element: <NotificationsPage /> },
       { path: '/settings', element: <SettingsPage /> },
       { path: '/settings/team', element: <SettingsTeamPage /> },
     ],

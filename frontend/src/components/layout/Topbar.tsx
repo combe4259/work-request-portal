@@ -3,6 +3,9 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { useProfileStore, AVATAR_COLOR_HEX } from '@/stores/profileStore'
 import { ROLE_LABELS } from '@/lib/constants'
+import { useDashboardNotificationsQuery } from '@/features/notification/queries'
+import { updateAllNotificationsReadState, updateNotificationReadState } from '@/features/notification/service'
+import { getNotificationRoute } from '@/features/notification/routes'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,48 +33,23 @@ const PAGE_TITLES: Record<string, string> = {
   '/meeting-notes': '회의록',
   '/ideas': '아이디어 보드',
   '/resources': '공유 리소스',
+  '/notifications': '알림',
   '/statistics': '통계',
   '/settings': '설정',
 }
-
-// 알림 샘플 데이터
-const MOCK_NOTIFICATIONS = [
-  {
-    id: 1,
-    type: 'assigned',
-    message: 'WR-2026-0042 업무가 나에게 배정되었습니다',
-    time: '5분 전',
-  },
-  {
-    id: 2,
-    type: 'comment',
-    message: '팀원이 WR-2026-0038에 댓글을 남겼습니다',
-    time: '23분 전',
-  },
-  {
-    id: 3,
-    type: 'deadline',
-    message: 'WR-2026-0031 마감일이 내일입니다',
-    time: '1시간 전',
-  },
-  {
-    id: 4,
-    type: 'deploy',
-    message: 'v2.1.3 배포가 완료되었습니다',
-    time: '3시간 전',
-  },
-]
 
 export default function Topbar({ onOpenSidebar }: TopbarProps) {
   const location = useLocation()
   const navigate = useNavigate()
   const { user, currentTeam, logout, setCurrentTeam } = useAuthStore()
   const { displayName, role, avatarColor, photoUrl } = useProfileStore()
+  const notificationsQuery = useDashboardNotificationsQuery(user?.id, 10)
+  const notifications = notificationsQuery.data ?? []
   const [notifOpen, setNotifOpen] = useState(false)
   const [teamSwitchOpen, setTeamSwitchOpen] = useState(false)
 
   const pageTitle = PAGE_TITLES[location.pathname] ?? '페이지'
-  const unreadCount = MOCK_NOTIFICATIONS.length
+  const unreadCount = notifications.filter((item) => !item.isRead).length
   const initials = (displayName || user?.name)?.slice(0, 1) ?? '?'
   const colorHex = AVATAR_COLOR_HEX[avatarColor] ?? AVATAR_COLOR_HEX['brand']
 
@@ -82,6 +60,32 @@ export default function Topbar({ onOpenSidebar }: TopbarProps) {
 
   const handleTeamSwitch = () => {
     setTeamSwitchOpen(true)
+  }
+
+  const handleMarkAllRead = async () => {
+    if (!user?.id || unreadCount === 0) {
+      return
+    }
+    await updateAllNotificationsReadState(true, user.id)
+    await notificationsQuery.refetch()
+  }
+
+  const handleNotificationClick = async (notification: {
+    id: number
+    isRead: boolean
+    refType: string | null
+    refId: number | null
+  }) => {
+    if (!notification.isRead) {
+      await updateNotificationReadState(notification.id, true)
+      await notificationsQuery.refetch()
+    }
+
+    const route = getNotificationRoute(notification.refType, notification.refId)
+    if (route) {
+      navigate(route)
+      setNotifOpen(false)
+    }
   }
 
   const confirmTeamSwitch = () => {
@@ -142,29 +146,66 @@ export default function Topbar({ onOpenSidebar }: TopbarProps) {
           <DropdownMenuContent align="end" className="w-80 p-0">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
               <span className="text-sm font-semibold text-gray-800">알림</span>
-              <button type="button" className="text-xs text-brand hover:underline">
+              <button
+                type="button"
+                onClick={() => {
+                  void handleMarkAllRead()
+                }}
+                disabled={unreadCount === 0}
+                className="text-xs text-brand hover:underline disabled:text-gray-300 disabled:no-underline"
+              >
                 모두 읽음
               </button>
             </div>
             <div className="max-h-64 overflow-y-auto">
-              {MOCK_NOTIFICATIONS.map((notif) => (
+              {notificationsQuery.isPending ? (
+                <p className="px-4 py-3 text-xs text-gray-400">알림을 불러오는 중입니다.</p>
+              ) : notificationsQuery.isError ? (
                 <button
                   type="button"
-                  key={notif.id}
-                  className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left border-b border-gray-50 last:border-0"
+                  onClick={() => {
+                    void notificationsQuery.refetch()
+                  }}
+                  className="px-4 py-3 text-xs text-brand hover:underline"
                 >
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 bg-brand/10">
-                    <NotifTypeIcon type={notif.type} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-gray-700 leading-relaxed line-clamp-2">{notif.message}</p>
-                    <p className="text-[10px] text-gray-400 mt-1">{notif.time}</p>
-                  </div>
+                  알림을 불러오지 못했습니다. 다시 시도
                 </button>
-              ))}
+              ) : notifications.length === 0 ? (
+                <p className="px-4 py-3 text-xs text-gray-400">새 알림이 없습니다.</p>
+              ) : (
+                notifications.map((notif) => (
+                  <button
+                    type="button"
+                    key={notif.id}
+                    onClick={() => {
+                      void handleNotificationClick(notif)
+                    }}
+                    className={`w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left border-b border-gray-50 last:border-0 ${
+                      notif.isRead ? 'bg-white' : 'bg-blue-50/40'
+                    }`}
+                  >
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 bg-brand/10">
+                      <NotifTypeIcon type={notif.type} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-xs leading-relaxed line-clamp-2 ${notif.isRead ? 'text-gray-700' : 'text-gray-800 font-medium'}`}>
+                        {notif.text}
+                      </p>
+                      <p className="text-[10px] text-gray-400 mt-1">{notif.time}</p>
+                    </div>
+                  </button>
+                ))
+              )}
             </div>
             <div className="px-4 py-2.5 border-t border-gray-100">
-              <button type="button" className="w-full text-xs text-center text-brand hover:underline">
+              <button
+                type="button"
+                onClick={() => {
+                  setNotifOpen(false)
+                  navigate('/notifications')
+                }}
+                className="w-full text-xs text-center text-brand hover:underline"
+              >
                 전체 알림 보기
               </button>
             </div>
@@ -308,7 +349,7 @@ function LogoutIcon() {
 }
 
 function NotifTypeIcon({ type }: { type: string }) {
-  if (type === 'assigned') {
+  if (type === 'assign' || type === 'assigned') {
     return (
       <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
         <circle cx="6.5" cy="4.5" r="2" stroke="#0046ff" strokeWidth="1.2" />
@@ -328,6 +369,15 @@ function NotifTypeIcon({ type }: { type: string }) {
       <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
         <circle cx="6.5" cy="6.5" r="5" stroke="#f59e0b" strokeWidth="1.2" />
         <path d="M6.5 3.5V6.5L8.5 8.5" stroke="#f59e0b" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    )
+  }
+  if (type === 'status') {
+    return (
+      <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+        <circle cx="6.5" cy="6.5" r="5" stroke="#0ea5e9" strokeWidth="1.2" />
+        <path d="M6.5 4V6.6" stroke="#0ea5e9" strokeWidth="1.2" strokeLinecap="round" />
+        <circle cx="6.5" cy="8.8" r="0.65" fill="#0ea5e9" />
       </svg>
     )
   }
