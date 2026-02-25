@@ -1,4 +1,16 @@
 package org.example.domain.attachment.dto;
 
-public record AttachmentDetailResponse(Long id) {
+import java.time.LocalDateTime;
+
+public record AttachmentDetailResponse(
+        Long id,
+        String refType,
+        Long refId,
+        String originalName,
+        String storedPath,
+        Long fileSize,
+        String mimeType,
+        Long uploadedBy,
+        LocalDateTime createdAt
+) {
 }
