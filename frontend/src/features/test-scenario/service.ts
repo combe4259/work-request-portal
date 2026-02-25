@@ -39,6 +39,10 @@ export interface CreateTestScenarioInput {
   priority: Priority
   deadline: string
   assignee?: string
+  precondition?: string
+  steps?: string
+  expectedResult?: string
+  actualResult?: string
   relatedDoc?: string
 }
 
@@ -63,6 +67,7 @@ export interface TestScenarioDetail {
   actualResult: string
   statusNote?: string
   deadline: string
+  createdAt: string
 }
 
 export interface UpdateTestScenarioInput {
@@ -111,17 +116,24 @@ interface ApiTestScenarioDetailResponse {
   actualResult: string | null
   statusNote: string | null
   deadline: string | null
+  createdAt: string | null
 }
 
 interface ApiCreateTestScenarioRequest {
   title: string
+  description?: string | null
   type: TestScenarioType
   priority: Priority
   status: TestStatus
   teamId: number
   assigneeId: number | null
+  precondition?: string
   steps: string
+  expectedResult?: string
+  actualResult?: string
   deadline: string
+  executedAt?: string | null
+  statusNote?: string | null
   createdBy: number
 }
 
@@ -196,6 +208,10 @@ function mapUserLabel(userId: number | null | undefined, fallbackText: string): 
 
 function toDateOnly(value: string | null | undefined): string {
   return value?.slice(0, 10) ?? ''
+}
+
+function toDateTime(value: string | null | undefined): string {
+  return value?.replace('T', ' ').slice(0, 16) ?? ''
 }
 
 function mapListItem(item: ApiTestScenarioListItem): TestScenario {
@@ -285,7 +301,10 @@ export async function createTestScenario(input: CreateTestScenarioInput): Promis
     status: '작성중',
     teamId: currentTeam.id,
     assigneeId,
-    steps: '[]',
+    precondition: input.precondition?.trim() ? input.precondition : undefined,
+    steps: input.steps ?? '[]',
+    expectedResult: input.expectedResult ?? '',
+    actualResult: input.actualResult ?? '',
     deadline: input.deadline,
     createdBy: user.id,
   }
@@ -339,6 +358,7 @@ export async function getTestScenario(id: string | number): Promise<TestScenario
     actualResult: data.actualResult ?? '',
     statusNote: data.statusNote ?? undefined,
     deadline: toDateOnly(data.deadline),
+    createdAt: toDateTime(data.createdAt),
   }
 }
 

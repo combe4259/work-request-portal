@@ -10,6 +10,7 @@ import { useDocumentIndexQuery } from '@/features/document-index/queries'
 import { useCreateTestScenarioMutation, useUpdateTestScenarioMutation } from '@/features/test-scenario/mutations'
 import { useTestScenarioDetailQuery, useTestScenarioRelatedRefsQuery } from '@/features/test-scenario/queries'
 import { testScenarioFormSchema, type TestScenarioFormValues } from '@/features/test-scenario/schemas'
+import { createAttachmentsFromFiles } from '@/features/attachment/service'
 import { useAuthStore } from '@/stores/authStore'
 
 interface TestStep {
@@ -220,19 +221,37 @@ export default function TestScenarioFormPage() {
         deadline: data.deadline,
         relatedDoc: relatedDoc?.docNo,
       })
+      if (fileList.length > 0) {
+        await createAttachmentsFromFiles({
+          refType: 'TEST_SCENARIO',
+          refId: validEditId,
+          files: fileList,
+        })
+      }
       navigate(`/test-scenarios/${validEditId}`)
       return
     }
 
-    await createTestScenario.mutateAsync({
+    const created = await createTestScenario.mutateAsync({
       title: data.title,
       type: data.type,
       priority: data.priority,
       deadline: data.deadline,
       assignee: data.assignee,
+      precondition: data.precondition,
+      steps: serializedSteps,
+      expectedResult: '',
+      actualResult: '',
       relatedDoc: relatedDoc?.docNo,
     })
-    navigate('/test-scenarios')
+    if (fileList.length > 0) {
+      await createAttachmentsFromFiles({
+        refType: 'TEST_SCENARIO',
+        refId: created.id,
+        files: fileList,
+      })
+    }
+    navigate(`/test-scenarios/${created.id}`)
   }
 
   if (isEdit && validEditId == null) {
