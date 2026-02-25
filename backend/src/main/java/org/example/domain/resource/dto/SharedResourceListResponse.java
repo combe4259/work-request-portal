@@ -1,4 +1,14 @@
 package org.example.domain.resource.dto;
 
-public record SharedResourceListResponse(Long id) {
+import java.time.LocalDateTime;
+
+public record SharedResourceListResponse(
+        Long id,
+        String title,
+        String url,
+        String category,
+        String description,
+        Long registeredBy,
+        LocalDateTime createdAt
+) {
 }
