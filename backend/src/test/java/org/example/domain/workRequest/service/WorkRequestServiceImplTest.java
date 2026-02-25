@@ -1,6 +1,7 @@
 package org.example.domain.workRequest.service;
 
 import jakarta.persistence.EntityNotFoundException;
+import org.example.domain.notification.service.NotificationEventService;
 import org.example.domain.workRequest.dto.WorkRequestCreateRequest;
 import org.example.domain.workRequest.dto.WorkRequestDetailResponse;
 import org.example.domain.workRequest.dto.WorkRequestListResponse;
@@ -30,6 +31,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -44,6 +47,9 @@ class WorkRequestServiceImplTest {
 
     @Mock
     private DocumentNoGenerator documentNoGenerator;
+
+    @Mock
+    private NotificationEventService notificationEventService;
 
     @InjectMocks
     private WorkRequestServiceImpl workRequestService;
@@ -172,6 +178,74 @@ class WorkRequestServiceImplTest {
         assertThat(entity.getStartedAt()).isEqualTo(LocalDateTime.of(2026, 2, 25, 9, 0));
         assertThat(entity.getBackground()).isEqualTo("요청 배경");
         assertThat(entity.getAssigneeId()).isEqualTo(30L);
+    }
+
+    @Test
+    @DisplayName("생성 시 담당자가 있으면 담당자배정 알림을 발행한다")
+    void createPublishesAssignNotification() {
+        WorkRequestCreateRequest request = new WorkRequestCreateRequest(
+                "새 요청",
+                "배경",
+                "요청 상세",
+                "기능개선",
+                "보통",
+                "접수대기",
+                10L,
+                20L,
+                30L,
+                LocalDate.of(2026, 3, 1)
+        );
+
+        when(workRequestRepository.save(any(WorkRequest.class))).thenAnswer(invocation -> {
+            WorkRequest wr = invocation.getArgument(0);
+            wr.setId(100L);
+            return wr;
+        });
+        when(documentNoGenerator.next("WR")).thenReturn("WR-001");
+
+        workRequestService.create(request);
+
+        verify(notificationEventService).create(
+                eq(30L),
+                eq("담당자배정"),
+                eq("업무요청 배정"),
+                contains("WR-001"),
+                eq("WORK_REQUEST"),
+                eq(100L)
+        );
+    }
+
+    @Test
+    @DisplayName("수정 시 상태가 변경되면 요청자에게 상태변경 알림을 발행한다")
+    void updatePublishesStatusNotification() {
+        WorkRequest entity = sampleEntity(7L);
+        when(workRequestRepository.findById(7L)).thenReturn(Optional.of(entity));
+
+        WorkRequestUpdateRequest request = new WorkRequestUpdateRequest(
+                null,
+                null,
+                null,
+                null,
+                null,
+                "완료",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+
+        workRequestService.update(7L, request);
+
+        verify(notificationEventService).create(
+                eq(20L),
+                eq("상태변경"),
+                eq("업무요청 상태 변경"),
+                contains("완료"),
+                eq("WORK_REQUEST"),
+                eq(7L)
+        );
     }
 
     private WorkRequest sampleEntity(Long id) {
