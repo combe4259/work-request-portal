@@ -1,8 +1,9 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { EmptyState, ErrorState, LoadingState } from '@/components/common/AsyncState'
 import { useKnowledgeBaseArticleQuery } from '@/features/knowledge-base/queries'
-import { useIncreaseKnowledgeBaseViewMutation } from '@/features/knowledge-base/mutations'
+import ConfirmDialog from '@/components/common/ConfirmDialog'
+import { useDeleteKnowledgeBaseArticleMutation, useIncreaseKnowledgeBaseViewMutation } from '@/features/knowledge-base/mutations'
 import type { KBCategory } from '@/types/knowledge-base'
 
 const CATEGORY_STYLES: Record<KBCategory, string> = {
@@ -13,6 +14,23 @@ const CATEGORY_STYLES: Record<KBCategory, string> = {
   '기타': 'bg-gray-100 text-gray-500',
 }
 
+function getDocRoute(docNo: string): string | null {
+  const [prefix, idText] = docNo.split('-')
+  const id = Number(idText)
+  if (!prefix || !Number.isFinite(id)) {
+    return null
+  }
+
+  if (prefix === 'WR') return `/work-requests/${id}`
+  if (prefix === 'TK') return `/tech-tasks/${id}`
+  if (prefix === 'TS') return `/test-scenarios/${id}`
+  if (prefix === 'DF') return `/defects/${id}`
+  if (prefix === 'DP') return `/deployments/${id}`
+  if (prefix === 'MN') return `/meeting-notes/${id}`
+  if (prefix === 'ID') return `/ideas/${id}`
+  return null
+}
+
 export default function KnowledgeBaseDetailPage() {
   const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
@@ -21,7 +39,9 @@ export default function KnowledgeBaseDetailPage() {
 
   const { data, isPending, isError, refetch } = useKnowledgeBaseArticleQuery(validId ? numericId : undefined)
   const increaseView = useIncreaseKnowledgeBaseViewMutation(validId ? numericId : undefined)
+  const deleteArticle = useDeleteKnowledgeBaseArticleMutation()
   const viewedRef = useRef(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
 
   useEffect(() => {
     if (!validId || !data || viewedRef.current) {
@@ -79,6 +99,23 @@ export default function KnowledgeBaseDetailPage() {
           </div>
           <h1 className="text-[20px] font-bold text-gray-900 leading-snug">{data.title}</h1>
         </div>
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => navigate(`/knowledge-base/${data.id}/edit`)}
+            className="h-8 px-3 border border-gray-200 rounded-lg text-[12px] font-medium text-gray-600 hover:bg-white transition-colors flex items-center gap-1.5"
+          >
+            <EditIcon />
+            수정
+          </button>
+          <button
+            type="button"
+            onClick={() => setDeleteOpen(true)}
+            className="h-8 px-3 border border-red-200 rounded-lg text-[12px] font-medium text-red-600 hover:bg-red-50 transition-colors"
+          >
+            삭제
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] px-5 py-4">
@@ -114,6 +151,46 @@ export default function KnowledgeBaseDetailPage() {
         <p className="text-[12px] font-semibold text-gray-700 mb-3">본문</p>
         <div className="text-[13px] text-gray-700 leading-relaxed whitespace-pre-wrap">{data.content}</div>
       </div>
+
+      {data.relatedDocs.length > 0 ? (
+        <div className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] px-5 py-4">
+          <p className="text-[12px] font-semibold text-gray-700 mb-3">연관 문서</p>
+          <div className="flex flex-wrap gap-2">
+            {data.relatedDocs.map((doc) => {
+              const route = getDocRoute(doc.docNo)
+              return (
+                <button
+                  key={doc.docNo}
+                  type="button"
+                  onClick={() => {
+                    if (route) navigate(route)
+                  }}
+                  disabled={!route}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg hover:border-brand/40 hover:bg-blue-50/30 transition-colors group disabled:opacity-70 disabled:cursor-default"
+                >
+                  <span className="font-mono text-[11px] text-gray-600">{doc.docNo}</span>
+                  <span className="text-[12px] text-gray-600 group-hover:text-brand transition-colors">{doc.title}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="문서를 삭제할까요?"
+        description="삭제 후에는 복구할 수 없습니다."
+        confirmText={deleteArticle.isPending ? '삭제 중...' : '삭제'}
+        cancelText="취소"
+        destructive
+        onConfirm={() => {
+          void deleteArticle.mutateAsync(data.id).then(() => {
+            navigate('/knowledge-base')
+          })
+        }}
+      />
     </div>
   )
 }
@@ -129,4 +206,13 @@ function MetaItem({ label, value }: { label: string; value: string }) {
 
 function BackIcon() {
   return <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M9 2.5L5 7L9 11.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+}
+
+function EditIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+      <path d="M2 11h2l6-6-2-2-6 6v2z" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round" />
+      <path d="M7.6 3.4l2 2" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
+    </svg>
+  )
 }

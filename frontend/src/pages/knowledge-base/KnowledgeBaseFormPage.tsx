@@ -1,18 +1,20 @@
-import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import type { KBCategory } from '@/types/knowledge-base'
 import { ChevronLeftIcon } from '@/components/common/Icons'
-import { useCreateKnowledgeBaseArticleMutation } from '@/features/knowledge-base/mutations'
+import { ErrorState, LoadingState } from '@/components/common/AsyncState'
+import { useCreateKnowledgeBaseArticleMutation, useUpdateKnowledgeBaseArticleMutation } from '@/features/knowledge-base/mutations'
+import { useKnowledgeBaseArticleQuery } from '@/features/knowledge-base/queries'
 import { useTeamMembersQuery } from '@/features/auth/queries'
 import { useAuthStore } from '@/stores/authStore'
 
 const schema = z.object({
   title: z.string().min(1, '제목을 입력해주세요').max(100),
   category: z.enum(['개발 가이드', '아키텍처', '트러블슈팅', '온보딩', '기타'] as const, { error: '카테고리를 선택해주세요' }),
-  authorId: z.coerce.number().int().positive('작성자를 선택해주세요'),
+  authorId: z.number().int().positive('작성자를 선택해주세요'),
   summary: z.string().min(1, '요약을 입력해주세요').max(300),
   content: z.string().min(1, '본문을 입력해주세요'),
 })
@@ -42,7 +44,13 @@ const sectionCls = 'bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_
 
 export default function KnowledgeBaseFormPage() {
   const navigate = useNavigate()
+  const { id } = useParams<{ id: string }>()
+  const isEdit = id != null
+  const numericId = Number(id)
+  const validEditId = isEdit && Number.isInteger(numericId) && numericId > 0 ? numericId : undefined
   const createArticle = useCreateKnowledgeBaseArticleMutation()
+  const updateArticle = useUpdateKnowledgeBaseArticleMutation()
+  const detailQuery = useKnowledgeBaseArticleQuery(validEditId)
 
   const currentUser = useAuthStore((state) => state.user)
   const currentTeam = useAuthStore((state) => state.currentTeam)
@@ -66,6 +74,7 @@ export default function KnowledgeBaseFormPage() {
     register,
     handleSubmit,
     watch,
+    reset,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -78,6 +87,21 @@ export default function KnowledgeBaseFormPage() {
   const summaryVal = watch('summary') ?? ''
   const contentVal = watch('content') ?? ''
   const selectedCategory = watch('category')
+
+  useEffect(() => {
+    if (!detailQuery.data) {
+      return
+    }
+
+    reset({
+      title: detailQuery.data.title,
+      category: detailQuery.data.category,
+      authorId: detailQuery.data.authorId,
+      summary: detailQuery.data.summary,
+      content: detailQuery.data.content,
+    })
+    setSelectedTags(detailQuery.data.tags)
+  }, [detailQuery.data, reset])
 
   const toggleTag = (tag: string) => {
     setSelectedTags((prev) => prev.includes(tag) ? prev.filter((item) => item !== tag) : [...prev, tag])
@@ -96,6 +120,20 @@ export default function KnowledgeBaseFormPage() {
   }
 
   const onSubmit = async (data: FormValues) => {
+    if (validEditId != null) {
+      await updateArticle.mutateAsync({
+        id: validEditId,
+        title: data.title,
+        category: data.category,
+        tags: selectedTags,
+        summary: data.summary,
+        content: data.content,
+      })
+
+      navigate(`/knowledge-base/${validEditId}`)
+      return
+    }
+
     const result = await createArticle.mutateAsync({
       title: data.title,
       category: data.category,
@@ -107,6 +145,44 @@ export default function KnowledgeBaseFormPage() {
 
     navigate(`/knowledge-base/${result.id}`)
   }
+
+  if (isEdit && validEditId == null) {
+    return (
+      <div className="p-6">
+        <ErrorState
+          title="잘못된 접근입니다"
+          description="문서 ID가 올바르지 않습니다."
+          actionLabel="목록으로 이동"
+          onAction={() => navigate('/knowledge-base')}
+        />
+      </div>
+    )
+  }
+
+  if (isEdit && detailQuery.isPending) {
+    return (
+      <div className="p-6">
+        <LoadingState title="문서 정보를 불러오는 중입니다" description="잠시만 기다려주세요." />
+      </div>
+    )
+  }
+
+  if (isEdit && (detailQuery.isError || !detailQuery.data)) {
+    return (
+      <div className="p-6">
+        <ErrorState
+          title="문서 정보를 불러오지 못했습니다"
+          description="잠시 후 다시 시도해주세요."
+          actionLabel="다시 시도"
+          onAction={() => {
+            void detailQuery.refetch()
+          }}
+        />
+      </div>
+    )
+  }
+
+  const isMutating = createArticle.isPending || updateArticle.isPending
 
   return (
     <div className="min-h-full p-6 flex flex-col items-center">
@@ -120,7 +196,7 @@ export default function KnowledgeBaseFormPage() {
             목록
           </button>
           <div className="w-px h-4 bg-gray-200" />
-          <h1 className="text-[18px] font-bold text-gray-900">문서 등록</h1>
+          <h1 className="text-[18px] font-bold text-gray-900">{isEdit ? '문서 수정' : '문서 등록'}</h1>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -155,7 +231,7 @@ export default function KnowledgeBaseFormPage() {
               <div>
                 <label className={labelCls}>작성자 <span className="text-red-400">*</span></label>
                 <div className="relative">
-                  <select {...register('authorId')} className={selectCls}>
+                  <select {...register('authorId', { valueAsNumber: true })} className={selectCls}>
                     <option value="">선택</option>
                     {authorOptions.map((option) => (
                       <option key={option.id} value={option.id}>{option.name}</option>
@@ -277,10 +353,10 @@ export default function KnowledgeBaseFormPage() {
             </button>
             <button
               type="submit"
-              disabled={createArticle.isPending}
+              disabled={isMutating}
               className="h-9 px-5 bg-brand hover:bg-brand-hover text-white text-[13px] font-semibold rounded-lg transition-colors disabled:opacity-60"
             >
-              {createArticle.isPending ? '등록 중...' : '등록'}
+              {isMutating ? (isEdit ? '수정 중...' : '등록 중...') : (isEdit ? '수정 완료' : '등록')}
             </button>
           </div>
         </form>

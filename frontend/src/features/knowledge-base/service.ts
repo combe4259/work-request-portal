@@ -1,4 +1,5 @@
 import api from '@/lib/api'
+import { toRelatedRefsPayload } from '@/lib/relatedRefs'
 import { useAuthStore } from '@/stores/authStore'
 import type { KBArticle, KBArticleDetail, KBCategory } from '@/types/knowledge-base'
 
@@ -48,6 +49,21 @@ interface ApiKnowledgeBaseCreateResponse {
   id: number
 }
 
+interface ApiKnowledgeBaseUpdateRequest {
+  title: string
+  category: KBCategory
+  tags: string[]
+  summary: string
+  content: string
+}
+
+interface ApiKnowledgeBaseRelatedRefResponse {
+  refType: string
+  refId: number
+  refNo: string
+  title: string | null
+}
+
 export interface CreateKnowledgeBaseArticleInput {
   title: string
   category: KBCategory
@@ -55,10 +71,21 @@ export interface CreateKnowledgeBaseArticleInput {
   summary: string
   content: string
   authorId: number
+  relatedDocs?: string[]
 }
 
 export interface CreateKnowledgeBaseArticleResult {
   id: string
+}
+
+export interface UpdateKnowledgeBaseArticleInput {
+  id: string | number
+  title: string
+  category: KBCategory
+  tags: string[]
+  summary: string
+  content: string
+  relatedDocs?: string[]
 }
 
 const LIST_FETCH_SIZE = 500
@@ -106,7 +133,17 @@ export async function listKnowledgeBaseArticles(): Promise<KBArticle[]> {
 }
 
 export async function getKnowledgeBaseArticle(id: string | number): Promise<KBArticleDetail> {
-  const { data } = await api.get<ApiKnowledgeBaseDetailResponse>(`/knowledge-base/${id}`)
+  const [detailResponse, relatedRefsResponse] = await Promise.all([
+    api.get<ApiKnowledgeBaseDetailResponse>(`/knowledge-base/${id}`),
+    api.get<ApiKnowledgeBaseRelatedRefResponse[]>(`/knowledge-base/${id}/related-refs`),
+  ])
+
+  const data = detailResponse.data
+  const relatedDocs = relatedRefsResponse.data.map((item) => ({
+    docNo: item.refNo,
+    title: item.title ?? item.refNo,
+  }))
+
   return {
     id: String(data.id),
     docNo: data.articleNo,
@@ -121,7 +158,7 @@ export async function getKnowledgeBaseArticle(id: string | number): Promise<KBAr
     createdAt: toDateOnly(data.createdAt),
     updatedAt: toDateOnly(data.updatedAt),
     views: data.viewCount,
-    relatedDocs: [],
+    relatedDocs,
     attachments: [],
   }
 }
@@ -147,9 +184,34 @@ export async function createKnowledgeBaseArticle(
   }
 
   const { data } = await api.post<ApiKnowledgeBaseCreateResponse>('/knowledge-base', payload)
+
+  const relatedRefs = toRelatedRefsPayload(input.relatedDocs ?? [])
+  if (relatedRefs.length > 0) {
+    await api.put(`/knowledge-base/${data.id}/related-refs`, { items: relatedRefs })
+  }
+
   return { id: String(data.id) }
 }
 
 export async function increaseKnowledgeBaseView(id: string | number): Promise<void> {
   await api.post(`/knowledge-base/${id}/view`)
+}
+
+export async function updateKnowledgeBaseArticle(input: UpdateKnowledgeBaseArticleInput): Promise<void> {
+  const payload: ApiKnowledgeBaseUpdateRequest = {
+    title: input.title,
+    category: input.category,
+    tags: input.tags,
+    summary: input.summary,
+    content: input.content,
+  }
+
+  await api.put(`/knowledge-base/${input.id}`, payload)
+
+  const relatedRefs = toRelatedRefsPayload(input.relatedDocs ?? [])
+  await api.put(`/knowledge-base/${input.id}/related-refs`, { items: relatedRefs })
+}
+
+export async function deleteKnowledgeBaseArticle(id: string | number): Promise<void> {
+  await api.delete(`/knowledge-base/${id}`)
 }

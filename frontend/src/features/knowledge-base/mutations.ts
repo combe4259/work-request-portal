@@ -1,5 +1,10 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { createKnowledgeBaseArticle, increaseKnowledgeBaseView } from './service'
+import {
+  createKnowledgeBaseArticle,
+  deleteKnowledgeBaseArticle,
+  increaseKnowledgeBaseView,
+  updateKnowledgeBaseArticle,
+} from './service'
 import { knowledgeBaseQueryKeys } from './queries'
 
 export function useCreateKnowledgeBaseArticleMutation() {
@@ -28,6 +33,29 @@ export function useIncreaseKnowledgeBaseViewMutation(id: string | number | undef
       if (id != null) {
         await queryClient.invalidateQueries({ queryKey: knowledgeBaseQueryKeys.detail(id) })
       }
+    },
+  })
+}
+
+export function useUpdateKnowledgeBaseArticleMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: updateKnowledgeBaseArticle,
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({ queryKey: knowledgeBaseQueryKeys.all })
+      await queryClient.invalidateQueries({ queryKey: knowledgeBaseQueryKeys.detail(variables.id) })
+    },
+  })
+}
+
+export function useDeleteKnowledgeBaseArticleMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: deleteKnowledgeBaseArticle,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: knowledgeBaseQueryKeys.all })
     },
   })
 }
