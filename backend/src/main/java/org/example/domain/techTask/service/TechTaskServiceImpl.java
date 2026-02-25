@@ -1,6 +1,8 @@
 package org.example.domain.techTask.service;
 
 import jakarta.persistence.EntityNotFoundException;
+import org.example.domain.documentIndex.service.DocumentIndexSyncService;
+import org.example.domain.notification.service.NotificationEventService;
 import org.example.domain.techTask.dto.TechTaskCreateRequest;
 import org.example.domain.techTask.dto.TechTaskDetailResponse;
 import org.example.domain.techTask.dto.TechTaskListResponse;
@@ -20,6 +22,7 @@ import org.example.domain.techTask.repository.TechTaskRelatedRefRepository;
 import org.example.domain.techTask.repository.TechTaskRepository;
 import org.example.domain.workRequest.entity.WorkRequest;
 import org.example.domain.workRequest.repository.WorkRequestRepository;
+import org.example.global.team.TeamScopeUtil;
 import org.example.global.util.DocumentNoGenerator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -43,25 +46,34 @@ public class TechTaskServiceImpl implements TechTaskService {
     private final TechTaskPrLinkRepository techTaskPrLinkRepository;
     private final WorkRequestRepository workRequestRepository;
     private final DocumentNoGenerator documentNoGenerator;
+    private final NotificationEventService notificationEventService;
+    private final DocumentIndexSyncService documentIndexSyncService;
 
     public TechTaskServiceImpl(
             TechTaskRepository techTaskRepository,
             TechTaskRelatedRefRepository techTaskRelatedRefRepository,
             TechTaskPrLinkRepository techTaskPrLinkRepository,
             WorkRequestRepository workRequestRepository,
-            DocumentNoGenerator documentNoGenerator
+            DocumentNoGenerator documentNoGenerator,
+            NotificationEventService notificationEventService,
+            DocumentIndexSyncService documentIndexSyncService
     ) {
         this.techTaskRepository = techTaskRepository;
         this.techTaskRelatedRefRepository = techTaskRelatedRefRepository;
         this.techTaskPrLinkRepository = techTaskPrLinkRepository;
         this.workRequestRepository = workRequestRepository;
         this.documentNoGenerator = documentNoGenerator;
+        this.notificationEventService = notificationEventService;
+        this.documentIndexSyncService = documentIndexSyncService;
     }
 
     @Override
     public Page<TechTaskListResponse> findPage(int page, int size) {
         PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
-        return techTaskRepository.findAll(pageable)
+        Long teamId = TeamScopeUtil.currentTeamId();
+        return (teamId == null
+                ? techTaskRepository.findAll(pageable)
+                : techTaskRepository.findByTeamId(teamId, pageable))
                 .map(TechTaskMapper::toListResponse);
     }
 
@@ -69,6 +81,7 @@ public class TechTaskServiceImpl implements TechTaskService {
     public TechTaskDetailResponse findById(Long id) {
         TechTask entity = techTaskRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("TechTask not found: " + id));
+        TeamScopeUtil.ensureAccessible(entity.getTeamId());
         return TechTaskMapper.toDetailResponse(entity);
     }
 
@@ -78,11 +91,14 @@ public class TechTaskServiceImpl implements TechTaskService {
         TechTask entity = TechTaskMapper.fromCreateRequest(request);
 
         entity.setTaskNo(documentNoGenerator.next("TK"));
+        entity.setTeamId(TeamScopeUtil.requireTeamId(request.teamId()));
         entity.setType(defaultIfBlank(request.type(), "기타"));
         entity.setPriority(defaultIfBlank(request.priority(), "보통"));
         entity.setStatus(defaultIfBlank(request.status(), "접수대기"));
 
         TechTask saved = techTaskRepository.save(entity);
+        syncDocumentIndex(saved);
+        notifyAssigneeAssigned(saved);
         return saved.getId();
     }
 
@@ -91,8 +107,27 @@ public class TechTaskServiceImpl implements TechTaskService {
     public void update(Long id, TechTaskUpdateRequest request) {
         TechTask entity = techTaskRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("TechTask not found: " + id));
+        TeamScopeUtil.ensureAccessible(entity.getTeamId());
+
+        Long previousAssigneeId = entity.getAssigneeId();
+        String previousStatus = entity.getStatus();
 
         TechTaskMapper.applyUpdate(entity, request);
+        syncDocumentIndex(entity);
+
+        notifyAssigneeChanged(entity, previousAssigneeId);
+        notifyStatusChanged(entity, previousStatus);
+    }
+
+    @Override
+    @Transactional
+    public void delete(Long id) {
+        TechTask entity = techTaskRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("TechTask not found: " + id));
+        TeamScopeUtil.ensureAccessible(entity.getTeamId());
+
+        techTaskRepository.delete(entity);
+        deleteDocumentIndex(entity);
     }
 
     @Override
@@ -104,7 +139,12 @@ public class TechTaskServiceImpl implements TechTaskService {
 
         TechTask entity = techTaskRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("TechTask not found: " + id));
+        TeamScopeUtil.ensureAccessible(entity.getTeamId());
+        String previousStatus = entity.getStatus();
         entity.setStatus(request.status().trim());
+        syncDocumentIndex(entity);
+
+        notifyStatusChanged(entity, previousStatus);
     }
 
     @Override
@@ -215,9 +255,17 @@ public class TechTaskServiceImpl implements TechTaskService {
         if (id == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "id는 필수입니다.");
         }
-        if (!techTaskRepository.existsById(id)) {
-            throw new EntityNotFoundException("TechTask not found: " + id);
+        Long scopedTeamId = TeamScopeUtil.currentTeamId();
+        if (scopedTeamId == null) {
+            if (!techTaskRepository.existsById(id)) {
+                throw new EntityNotFoundException("TechTask not found: " + id);
+            }
+            return;
         }
+
+        TechTask entity = techTaskRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("TechTask not found: " + id));
+        TeamScopeUtil.ensureAccessible(entity.getTeamId());
     }
 
     private String normalizeRefType(String rawRefType) {
@@ -240,7 +288,7 @@ public class TechTaskServiceImpl implements TechTaskService {
 
         if ("TECH_TASK".equals(normalizedRefType)) {
             TechTask task = techTaskRepository.findById(refId).orElse(null);
-            if (task != null) {
+            if (task != null && (TeamScopeUtil.currentTeamId() == null || TeamScopeUtil.currentTeamId().equals(task.getTeamId()))) {
                 return new RefMetadata(task.getTaskNo(), task.getTitle());
             }
         }
@@ -276,6 +324,75 @@ public class TechTaskServiceImpl implements TechTaskService {
         return value == null || value.isBlank();
     }
 
+    private void notifyAssigneeAssigned(TechTask entity) {
+        if (notificationEventService == null) {
+            return;
+        }
+
+        notificationEventService.create(
+                entity.getAssigneeId(),
+                "담당자배정",
+                "기술과제 배정",
+                entity.getTaskNo() + " '" + entity.getTitle() + "' 과제가 배정되었습니다.",
+                "TECH_TASK",
+                entity.getId()
+        );
+    }
+
+    private void notifyAssigneeChanged(TechTask entity, Long previousAssigneeId) {
+        Long currentAssigneeId = entity.getAssigneeId();
+        if (currentAssigneeId == null || currentAssigneeId.equals(previousAssigneeId)) {
+            return;
+        }
+
+        notifyAssigneeAssigned(entity);
+    }
+
+    private void notifyStatusChanged(TechTask entity, String previousStatus) {
+        if (notificationEventService == null) {
+            return;
+        }
+
+        String currentStatus = entity.getStatus();
+        if (currentStatus == null || currentStatus.equals(previousStatus)) {
+            return;
+        }
+
+        notificationEventService.create(
+                entity.getRegistrantId(),
+                "상태변경",
+                "기술과제 상태 변경",
+                entity.getTaskNo() + " 상태가 '" + currentStatus + "'(으)로 변경되었습니다.",
+                "TECH_TASK",
+                entity.getId()
+        );
+    }
+
     private record RefMetadata(String refNo, String title) {
+    }
+
+    private void syncDocumentIndex(TechTask entity) {
+        if (documentIndexSyncService == null) {
+            return;
+        }
+        documentIndexSyncService.upsert(
+                "TECH_TASK",
+                entity.getId(),
+                entity.getTeamId(),
+                entity.getTaskNo(),
+                entity.getTitle(),
+                entity.getStatus()
+        );
+    }
+
+    private void deleteDocumentIndex(TechTask entity) {
+        if (documentIndexSyncService == null) {
+            return;
+        }
+        documentIndexSyncService.delete(
+                "TECH_TASK",
+                entity.getId(),
+                entity.getTeamId()
+        );
     }
 }

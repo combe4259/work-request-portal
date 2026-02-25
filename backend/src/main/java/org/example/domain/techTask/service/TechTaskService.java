@@ -22,6 +22,8 @@ public interface TechTaskService {
 
     void update(Long id, TechTaskUpdateRequest request);
 
+    void delete(Long id);
+
     void updateStatus(Long id, TechTaskStatusUpdateRequest request);
 
     List<TechTaskRelatedRefResponse> getRelatedRefs(Long id);

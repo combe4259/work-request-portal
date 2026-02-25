@@ -1,6 +1,7 @@
 package org.example.domain.techTask.service;
 
 import jakarta.persistence.EntityNotFoundException;
+import org.example.domain.notification.service.NotificationEventService;
 import org.example.domain.techTask.dto.TechTaskCreateRequest;
 import org.example.domain.techTask.dto.TechTaskDetailResponse;
 import org.example.domain.techTask.dto.TechTaskListResponse;
@@ -43,6 +44,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -63,6 +66,9 @@ class TechTaskServiceImplTest {
 
     @Mock
     private DocumentNoGenerator documentNoGenerator;
+
+    @Mock
+    private NotificationEventService notificationEventService;
 
     @InjectMocks
     private TechTaskServiceImpl techTaskService;
@@ -203,6 +209,60 @@ class TechTaskServiceImplTest {
         techTaskService.updateStatus(7L, new TechTaskStatusUpdateRequest("완료", "done"));
 
         assertThat(entity.getStatus()).isEqualTo("완료");
+    }
+
+    @Test
+    @DisplayName("생성 시 담당자가 있으면 담당자배정 알림을 발행한다")
+    void createPublishesAssignNotification() {
+        TechTaskCreateRequest request = new TechTaskCreateRequest(
+                "서비스 레이어 분리",
+                "컨트롤러가 저장소를 직접 호출",
+                "서비스 계층으로 이동",
+                "[\"테스트 작성\"]",
+                "리팩토링",
+                "높음",
+                "검토중",
+                10L,
+                20L,
+                30L,
+                LocalDate.of(2026, 3, 7)
+        );
+
+        when(techTaskRepository.save(any(TechTask.class))).thenAnswer(invocation -> {
+            TechTask task = invocation.getArgument(0);
+            task.setId(100L);
+            return task;
+        });
+        when(documentNoGenerator.next("TK")).thenReturn("TK-001");
+
+        techTaskService.create(request);
+
+        verify(notificationEventService).create(
+                eq(30L),
+                eq("담당자배정"),
+                eq("기술과제 배정"),
+                contains("TK-001"),
+                eq("TECH_TASK"),
+                eq(100L)
+        );
+    }
+
+    @Test
+    @DisplayName("상태 변경 시 등록자에게 상태변경 알림을 발행한다")
+    void updateStatusPublishesNotification() {
+        TechTask entity = sampleEntity(7L);
+        when(techTaskRepository.findById(7L)).thenReturn(Optional.of(entity));
+
+        techTaskService.updateStatus(7L, new TechTaskStatusUpdateRequest("완료", "done"));
+
+        verify(notificationEventService).create(
+                eq(20L),
+                eq("상태변경"),
+                eq("기술과제 상태 변경"),
+                contains("완료"),
+                eq("TECH_TASK"),
+                eq(7L)
+        );
     }
 
     @Test

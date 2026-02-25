@@ -64,6 +64,12 @@ public class TechTaskController {
         return ResponseEntity.noContent().build();
     }
 
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteTechTask(@PathVariable Long id) {
+        techTaskService.delete(id);
+        return ResponseEntity.noContent().build();
+    }
+
     @PatchMapping("/{id}/status")
     public ResponseEntity<Void> updateTechTaskStatus(
             @PathVariable Long id,
