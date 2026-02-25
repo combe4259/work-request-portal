@@ -1,13 +1,21 @@
 package org.example.domain.testScenario.service;
 
+import org.example.domain.documentIndex.service.DocumentIndexSyncService;
+import org.example.domain.notification.service.NotificationEventService;
 import org.example.domain.testScenario.dto.TestScenarioCreateRequest;
 import org.example.domain.testScenario.dto.TestScenarioDetailResponse;
 import org.example.domain.testScenario.dto.TestScenarioListResponse;
+import org.example.domain.testScenario.dto.TestScenarioRelatedRefItemRequest;
+import org.example.domain.testScenario.dto.TestScenarioRelatedRefResponse;
+import org.example.domain.testScenario.dto.TestScenarioRelatedRefsUpdateRequest;
 import org.example.domain.testScenario.dto.TestScenarioStatusUpdateRequest;
 import org.example.domain.testScenario.dto.TestScenarioUpdateRequest;
 import org.example.domain.testScenario.entity.TestScenario;
+import org.example.domain.testScenario.entity.TestScenarioRelatedRef;
 import org.example.domain.testScenario.mapper.TestScenarioMapper;
+import org.example.domain.testScenario.repository.TestScenarioRelatedRefRepository;
 import org.example.domain.testScenario.repository.TestScenarioRepository;
+import org.example.global.team.TeamScopeUtil;
 import org.example.global.util.DocumentNoGenerator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -17,25 +25,42 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+
 @Service
 @Transactional(readOnly = true)
 public class TestScenarioServiceImpl implements TestScenarioService {
 
     private final TestScenarioRepository testScenarioRepository;
+    private final TestScenarioRelatedRefRepository testScenarioRelatedRefRepository;
     private final DocumentNoGenerator documentNoGenerator;
+    private final NotificationEventService notificationEventService;
+    private final DocumentIndexSyncService documentIndexSyncService;
 
     public TestScenarioServiceImpl(
             TestScenarioRepository testScenarioRepository,
-            DocumentNoGenerator documentNoGenerator
+            TestScenarioRelatedRefRepository testScenarioRelatedRefRepository,
+            DocumentNoGenerator documentNoGenerator,
+            NotificationEventService notificationEventService,
+            DocumentIndexSyncService documentIndexSyncService
     ) {
         this.testScenarioRepository = testScenarioRepository;
+        this.testScenarioRelatedRefRepository = testScenarioRelatedRefRepository;
         this.documentNoGenerator = documentNoGenerator;
+        this.notificationEventService = notificationEventService;
+        this.documentIndexSyncService = documentIndexSyncService;
     }
 
     @Override
     public Page<TestScenarioListResponse> findPage(int page, int size) {
         PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
-        return testScenarioRepository.findAll(pageable)
+        Long teamId = TeamScopeUtil.currentTeamId();
+        return (teamId == null
+                ? testScenarioRepository.findAll(pageable)
+                : testScenarioRepository.findByTeamId(teamId, pageable))
                 .map(TestScenarioMapper::toListResponse);
     }
 
@@ -43,6 +68,7 @@ public class TestScenarioServiceImpl implements TestScenarioService {
     public TestScenarioDetailResponse findById(Long id) {
         TestScenario entity = testScenarioRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "테스트 시나리오를 찾을 수 없습니다."));
+        TeamScopeUtil.ensureAccessible(entity.getTeamId());
         return TestScenarioMapper.toDetailResponse(entity);
     }
 
@@ -54,12 +80,15 @@ public class TestScenarioServiceImpl implements TestScenarioService {
         TestScenario entity = TestScenarioMapper.fromCreateRequest(request);
 
         entity.setScenarioNo(documentNoGenerator.next("TS"));
+        entity.setTeamId(TeamScopeUtil.requireTeamId(request.teamId()));
         entity.setType(defaultIfBlank(request.type(), "기능"));
         entity.setPriority(defaultIfBlank(request.priority(), "보통"));
         entity.setStatus(defaultIfBlank(request.status(), "작성중"));
         entity.setSteps(defaultIfBlank(request.steps(), "[]"));
 
         TestScenario saved = testScenarioRepository.save(entity);
+        syncDocumentIndex(saved);
+        notifyAssigneeAssigned(saved);
         return saved.getId();
     }
 
@@ -72,6 +101,9 @@ public class TestScenarioServiceImpl implements TestScenarioService {
 
         TestScenario entity = testScenarioRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "테스트 시나리오를 찾을 수 없습니다."));
+        TeamScopeUtil.ensureAccessible(entity.getTeamId());
+        Long previousAssigneeId = entity.getAssigneeId();
+        String previousStatus = entity.getStatus();
 
         if (request.title() != null && request.title().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "title은 필수입니다.");
@@ -91,6 +123,22 @@ public class TestScenarioServiceImpl implements TestScenarioService {
         if (request.steps() != null) {
             entity.setSteps(defaultIfBlank(request.steps(), "[]"));
         }
+        syncDocumentIndex(entity);
+
+        notifyAssigneeChanged(entity, previousAssigneeId);
+        notifyStatusChanged(entity, previousStatus);
+    }
+
+    @Override
+    @Transactional
+    public void delete(Long id) {
+        TestScenario entity = testScenarioRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "테스트 시나리오를 찾을 수 없습니다."));
+        TeamScopeUtil.ensureAccessible(entity.getTeamId());
+
+        testScenarioRelatedRefRepository.deleteByTestScenarioId(id);
+        testScenarioRepository.delete(entity);
+        deleteDocumentIndex(entity);
     }
 
     @Override
@@ -102,10 +150,73 @@ public class TestScenarioServiceImpl implements TestScenarioService {
 
         TestScenario entity = testScenarioRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "테스트 시나리오를 찾을 수 없습니다."));
+        TeamScopeUtil.ensureAccessible(entity.getTeamId());
+        String previousStatus = entity.getStatus();
 
         entity.setStatus(request.status().trim());
         if (request.statusNote() != null) {
             entity.setStatusNote(normalizeNullable(request.statusNote()));
+        }
+        syncDocumentIndex(entity);
+
+        notifyStatusChanged(entity, previousStatus);
+    }
+
+    @Override
+    public List<TestScenarioRelatedRefResponse> getRelatedRefs(Long id) {
+        ensureAccessibleTestScenario(id);
+
+        return testScenarioRelatedRefRepository.findByTestScenarioIdOrderByIdAsc(id).stream()
+                .map(ref -> new TestScenarioRelatedRefResponse(
+                        ref.getRefType(),
+                        ref.getRefId(),
+                        toFallbackRefNo(ref.getRefType(), ref.getRefId()),
+                        null
+                ))
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public void replaceRelatedRefs(Long id, TestScenarioRelatedRefsUpdateRequest request) {
+        ensureAccessibleTestScenario(id);
+        testScenarioRelatedRefRepository.deleteByTestScenarioId(id);
+
+        if (request == null || request.items() == null || request.items().isEmpty()) {
+            return;
+        }
+
+        List<TestScenarioRelatedRefItemRequest> sortedItems = request.items().stream()
+                .filter(item -> item != null)
+                .sorted((a, b) -> {
+                    int left = a.sortOrder() == null ? Integer.MAX_VALUE : a.sortOrder();
+                    int right = b.sortOrder() == null ? Integer.MAX_VALUE : b.sortOrder();
+                    return Integer.compare(left, right);
+                })
+                .toList();
+
+        LinkedHashSet<String> seen = new LinkedHashSet<>();
+        List<TestScenarioRelatedRef> rows = new ArrayList<>();
+        for (TestScenarioRelatedRefItemRequest item : sortedItems) {
+            if (item.refId() == null || isBlank(item.refType())) {
+                continue;
+            }
+
+            String normalizedRefType = normalizeRefType(item.refType());
+            String uniqueKey = normalizedRefType + ":" + item.refId();
+            if (!seen.add(uniqueKey)) {
+                continue;
+            }
+
+            TestScenarioRelatedRef row = new TestScenarioRelatedRef();
+            row.setTestScenarioId(id);
+            row.setRefType(normalizedRefType);
+            row.setRefId(item.refId());
+            rows.add(row);
+        }
+
+        if (!rows.isEmpty()) {
+            testScenarioRelatedRefRepository.saveAll(rows);
         }
     }
 
@@ -116,15 +227,44 @@ public class TestScenarioServiceImpl implements TestScenarioService {
         if (request.title() == null || request.title().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "title은 필수입니다.");
         }
-        if (request.teamId() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "teamId는 필수입니다.");
-        }
+        TeamScopeUtil.requireTeamId(request.teamId());
         if (request.createdBy() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "createdBy는 필수입니다.");
         }
         if (request.deadline() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "deadline은 필수입니다.");
         }
+    }
+
+    private void ensureAccessibleTestScenario(Long id) {
+        TestScenario entity = testScenarioRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "테스트 시나리오를 찾을 수 없습니다."));
+        TeamScopeUtil.ensureAccessible(entity.getTeamId());
+    }
+
+    private String normalizeRefType(String rawRefType) {
+        String value = rawRefType.trim().toUpperCase(Locale.ROOT);
+        return switch (value) {
+            case "WORK_REQUEST", "TECH_TASK", "TEST_SCENARIO", "DEFECT", "DEPLOYMENT" -> value;
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "유효하지 않은 refType입니다.");
+        };
+    }
+
+    private String toFallbackRefNo(String refType, Long refId) {
+        String prefix = switch (refType) {
+            case "WORK_REQUEST" -> "WR";
+            case "TECH_TASK" -> "TK";
+            case "TEST_SCENARIO" -> "TS";
+            case "DEFECT" -> "DF";
+            case "DEPLOYMENT" -> "DP";
+            default -> "REF";
+        };
+
+        return prefix + "-" + refId;
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     private String defaultIfBlank(String value, String defaultValue) {
@@ -139,5 +279,74 @@ public class TestScenarioServiceImpl implements TestScenarioService {
             return null;
         }
         return value.trim();
+    }
+
+    private void notifyAssigneeAssigned(TestScenario entity) {
+        if (notificationEventService == null) {
+            return;
+        }
+
+        notificationEventService.create(
+                entity.getAssigneeId(),
+                "담당자배정",
+                "테스트 시나리오 배정",
+                entity.getScenarioNo() + " '" + entity.getTitle() + "' 시나리오가 배정되었습니다.",
+                "TEST_SCENARIO",
+                entity.getId()
+        );
+    }
+
+    private void notifyAssigneeChanged(TestScenario entity, Long previousAssigneeId) {
+        Long currentAssigneeId = entity.getAssigneeId();
+        if (currentAssigneeId == null || currentAssigneeId.equals(previousAssigneeId)) {
+            return;
+        }
+
+        notifyAssigneeAssigned(entity);
+    }
+
+    private void notifyStatusChanged(TestScenario entity, String previousStatus) {
+        if (notificationEventService == null) {
+            return;
+        }
+
+        String currentStatus = entity.getStatus();
+        if (currentStatus == null || currentStatus.equals(previousStatus)) {
+            return;
+        }
+
+        notificationEventService.create(
+                entity.getCreatedBy(),
+                "상태변경",
+                "테스트 시나리오 상태 변경",
+                entity.getScenarioNo() + " 상태가 '" + currentStatus + "'(으)로 변경되었습니다.",
+                "TEST_SCENARIO",
+                entity.getId()
+        );
+    }
+
+    private void syncDocumentIndex(TestScenario entity) {
+        if (documentIndexSyncService == null) {
+            return;
+        }
+        documentIndexSyncService.upsert(
+                "TEST_SCENARIO",
+                entity.getId(),
+                entity.getTeamId(),
+                entity.getScenarioNo(),
+                entity.getTitle(),
+                entity.getStatus()
+        );
+    }
+
+    private void deleteDocumentIndex(TestScenario entity) {
+        if (documentIndexSyncService == null) {
+            return;
+        }
+        documentIndexSyncService.delete(
+                "TEST_SCENARIO",
+                entity.getId(),
+                entity.getTeamId()
+        );
     }
 }
