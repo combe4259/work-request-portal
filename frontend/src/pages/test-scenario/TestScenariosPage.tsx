@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { PriorityBadge } from '@/components/work-request/Badges'
 import { TestTypeBadge, TestStatusBadge } from '@/components/test-scenario/Badges'
 import { FilterSelect, SortTh, Pagination, DeadlineCell, type SortDir } from '@/components/common/TableControls'
@@ -147,23 +147,18 @@ export default function TestScenariosPage() {
             </thead>
               <tbody className="divide-y divide-gray-50">
                 {(data?.items ?? []).map((ts) => (
-                  <tr key={ts.id} className="hover:bg-blue-50/30 transition-colors group">
+                  <tr
+                    key={ts.id}
+                    onClick={() => navigate(`/test-scenarios/${ts.id}`)}
+                    className="hover:bg-blue-50/30 transition-colors group cursor-pointer"
+                  >
                     <td className="px-4 py-3 font-mono text-[11px] text-gray-400 whitespace-nowrap">
-                      <Link
-                        to={`/test-scenarios/${ts.id}`}
-                        className="inline-flex rounded focus:outline-none focus:ring-2 focus:ring-brand/30"
-                        aria-label={`${ts.docNo} 상세 보기`}
-                      >
-                        {ts.docNo}
-                      </Link>
+                      {ts.docNo}
                     </td>
                     <td className="px-4 py-3 max-w-[240px]">
-                      <Link
-                        to={`/test-scenarios/${ts.id}`}
-                        className="text-[13px] text-gray-800 font-medium truncate block group-hover:text-brand transition-colors rounded focus:outline-none focus:ring-2 focus:ring-brand/30"
-                      >
+                      <span className="text-[13px] text-gray-800 font-medium truncate block group-hover:text-brand transition-colors">
                         {ts.title}
-                      </Link>
+                      </span>
                     </td>
                     <td className="px-3 py-3 whitespace-nowrap"><TestTypeBadge type={ts.type} /></td>
                     <td className="px-3 py-3 whitespace-nowrap"><PriorityBadge priority={ts.priority} /></td>

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { TypeBadge, PriorityBadge, StatusBadge } from '@/components/work-request/Badges'
 import { FilterSelect, SortTh, Pagination, DeadlineCell, type SortDir } from '@/components/common/TableControls'
 import { PlusIcon, SearchIcon } from '@/components/common/Icons'
@@ -120,23 +120,18 @@ export default function WorkRequestsPage() {
             </thead>
               <tbody className="divide-y divide-gray-50">
                 {(data?.items ?? []).map((req) => (
-                  <tr key={req.id} className="hover:bg-blue-50/30 transition-colors group">
+                  <tr
+                    key={req.id}
+                    onClick={() => navigate(`/work-requests/${req.id}`)}
+                    className="hover:bg-blue-50/30 transition-colors group cursor-pointer"
+                  >
                     <td className="px-4 py-3 font-mono text-[11px] text-gray-400 whitespace-nowrap">
-                      <Link
-                        to={`/work-requests/${req.id}`}
-                        className="inline-flex rounded focus:outline-none focus:ring-2 focus:ring-brand/30"
-                        aria-label={`${req.docNo} 상세 보기`}
-                      >
-                        {req.docNo}
-                      </Link>
+                      {req.docNo}
                     </td>
                     <td className="px-4 py-3 max-w-[260px]">
-                      <Link
-                        to={`/work-requests/${req.id}`}
-                        className="text-[13px] text-gray-800 font-medium truncate block group-hover:text-brand transition-colors rounded focus:outline-none focus:ring-2 focus:ring-brand/30"
-                      >
+                      <span className="text-[13px] text-gray-800 font-medium truncate block group-hover:text-brand transition-colors">
                         {req.title}
-                      </Link>
+                      </span>
                     </td>
                     <td className="px-3 py-3 whitespace-nowrap"><TypeBadge type={req.type} /></td>
                     <td className="px-3 py-3 whitespace-nowrap"><PriorityBadge priority={req.priority} /></td>

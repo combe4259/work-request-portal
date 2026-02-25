@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { PriorityBadge, StatusBadge } from '@/components/work-request/Badges'
 import { FilterSelect, SortTh, Pagination, DeadlineCell, type SortDir } from '@/components/common/TableControls'
 import { PlusIcon, SearchIcon } from '@/components/common/Icons'
@@ -122,23 +122,18 @@ export default function TechTasksPage() {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {(data?.items ?? []).map((task) => (
-                  <tr key={task.id} className="hover:bg-blue-50/30 transition-colors group">
+                  <tr
+                    key={task.id}
+                    onClick={() => navigate(`/tech-tasks/${task.id}`)}
+                    className="hover:bg-blue-50/30 transition-colors group cursor-pointer"
+                  >
                     <td className="px-4 py-3 font-mono text-[11px] text-gray-400 whitespace-nowrap">
-                      <Link
-                        to={`/tech-tasks/${task.id}`}
-                        className="inline-flex rounded focus:outline-none focus:ring-2 focus:ring-brand/30"
-                        aria-label={`${task.docNo} 상세 보기`}
-                      >
-                        {task.docNo}
-                      </Link>
+                      {task.docNo}
                     </td>
                     <td className="px-4 py-3 max-w-[260px]">
-                      <Link
-                        to={`/tech-tasks/${task.id}`}
-                        className="text-[13px] text-gray-800 font-medium truncate block group-hover:text-brand transition-colors rounded focus:outline-none focus:ring-2 focus:ring-brand/30"
-                      >
+                      <span className="text-[13px] text-gray-800 font-medium truncate block group-hover:text-brand transition-colors">
                         {task.title}
-                      </Link>
+                      </span>
                     </td>
                     <td className="px-3 py-3 whitespace-nowrap"><TechTypeBadge type={task.type} /></td>
                     <td className="px-3 py-3 whitespace-nowrap"><PriorityBadge priority={task.priority} /></td>
