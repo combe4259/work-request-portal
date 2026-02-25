@@ -7,6 +7,9 @@ import org.example.domain.attachment.dto.AttachmentUpdateRequest;
 import org.example.domain.attachment.entity.Attachment;
 import org.example.domain.attachment.mapper.AttachmentMapper;
 import org.example.domain.attachment.repository.AttachmentRepository;
+import org.example.domain.documentIndex.repository.DocumentIndexRepository;
+import org.example.global.team.TeamScopeUtil;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +35,8 @@ public class AttachmentServiceImpl implements AttachmentService {
     );
 
     private final AttachmentRepository attachmentRepository;
+    @Autowired(required = false)
+    private DocumentIndexRepository documentIndexRepository;
 
     public AttachmentServiceImpl(AttachmentRepository attachmentRepository) {
         this.attachmentRepository = attachmentRepository;
@@ -43,6 +48,7 @@ public class AttachmentServiceImpl implements AttachmentService {
         if (refId == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "refId는 필수입니다.");
         }
+        ensureRefAccessible(normalizedRefType, refId);
 
         return attachmentRepository.findByRefTypeAndRefIdOrderByIdDesc(normalizedRefType, refId).stream()
                 .map(AttachmentMapper::toListResponse)
@@ -52,6 +58,7 @@ public class AttachmentServiceImpl implements AttachmentService {
     @Override
     public AttachmentDetailResponse findById(Long id) {
         Attachment entity = getAttachmentOrThrow(id);
+        ensureRefAccessible(entity.getRefType(), entity.getRefId());
         return AttachmentMapper.toDetailResponse(entity);
     }
 
@@ -59,9 +66,11 @@ public class AttachmentServiceImpl implements AttachmentService {
     @Transactional
     public Long create(AttachmentCreateRequest request) {
         validateCreateRequest(request);
+        String normalizedRefType = normalizeRequiredRefType(request.refType());
+        ensureRefAccessible(normalizedRefType, request.refId());
 
         Attachment entity = AttachmentMapper.fromCreateRequest(request);
-        entity.setRefType(normalizeRequiredRefType(request.refType()));
+        entity.setRefType(normalizedRefType);
         entity.setOriginalName(request.originalName().trim());
         entity.setStoredPath(request.storedPath().trim());
         entity.setMimeType(normalizeNullable(request.mimeType()));
@@ -78,11 +87,16 @@ public class AttachmentServiceImpl implements AttachmentService {
 
         Attachment entity = getAttachmentOrThrow(id);
         validateUpdateRequest(request);
+        String targetRefType = request.refType() == null
+                ? entity.getRefType()
+                : normalizeRequiredRefType(request.refType());
+        Long targetRefId = request.refId() == null ? entity.getRefId() : request.refId();
+        ensureRefAccessible(targetRefType, targetRefId);
 
         AttachmentMapper.applyUpdate(entity, request);
 
         if (request.refType() != null) {
-            entity.setRefType(normalizeRequiredRefType(request.refType()));
+            entity.setRefType(targetRefType);
         }
         if (request.originalName() != null) {
             entity.setOriginalName(request.originalName().trim());
@@ -99,6 +113,7 @@ public class AttachmentServiceImpl implements AttachmentService {
     @Transactional
     public void delete(Long id) {
         Attachment entity = getAttachmentOrThrow(id);
+        ensureRefAccessible(entity.getRefType(), entity.getRefId());
         attachmentRepository.delete(entity);
     }
 
@@ -158,5 +173,20 @@ public class AttachmentServiceImpl implements AttachmentService {
             return null;
         }
         return value.trim();
+    }
+
+    private void ensureRefAccessible(String refType, Long refId) {
+        Long teamId = TeamScopeUtil.currentTeamId();
+        if (teamId == null || documentIndexRepository == null) {
+            return;
+        }
+        if (refId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "refId는 필수입니다.");
+        }
+
+        boolean exists = documentIndexRepository.findByTeamIdAndRefTypeAndRefId(teamId, refType, refId).isPresent();
+        if (!exists) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "참조 문서를 찾을 수 없습니다.");
+        }
     }
 }

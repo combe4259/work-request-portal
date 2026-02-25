@@ -1,5 +1,6 @@
 package org.example.domain.comment.service;
 
+import org.example.domain.documentIndex.repository.DocumentIndexRepository;
 import org.example.domain.comment.dto.CommentCreateRequest;
 import org.example.domain.comment.dto.CommentDetailResponse;
 import org.example.domain.comment.dto.CommentListResponse;
@@ -7,6 +8,8 @@ import org.example.domain.comment.dto.CommentUpdateRequest;
 import org.example.domain.comment.entity.Comment;
 import org.example.domain.comment.mapper.CommentMapper;
 import org.example.domain.comment.repository.CommentRepository;
+import org.example.global.team.TeamScopeUtil;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -34,6 +37,8 @@ public class CommentServiceImpl implements CommentService {
     );
 
     private final CommentRepository commentRepository;
+    @Autowired(required = false)
+    private DocumentIndexRepository documentIndexRepository;
 
     public CommentServiceImpl(CommentRepository commentRepository) {
         this.commentRepository = commentRepository;
@@ -45,6 +50,7 @@ public class CommentServiceImpl implements CommentService {
         if (refId == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "refId는 필수입니다.");
         }
+        ensureRefAccessible(normalizedRefType, refId);
 
         PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
         return commentRepository.findByRefTypeAndRefIdOrderByIdDesc(normalizedRefType, refId, pageable)
@@ -54,6 +60,7 @@ public class CommentServiceImpl implements CommentService {
     @Override
     public CommentDetailResponse findById(Long id) {
         Comment entity = getCommentOrThrow(id);
+        ensureRefAccessible(entity.getRefType(), entity.getRefId());
         return CommentMapper.toDetailResponse(entity);
     }
 
@@ -61,9 +68,11 @@ public class CommentServiceImpl implements CommentService {
     @Transactional
     public Long create(CommentCreateRequest request) {
         validateCreateRequest(request);
+        String normalizedRefType = normalizeRequiredRefType(request.refType());
+        ensureRefAccessible(normalizedRefType, request.refId());
 
         Comment entity = CommentMapper.fromCreateRequest(request);
-        entity.setRefType(normalizeRequiredRefType(request.refType()));
+        entity.setRefType(normalizedRefType);
         entity.setContent(request.content().trim());
 
         return commentRepository.save(entity).getId();
@@ -80,6 +89,7 @@ public class CommentServiceImpl implements CommentService {
         }
 
         Comment entity = getCommentOrThrow(id);
+        ensureRefAccessible(entity.getRefType(), entity.getRefId());
         CommentMapper.applyUpdate(entity, request);
         entity.setContent(request.content().trim());
     }
@@ -88,6 +98,7 @@ public class CommentServiceImpl implements CommentService {
     @Transactional
     public void delete(Long id) {
         Comment entity = getCommentOrThrow(id);
+        ensureRefAccessible(entity.getRefType(), entity.getRefId());
         commentRepository.delete(entity);
     }
 
@@ -122,5 +133,20 @@ public class CommentServiceImpl implements CommentService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "유효하지 않은 refType입니다.");
         }
         return normalized;
+    }
+
+    private void ensureRefAccessible(String refType, Long refId) {
+        Long teamId = TeamScopeUtil.currentTeamId();
+        if (teamId == null || documentIndexRepository == null) {
+            return;
+        }
+        if (refId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "refId는 필수입니다.");
+        }
+
+        boolean exists = documentIndexRepository.findByTeamIdAndRefTypeAndRefId(teamId, refType, refId).isPresent();
+        if (!exists) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "참조 문서를 찾을 수 없습니다.");
+        }
     }
 }
