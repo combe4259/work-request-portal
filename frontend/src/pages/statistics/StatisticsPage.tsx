@@ -4,6 +4,8 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
   type PieLabelRenderProps,
 } from 'recharts'
+import { useStatisticsSummaryQuery } from '@/features/statistics/queries'
+import { useAuthStore } from '@/stores/authStore'
 
 // ── 데이터 ────────────────────────────────────────────
 const WEEKLY_TREND = [
@@ -109,6 +111,22 @@ function Card({ title, children, className = '' }: { title: string; children: Re
 // ── 메인 ──────────────────────────────────────────────
 export default function StatisticsPage() {
   const [period, setPeriod] = useState<Period>('최근 8주')
+  const currentTeamId = useAuthStore((state) => state.currentTeam?.id)
+  const statisticsQuery = useStatisticsSummaryQuery(currentTeamId)
+  const stats = statisticsQuery.data
+
+  const weeklyTrend = stats?.weeklyTrend ?? WEEKLY_TREND
+  const domainData = stats?.domainData ?? DOMAIN_DATA
+  const defectSeverity = stats?.defectSeverity ?? DEFECT_SEVERITY
+  const memberStats = stats?.memberStats ?? MEMBER_STATS
+  const statusFlow = stats?.statusFlow ?? STATUS_FLOW
+
+  const kpi = [
+    { label: '총 업무요청', value: stats?.kpi.totalRequests ?? KPI[0].value, sub: '전체 업무요청 수', delta: true, icon: <DocIcon />, color: 'text-blue-600 bg-blue-50' },
+    { label: '평균 처리 기간', value: `${stats?.kpi.averageProcessingDays ?? 0}일`, sub: '완료 기준 평균', delta: true, icon: <ClockIcon />, color: 'text-indigo-600 bg-indigo-50' },
+    { label: '완료율', value: `${stats?.kpi.completionRate ?? 0}%`, sub: '전체 대비 완료 비율', delta: false, icon: <CheckIcon />, color: 'text-emerald-600 bg-emerald-50' },
+    { label: '미해결 결함', value: stats?.kpi.unresolvedDefects ?? KPI[3].value, sub: '완료/재현불가 제외', delta: false, icon: <BugIcon />, color: 'text-red-500 bg-red-50' },
+  ]
 
   return (
     <div className="p-6 space-y-5">
@@ -136,7 +154,7 @@ export default function StatisticsPage() {
 
       {/* KPI 카드 */}
       <div className="grid grid-cols-4 gap-4">
-        {KPI.map((k) => (
+        {kpi.map((k) => (
           <div key={k.label} className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] px-5 py-4 flex items-center gap-4">
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${k.color}`}>
               {k.icon}
@@ -154,7 +172,7 @@ export default function StatisticsPage() {
       <div className="grid grid-cols-[1fr_300px] gap-4">
         <Card title="주별 업무 추이">
           <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={WEEKLY_TREND} margin={{ top: 4, right: 4, bottom: 0, left: -10 }}>
+            <AreaChart data={weeklyTrend} margin={{ top: 4, right: 4, bottom: 0, left: -10 }}>
               <defs>
                 <linearGradient id="colorWr" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.15} />
@@ -187,8 +205,8 @@ export default function StatisticsPage() {
 
         <Card title="업무 상태 현황">
           <div className="space-y-2.5">
-            {STATUS_FLOW.map((s) => {
-              const max = Math.max(...STATUS_FLOW.map((x) => x.value))
+            {statusFlow.map((s) => {
+              const max = Math.max(...statusFlow.map((x) => x.value), 1)
               const pct = Math.round((s.value / max) * 100)
               return (
                 <div key={s.name}>
@@ -216,7 +234,7 @@ export default function StatisticsPage() {
           <ResponsiveContainer width="100%" height={180}>
             <PieChart>
               <Pie
-                data={DOMAIN_DATA}
+                data={domainData}
                 cx="50%"
                 cy="50%"
                 innerRadius={52}
@@ -226,7 +244,7 @@ export default function StatisticsPage() {
                 labelLine={false}
                 label={PieLabel}
               >
-                {DOMAIN_DATA.map((entry) => (
+                {domainData.map((entry) => (
                   <Cell key={entry.name} fill={entry.color} />
                 ))}
               </Pie>
@@ -237,7 +255,7 @@ export default function StatisticsPage() {
             </PieChart>
           </ResponsiveContainer>
           <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-2">
-            {DOMAIN_DATA.map((d) => (
+            {domainData.map((d) => (
               <div key={d.name} className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: d.color }} />
                 <span className="text-[11px] text-gray-500">{d.name}</span>
@@ -250,7 +268,7 @@ export default function StatisticsPage() {
         {/* 결함 심각도 */}
         <Card title="결함 심각도 분포">
           <ResponsiveContainer width="100%" height={160}>
-            <BarChart data={DEFECT_SEVERITY} margin={{ top: 0, right: 4, bottom: 0, left: -20 }} barSize={28}>
+            <BarChart data={defectSeverity} margin={{ top: 0, right: 4, bottom: 0, left: -20 }} barSize={28}>
               <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
               <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
@@ -260,7 +278,7 @@ export default function StatisticsPage() {
                 contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #F1F5F9' }}
               />
               <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                {DEFECT_SEVERITY.map((entry) => (
+                {defectSeverity.map((entry) => (
                   <Cell key={entry.name} fill={entry.color} />
                 ))}
               </Bar>
@@ -271,7 +289,7 @@ export default function StatisticsPage() {
         {/* 팀원별 처리 건수 */}
         <Card title="팀원별 완료 현황">
           <div className="space-y-3">
-            {MEMBER_STATS.map((m) => {
+            {memberStats.map((m) => {
               const total = m.done + m.inProgress
               const donePct = Math.round((m.done / total) * 100)
               return (
