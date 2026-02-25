@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.domain.workRequest.dto.WorkRequestCreateRequest;
 import org.example.domain.workRequest.dto.WorkRequestDetailResponse;
 import org.example.domain.workRequest.dto.WorkRequestListResponse;
+import org.example.domain.workRequest.dto.WorkRequestStatusUpdateRequest;
 import org.example.domain.workRequest.dto.WorkRequestUpdateRequest;
 import org.example.domain.workRequest.service.WorkRequestService;
 import org.junit.jupiter.api.DisplayName;
@@ -26,6 +27,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -154,6 +156,19 @@ class WorkRequestControllerTest {
                 .andExpect(status().isNoContent());
 
         verify(workRequestService).update(eq(50L), eq(request));
+    }
+
+    @Test
+    @DisplayName("업무요청 상태 수정 성공 시 204를 반환한다")
+    void updateWorkRequestStatusSuccess() throws Exception {
+        WorkRequestStatusUpdateRequest request = new WorkRequestStatusUpdateRequest("완료", "확인 완료");
+
+        mockMvc.perform(patch("/api/work-requests/{id}/status", 50L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isNoContent());
+
+        verify(workRequestService).updateStatus(eq(50L), eq(request));
     }
 
     private WorkRequestListResponse listResponse(Long id, String requestNo) {

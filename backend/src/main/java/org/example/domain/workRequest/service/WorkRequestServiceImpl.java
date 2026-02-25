@@ -9,6 +9,7 @@ import org.example.domain.workRequest.dto.WorkRequestListResponse;
 import org.example.domain.workRequest.dto.WorkRequestRelatedRefItemRequest;
 import org.example.domain.workRequest.dto.WorkRequestRelatedRefResponse;
 import org.example.domain.workRequest.dto.WorkRequestRelatedRefsUpdateRequest;
+import org.example.domain.workRequest.dto.WorkRequestStatusUpdateRequest;
 import org.example.domain.workRequest.dto.WorkRequestUpdateRequest;
 import org.example.domain.workRequest.entity.WorkRequest;
 import org.example.domain.workRequest.entity.WorkRequestRelatedRef;
@@ -24,6 +25,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -61,18 +63,15 @@ public class WorkRequestServiceImpl implements WorkRequestService {
     @Override
     public Page<WorkRequestListResponse> findPage(int page, int size) {
         PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
-        Long teamId = TeamScopeUtil.currentTeamId();
-        return (teamId == null
-                ? workRequestRepository.findAll(pageable)
-                : workRequestRepository.findByTeamId(teamId, pageable))
-                .map(WorkRequestMapper::toListResponse);
+        Long teamId = requireCurrentTeamId();
+        return workRequestRepository.findByTeamId(teamId, pageable).map(WorkRequestMapper::toListResponse);
     }
 
     @Override
     public WorkRequestDetailResponse findById(Long id) {
         WorkRequest entity = workRequestRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("WorkRequest not found: " + id));
-        TeamScopeUtil.ensureAccessible(entity.getTeamId());
+        ensureSameTeam(entity.getTeamId());
         return WorkRequestMapper.toDetailResponse(entity);
     }
 
@@ -82,7 +81,7 @@ public class WorkRequestServiceImpl implements WorkRequestService {
         WorkRequest entity = WorkRequestMapper.fromCreateRequest(request);
 
         entity.setRequestNo(documentNoGenerator.next("WR"));
-        entity.setTeamId(TeamScopeUtil.requireTeamId(request.teamId()));
+        entity.setTeamId(requireCurrentTeamId());
         entity.setType(defaultIfBlank(request.type(), "기능개선"));
         entity.setPriority(defaultIfBlank(request.priority(), "보통"));
         entity.setStatus(defaultIfBlank(request.status(), "접수대기"));
@@ -98,7 +97,7 @@ public class WorkRequestServiceImpl implements WorkRequestService {
     public void update(Long id, WorkRequestUpdateRequest request) {
         WorkRequest entity = workRequestRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("WorkRequest not found: " + id));
-        TeamScopeUtil.ensureAccessible(entity.getTeamId());
+        ensureSameTeam(entity.getTeamId());
 
         Long previousAssigneeId = entity.getAssigneeId();
         String previousStatus = entity.getStatus();
@@ -112,10 +111,44 @@ public class WorkRequestServiceImpl implements WorkRequestService {
 
     @Override
     @Transactional
+    public void updateStatus(Long id, WorkRequestStatusUpdateRequest request) {
+        if (request == null || isBlank(request.status())) {
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST, "status는 필수입니다.");
+        }
+
+        WorkRequest entity = workRequestRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("WorkRequest not found: " + id));
+        ensureSameTeam(entity.getTeamId());
+
+        String previousStatus = entity.getStatus();
+        String nextStatus = request.status().trim();
+
+        entity.setStatus(nextStatus);
+        if ("개발중".equals(nextStatus) && entity.getStartedAt() == null) {
+            entity.setStartedAt(java.time.LocalDateTime.now());
+        }
+        if ("완료".equals(nextStatus) && entity.getCompletedAt() == null) {
+            entity.setCompletedAt(java.time.LocalDateTime.now());
+        }
+        if ("반려".equals(nextStatus)) {
+            if (!isBlank(request.statusNote())) {
+                entity.setRejectedReason(request.statusNote().trim());
+            }
+            if (entity.getRejectedAt() == null) {
+                entity.setRejectedAt(java.time.LocalDateTime.now());
+            }
+        }
+
+        syncDocumentIndex(entity);
+        notifyStatusChanged(entity, previousStatus);
+    }
+
+    @Override
+    @Transactional
     public void delete(Long id) {
         WorkRequest entity = workRequestRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("WorkRequest not found: " + id));
-        TeamScopeUtil.ensureAccessible(entity.getTeamId());
+        ensureSameTeam(entity.getTeamId());
 
         workRequestRelatedRefRepository.deleteByWorkRequestId(id);
         workRequestRepository.delete(entity);
@@ -186,7 +219,22 @@ public class WorkRequestServiceImpl implements WorkRequestService {
     private void ensureAccessibleWorkRequest(Long id) {
         WorkRequest entity = workRequestRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("WorkRequest not found: " + id));
-        TeamScopeUtil.ensureAccessible(entity.getTeamId());
+        ensureSameTeam(entity.getTeamId());
+    }
+
+    private Long requireCurrentTeamId() {
+        Long teamId = TeamScopeUtil.currentTeamId();
+        if (teamId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "X-Team-Id 헤더가 필요합니다.");
+        }
+        return teamId;
+    }
+
+    private void ensureSameTeam(Long entityTeamId) {
+        Long currentTeamId = requireCurrentTeamId();
+        if (entityTeamId == null || !currentTeamId.equals(entityTeamId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "현재 팀에서 접근할 수 없는 데이터입니다.");
+        }
     }
 
     private String normalizeRefType(String rawRefType) {

@@ -1,6 +1,9 @@
 package org.example.global.team;
 
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.server.ResponseStatusException;
 
 public final class TeamScopeUtil {
@@ -9,7 +12,11 @@ public final class TeamScopeUtil {
     }
 
     public static Long currentTeamId() {
-        return TeamRequestContext.getCurrentTeamId();
+        Long contextTeamId = TeamRequestContext.getCurrentTeamId();
+        if (contextTeamId != null) {
+            return contextTeamId;
+        }
+        return resolveTeamIdFromRequest();
     }
 
     public static Long resolveTeamId(Long requestTeamId) {
@@ -36,5 +43,35 @@ public final class TeamScopeUtil {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "teamId는 필수입니다.");
         }
         return resolved;
+    }
+
+    private static Long resolveTeamIdFromRequest() {
+        ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        if (attributes == null) {
+            return null;
+        }
+
+        HttpServletRequest request = attributes.getRequest();
+        if (request == null) {
+            return null;
+        }
+
+        String rawTeamId = request.getHeader("X-Team-Id");
+        if (rawTeamId == null || rawTeamId.isBlank()) {
+            rawTeamId = request.getParameter("teamId");
+        }
+        if (rawTeamId == null || rawTeamId.isBlank()) {
+            return null;
+        }
+
+        try {
+            Long teamId = Long.parseLong(rawTeamId.trim());
+            if (teamId <= 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "유효하지 않은 X-Team-Id 입니다.");
+            }
+            return teamId;
+        } catch (NumberFormatException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "유효하지 않은 X-Team-Id 입니다.");
+        }
     }
 }

@@ -5,11 +5,15 @@ import org.example.domain.notification.service.NotificationEventService;
 import org.example.domain.workRequest.dto.WorkRequestCreateRequest;
 import org.example.domain.workRequest.dto.WorkRequestDetailResponse;
 import org.example.domain.workRequest.dto.WorkRequestListResponse;
+import org.example.domain.workRequest.dto.WorkRequestStatusUpdateRequest;
 import org.example.domain.workRequest.dto.WorkRequestUpdateRequest;
 import org.example.domain.workRequest.entity.WorkRequest;
 import org.example.domain.workRequest.repository.WorkRequestQueryRepository;
 import org.example.domain.workRequest.repository.WorkRequestRepository;
+import org.example.global.team.TeamRequestContext;
 import org.example.global.util.DocumentNoGenerator;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -60,16 +64,26 @@ class WorkRequestServiceImplTest {
     @Captor
     private ArgumentCaptor<Pageable> pageableCaptor;
 
+    @BeforeEach
+    void setUpTeamContext() {
+        TeamRequestContext.set(1L, 10L);
+    }
+
+    @AfterEach
+    void clearTeamContext() {
+        TeamRequestContext.clear();
+    }
+
     @Test
     @DisplayName("목록 조회 시 페이징/정렬을 적용하고 리스트 응답으로 매핑한다")
     void findPage() {
         WorkRequest entity = sampleEntity(1L);
-        when(workRequestRepository.findAll(any(Pageable.class)))
+        when(workRequestRepository.findByTeamId(eq(10L), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(entity)));
 
         Page<WorkRequestListResponse> page = workRequestService.findPage(2, 5);
 
-        verify(workRequestRepository).findAll(pageableCaptor.capture());
+        verify(workRequestRepository).findByTeamId(eq(10L), pageableCaptor.capture());
         Pageable pageable = pageableCaptor.getValue();
         Sort.Order idOrder = pageable.getSort().getOrderFor("id");
 
@@ -246,6 +260,26 @@ class WorkRequestServiceImplTest {
                 eq("WORK_REQUEST"),
                 eq(7L)
         );
+    }
+
+    @Test
+    @DisplayName("상태 전용 변경은 상태/시각 필드를 반영한다")
+    void updateStatus() {
+        WorkRequest entity = sampleEntity(9L);
+        entity.setStartedAt(null);
+        entity.setCompletedAt(null);
+        entity.setRejectedAt(null);
+        entity.setRejectedReason(null);
+        when(workRequestRepository.findById(9L)).thenReturn(Optional.of(entity));
+
+        workRequestService.updateStatus(9L, new WorkRequestStatusUpdateRequest("완료", null));
+        assertThat(entity.getStatus()).isEqualTo("완료");
+        assertThat(entity.getCompletedAt()).isNotNull();
+
+        workRequestService.updateStatus(9L, new WorkRequestStatusUpdateRequest("반려", "요건 불충분"));
+        assertThat(entity.getStatus()).isEqualTo("반려");
+        assertThat(entity.getRejectedReason()).isEqualTo("요건 불충분");
+        assertThat(entity.getRejectedAt()).isNotNull();
     }
 
     private WorkRequest sampleEntity(Long id) {

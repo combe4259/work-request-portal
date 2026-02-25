@@ -5,12 +5,14 @@ import org.example.domain.workRequest.dto.WorkRequestDetailResponse;
 import org.example.domain.workRequest.dto.WorkRequestListResponse;
 import org.example.domain.workRequest.dto.WorkRequestRelatedRefResponse;
 import org.example.domain.workRequest.dto.WorkRequestRelatedRefsUpdateRequest;
+import org.example.domain.workRequest.dto.WorkRequestStatusUpdateRequest;
 import org.example.domain.workRequest.dto.WorkRequestUpdateRequest;
 import org.example.domain.workRequest.service.WorkRequestService;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -57,6 +59,15 @@ public class WorkRequestController {
             @RequestBody WorkRequestUpdateRequest request
     ) {
         workRequestService.update(id, request);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<Void> updateWorkRequestStatus(
+            @PathVariable Long id,
+            @RequestBody WorkRequestStatusUpdateRequest request
+    ) {
+        workRequestService.updateStatus(id, request);
         return ResponseEntity.noContent().build();
     }
 

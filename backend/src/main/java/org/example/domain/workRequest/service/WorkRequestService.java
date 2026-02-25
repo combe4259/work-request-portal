@@ -5,6 +5,7 @@ import org.example.domain.workRequest.dto.WorkRequestDetailResponse;
 import org.example.domain.workRequest.dto.WorkRequestListResponse;
 import org.example.domain.workRequest.dto.WorkRequestRelatedRefResponse;
 import org.example.domain.workRequest.dto.WorkRequestRelatedRefsUpdateRequest;
+import org.example.domain.workRequest.dto.WorkRequestStatusUpdateRequest;
 import org.example.domain.workRequest.dto.WorkRequestUpdateRequest;
 import org.springframework.data.domain.Page;
 
@@ -18,6 +19,8 @@ public interface WorkRequestService {
     Long create(WorkRequestCreateRequest request);
 
     void update(Long id, WorkRequestUpdateRequest request);
+
+    void updateStatus(Long id, WorkRequestStatusUpdateRequest request);
 
     void delete(Long id);
 
