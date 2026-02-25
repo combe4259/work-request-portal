@@ -4,21 +4,14 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/common/AsyncS
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import { PriorityBadge, StatusBadge } from '@/components/work-request/Badges'
 import { TechTypeBadge } from '@/components/tech-task/Badges'
+import api from '@/lib/api'
+import { useCreateCommentMutation } from '@/features/comment/mutations'
+import { useCommentsQuery } from '@/features/comment/queries'
+import { useAttachmentsQuery } from '@/features/attachment/queries'
+import { useActivityLogsQuery } from '@/features/activity-log/queries'
 import { useDeleteTechTaskMutation, useUpdateTechTaskStatusMutation } from '@/features/tech-task/mutations'
 import { useTechTaskDetailQuery, useTechTaskPrLinksQuery, useTechTaskRelatedRefsQuery } from '@/features/tech-task/queries'
 import type { Status } from '@/types/tech-task'
-
-const MOCK_COMMENTS = [
-  { id: 1, author: '이설계', content: 'Service 인터페이스 먼저 정의하고 구현체 분리하는 방향으로 가면 테스트 붙이기도 편할 것 같습니다.', createdAt: '2026-02-08 10:14' },
-  { id: 2, author: '김개발', content: '네, AccountService 인터페이스 → AccountServiceImpl 구조로 가겠습니다. PR 올리면 리뷰 부탁드립니다.', createdAt: '2026-02-10 14:32' },
-]
-
-const MOCK_HISTORY = [
-  { action: '상태 변경', from: '검토중', to: '개발중', actor: '김개발', at: '2026-02-10 14:30' },
-  { action: '담당자 배정', from: '미배정', to: '김개발', actor: '이설계', at: '2026-02-07 11:20' },
-  { action: '상태 변경', from: '접수대기', to: '검토중', actor: '이설계', at: '2026-02-06 09:45' },
-  { action: '등록', from: '', to: '', actor: '김개발', at: '2026-02-05 17:22' },
-]
 
 const STATUS_OPTIONS: Status[] = ['접수대기', '검토중', '개발중', '테스트중', '완료', '반려']
 
@@ -80,15 +73,19 @@ export default function TechTaskDetailPage() {
   const detailQuery = useTechTaskDetailQuery(id)
   const relatedRefsQuery = useTechTaskRelatedRefsQuery(id)
   const prLinksQuery = useTechTaskPrLinksQuery(id)
+  const commentsQuery = useCommentsQuery('TECH_TASK', id)
+  const attachmentsQuery = useAttachmentsQuery('TECH_TASK', id)
+  const activityLogsQuery = useActivityLogsQuery('TECH_TASK', id)
   const updateStatusMutation = useUpdateTechTaskStatusMutation(id ?? '')
+  const createCommentMutation = useCreateCommentMutation('TECH_TASK', id)
   const deleteMutation = useDeleteTechTaskMutation()
 
   const [status, setStatus] = useState<Status>('접수대기')
   const [statusOpen, setStatusOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [dod, setDod] = useState<DodItem[]>([])
+  const [isSavingDod, setIsSavingDod] = useState(false)
   const [comment, setComment] = useState('')
-  const [comments, setComments] = useState(MOCK_COMMENTS)
 
   useEffect(() => {
     if (!detailQuery.data) {
@@ -120,10 +117,47 @@ export default function TechTaskDetailPage() {
     }
   }
 
-  const handleComment = () => {
-    if (!comment.trim()) return
-    setComments((prev) => [...prev, { id: Date.now(), author: '나', content: comment.trim(), createdAt: '방금 전' }])
+  const comments = commentsQuery.data?.items ?? []
+  const attachments = attachmentsQuery.data ?? []
+  const activityLogs = activityLogsQuery.data?.items ?? []
+
+  const handleComment = async () => {
+    const trimmed = comment.trim()
+    if (!trimmed) {
+      return
+    }
+    await createCommentMutation.mutateAsync({ content: trimmed })
     setComment('')
+  }
+
+  const handleDodToggle = async (itemId: number) => {
+    if (!id || !detailQuery.data) {
+      return
+    }
+
+    const previous = dod
+    const next = dod.map((item) => (item.id === itemId ? { ...item, done: !item.done } : item))
+    setDod(next)
+    setIsSavingDod(true)
+
+    try {
+      const payload = {
+        title: detailQuery.data.title,
+        currentIssue: detailQuery.data.currentIssue,
+        solution: detailQuery.data.solution,
+        definitionOfDone: JSON.stringify(next.map((item) => ({ text: item.text, done: item.done }))),
+        type: detailQuery.data.type,
+        priority: detailQuery.data.priority,
+        status: detailQuery.data.status,
+        deadline: detailQuery.data.deadline,
+      }
+      await api.put(`/tech-tasks/${id}`, payload)
+      await detailQuery.refetch()
+    } catch {
+      setDod(previous)
+    } finally {
+      setIsSavingDod(false)
+    }
   }
 
   if (detailQuery.isPending) {
@@ -262,12 +296,11 @@ export default function TechTaskDetailPage() {
                       <input
                         type="checkbox"
                         checked={item.done}
-                        onChange={() =>
-                          setDod((prev) =>
-                            prev.map((d) => (d.id === item.id ? { ...d, done: !d.done } : d))
-                          )
-                        }
+                        onChange={() => {
+                          void handleDodToggle(item.id)
+                        }}
                         className="sr-only"
+                        disabled={isSavingDod}
                       />
                       <div
                         className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${
@@ -345,39 +378,65 @@ export default function TechTaskDetailPage() {
               </div>
             </Section>
           )}
+
+          <Section title="첨부파일">
+            {attachmentsQuery.isPending ? (
+              <p className="text-[12px] text-gray-400">불러오는 중...</p>
+            ) : attachments.length === 0 ? (
+              <p className="text-[12px] text-gray-400">등록된 첨부파일이 없습니다.</p>
+            ) : (
+              <div className="space-y-2">
+                {attachments.map((file) => (
+                  <div key={file.id} className="flex items-center gap-2.5 px-3 py-2 bg-gray-50 rounded-lg border border-gray-100">
+                    <FileIcon />
+                    <span className="text-[12px] text-gray-700 flex-1 truncate">{file.originalName}</span>
+                    <span className="text-[11px] text-gray-400">{formatFileSize(file.fileSize)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Section>
         </div>
 
         <div className="w-[300px] flex-shrink-0 space-y-4">
           <div className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] px-4 py-4">
             <p className="text-[12px] font-semibold text-gray-700 mb-3">댓글 {comments.length}</p>
             <div className="space-y-3 mb-3 max-h-[260px] overflow-y-auto">
-              {comments.map((c) => (
-                <div key={c.id} className="flex gap-2.5">
-                  <div className="w-6 h-6 rounded-full bg-brand/10 flex items-center justify-center text-brand text-[10px] font-bold flex-shrink-0">
-                    {c.author[0]}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span className="text-[11px] font-semibold text-gray-800">{c.author}</span>
-                      <span className="text-[10px] text-gray-400">{c.createdAt}</span>
+              {commentsQuery.isPending ? (
+                <p className="text-[12px] text-gray-400">불러오는 중...</p>
+              ) : comments.length === 0 ? (
+                <EmptyState title="댓글이 없습니다" description="첫 댓글을 남겨보세요." />
+              ) : (
+                comments.map((c) => (
+                  <div key={c.id} className="flex gap-2.5">
+                    <div className="w-6 h-6 rounded-full bg-brand/10 flex items-center justify-center text-brand text-[10px] font-bold flex-shrink-0">
+                      {c.authorName[0]}
                     </div>
-                    <p className="text-[12px] text-gray-600 leading-relaxed">{c.content}</p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-[11px] font-semibold text-gray-800">{c.authorName}</span>
+                        <span className="text-[10px] text-gray-400">{c.createdAt}</span>
+                      </div>
+                      <p className="text-[12px] text-gray-600 leading-relaxed">{c.content}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
             <div className="flex gap-2 pt-2 border-t border-gray-100">
               <textarea
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && e.metaKey) handleComment() }}
+                onKeyDown={(e) => { if (e.key === 'Enter' && e.metaKey) void handleComment() }}
                 placeholder="댓글 입력 (⌘+Enter 전송)"
                 rows={2}
                 className="flex-1 px-2.5 py-2 text-[12px] border border-gray-200 rounded-lg focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand/20 resize-none"
               />
               <button
-                onClick={handleComment}
-                disabled={!comment.trim()}
+                onClick={() => {
+                  void handleComment()
+                }}
+                disabled={!comment.trim() || createCommentMutation.isPending}
                 className="h-fit px-2.5 py-2 bg-brand text-white text-[11px] font-semibold rounded-lg hover:bg-brand-hover transition-colors disabled:opacity-40 self-end"
               >
                 전송
@@ -390,20 +449,29 @@ export default function TechTaskDetailPage() {
             <div className="relative">
               <div className="absolute left-2.5 top-0 bottom-0 w-px bg-gray-100" />
               <div className="space-y-4">
-                {MOCK_HISTORY.map((h, i) => (
-                  <div key={i} className="flex gap-3 relative">
-                    <div className="w-5 h-5 rounded-full bg-white border-2 border-gray-200 flex-shrink-0 z-10 flex items-center justify-center">
-                      <div className={`w-1.5 h-1.5 rounded-full ${i === 0 ? 'bg-brand' : 'bg-gray-300'}`} />
+                {activityLogsQuery.isPending ? (
+                  <p className="text-[12px] text-gray-400">불러오는 중...</p>
+                ) : activityLogs.length === 0 ? (
+                  <p className="text-[12px] text-gray-400">처리 이력이 없습니다.</p>
+                ) : (
+                  activityLogs.map((h, i) => (
+                    <div key={h.id} className="flex gap-3 relative">
+                      <div className="w-5 h-5 rounded-full bg-white border-2 border-gray-200 flex-shrink-0 z-10 flex items-center justify-center">
+                        <div className={`w-1.5 h-1.5 rounded-full ${i === 0 ? 'bg-brand' : 'bg-gray-300'}`} />
+                      </div>
+                      <div className="flex-1 min-w-0 pb-1">
+                        <p className="text-[11px] font-semibold text-gray-700">{toActionLabel(h.actionType)}</p>
+                        {h.beforeValue || h.afterValue ? (
+                          <p className="text-[10px] text-gray-400 mt-0.5">{h.beforeValue ?? '-'} → {h.afterValue ?? '-'}</p>
+                        ) : null}
+                        <p className="text-[10px] text-gray-400 mt-0.5">{h.actorName} · {h.createdAt.slice(5)}</p>
+                        {h.message ? (
+                          <p className="text-[10px] text-gray-400 mt-0.5">{h.message}</p>
+                        ) : null}
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0 pb-1">
-                      <p className="text-[11px] font-semibold text-gray-700">{h.action}</p>
-                      {h.from && (
-                        <p className="text-[10px] text-gray-400 mt-0.5">{h.from} → {h.to}</p>
-                      )}
-                      <p className="text-[10px] text-gray-400 mt-0.5">{h.actor} · {h.at.slice(5)}</p>
-                    </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           </div>
@@ -459,6 +527,31 @@ function DeadlineText({ date }: { date: string }) {
   if (diff < 0) cls = 'text-red-500'
   else if (diff <= 3) cls = 'text-orange-500'
   return <p className={`text-[13px] font-medium ${cls}`}>{date} {diff >= 0 ? `(D-${diff})` : `(D+${Math.abs(diff)})`}</p>
+}
+
+function toActionLabel(actionType: string): string {
+  if (actionType === 'CREATED') return '등록'
+  if (actionType === 'UPDATED') return '수정'
+  if (actionType === 'STATUS_CHANGED') return '상태 변경'
+  if (actionType === 'ASSIGNEE_CHANGED') return '담당자 변경'
+  if (actionType === 'DELETED') return '삭제'
+  return actionType
+}
+
+function formatFileSize(bytes: number | null): string {
+  if (bytes == null || bytes < 0) return '-'
+  if (bytes < 1024) return `${bytes}B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
+}
+
+function FileIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+      <path d="M3 1H8L11 4V12H3V1Z" stroke="#9CA3AF" strokeWidth="1.2" strokeLinejoin="round" />
+      <path d="M8 1V4H11" stroke="#9CA3AF" strokeWidth="1.2" strokeLinejoin="round" />
+    </svg>
+  )
 }
 
 function BackIcon() {

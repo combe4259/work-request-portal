@@ -55,6 +55,12 @@ export interface TechTaskPrLink {
   prUrl: string | null
 }
 
+export interface CreateTechTaskPrLinkInput {
+  branchName: string
+  prNo?: string | null
+  prUrl?: string | null
+}
+
 export interface CreateTechTaskInput {
   title: string
   type: TechTaskType
@@ -272,6 +278,22 @@ export async function listTechTaskRelatedRefs(id: string | number): Promise<Tech
 export async function listTechTaskPrLinks(id: string | number): Promise<TechTaskPrLink[]> {
   const { data } = await api.get<ApiTechTaskPrLinkResponse[]>(`/tech-tasks/${id}/pr-links`)
   return data
+}
+
+export async function createTechTaskPrLink(
+  id: string | number,
+  input: CreateTechTaskPrLinkInput,
+): Promise<number> {
+  const { data } = await api.post<{ id: number }>(`/tech-tasks/${id}/pr-links`, {
+    branchName: input.branchName,
+    prNo: input.prNo ?? null,
+    prUrl: input.prUrl ?? null,
+  })
+  return data.id
+}
+
+export async function deleteTechTaskPrLink(id: string | number, linkId: number): Promise<void> {
+  await api.delete(`/tech-tasks/${id}/pr-links/${linkId}`)
 }
 
 export async function createTechTask(input: CreateTechTaskInput): Promise<CreateTechTaskResult> {

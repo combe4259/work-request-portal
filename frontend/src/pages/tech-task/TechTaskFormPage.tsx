@@ -8,8 +8,10 @@ import { inputCls, textareaCls, selectCls } from '@/lib/formStyles'
 import { useTeamMembersQuery } from '@/features/auth/queries'
 import { useDocumentIndexQuery } from '@/features/document-index/queries'
 import { useCreateTechTaskMutation, useUpdateTechTaskMutation } from '@/features/tech-task/mutations'
-import { useTechTaskDetailQuery, useTechTaskRelatedRefsQuery } from '@/features/tech-task/queries'
+import { useTechTaskDetailQuery, useTechTaskPrLinksQuery, useTechTaskRelatedRefsQuery } from '@/features/tech-task/queries'
 import { techTaskFormSchema, type TechTaskFormValues } from '@/features/tech-task/schemas'
+import { createTechTaskPrLink, deleteTechTaskPrLink } from '@/features/tech-task/service'
+import { createAttachmentsFromFiles } from '@/features/attachment/service'
 import { useAuthStore } from '@/stores/authStore'
 
 const ALLOWED_REF_TYPES = [
@@ -60,6 +62,7 @@ export default function TechTaskFormPage() {
   const teamMembersQuery = useTeamMembersQuery(currentTeam?.id)
   const detailQuery = useTechTaskDetailQuery(validEditId)
   const relatedRefsQuery = useTechTaskRelatedRefsQuery(validEditId)
+  const prLinksQuery = useTechTaskPrLinksQuery(validEditId)
 
   // 완료 기준
   const [dodItems, setDodItems] = useState<string[]>([])
@@ -80,6 +83,7 @@ export default function TechTaskFormPage() {
 
   // 첨부파일
   const [fileList, setFileList] = useState<File[]>([])
+  const [prLinks, setPrLinks] = useState<Array<{ id: number; branchName: string; prNo: string; prUrl: string }>>([])
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -130,6 +134,18 @@ export default function TechTaskFormPage() {
   }
 
   const removeFile = (idx: number) => setFileList((prev) => prev.filter((_, i) => i !== idx))
+  const addPrLink = () => {
+    setPrLinks((prev) => [
+      ...prev,
+      { id: Date.now(), branchName: '', prNo: '', prUrl: '' },
+    ])
+  }
+  const removePrLink = (id: number) => {
+    setPrLinks((prev) => prev.filter((item) => item.id !== id))
+  }
+  const updatePrLink = (id: number, field: 'branchName' | 'prNo' | 'prUrl', value: string) => {
+    setPrLinks((prev) => prev.map((item) => (item.id === id ? { ...item, [field]: value } : item)))
+  }
 
   const {
     register,
@@ -171,7 +187,41 @@ export default function TechTaskFormPage() {
     setRelatedDocs(relatedRefsQuery.data.map((item) => ({ docNo: item.refNo, title: item.title ?? item.refNo })))
   }, [relatedRefsQuery.data])
 
+  useEffect(() => {
+    if (!prLinksQuery.data) {
+      return
+    }
+    setPrLinks(prLinksQuery.data.map((item) => ({
+      id: item.id,
+      branchName: item.branchName,
+      prNo: item.prNo ?? '',
+      prUrl: item.prUrl ?? '',
+    })))
+  }, [prLinksQuery.data])
+
   const onSubmit = async (data: TechTaskFormValues) => {
+    const persistPrLinks = async (taskId: string | number, removeExisting: boolean) => {
+      const items = prLinks
+        .map((item) => ({
+          branchName: item.branchName.trim(),
+          prNo: item.prNo.trim(),
+          prUrl: item.prUrl.trim(),
+        }))
+        .filter((item) => item.branchName.length > 0)
+
+      if (removeExisting && prLinksQuery.data) {
+        await Promise.all(prLinksQuery.data.map((item) => deleteTechTaskPrLink(taskId, item.id)))
+      }
+
+      if (items.length > 0) {
+        await Promise.all(items.map((item) => createTechTaskPrLink(taskId, {
+          branchName: item.branchName,
+          prNo: item.prNo || null,
+          prUrl: item.prUrl || null,
+        })))
+      }
+    }
+
     if (validEditId != null && detailQuery.data) {
       await updateTechTask.mutateAsync({
         id: validEditId,
@@ -186,11 +236,19 @@ export default function TechTaskFormPage() {
         assignee: data.assignee,
         relatedDocs: relatedDocs.map((doc) => doc.docNo),
       })
+      if (fileList.length > 0) {
+        await createAttachmentsFromFiles({
+          refType: 'TECH_TASK',
+          refId: validEditId,
+          files: fileList,
+        })
+      }
+      await persistPrLinks(validEditId, true)
       navigate(`/tech-tasks/${validEditId}`)
       return
     }
 
-    await createTechTask.mutateAsync({
+    const created = await createTechTask.mutateAsync({
       title: data.title,
       type: data.type,
       priority: data.priority,
@@ -201,7 +259,15 @@ export default function TechTaskFormPage() {
       assignee: data.assignee,
       relatedDocs: relatedDocs.map((doc) => doc.docNo),
     })
-    navigate('/tech-tasks')
+    if (fileList.length > 0) {
+      await createAttachmentsFromFiles({
+        refType: 'TECH_TASK',
+        refId: created.id,
+        files: fileList,
+      })
+    }
+    await persistPrLinks(created.id, false)
+    navigate(`/tech-tasks/${created.id}`)
   }
 
   if (isEdit && validEditId == null) {
@@ -217,7 +283,7 @@ export default function TechTaskFormPage() {
     )
   }
 
-  if (isEdit && detailQuery.isPending) {
+  if (isEdit && (detailQuery.isPending || prLinksQuery.isPending)) {
     return (
       <div className="p-6">
         <LoadingState title="기술과제 정보를 불러오는 중입니다" description="잠시만 기다려주세요." />
@@ -428,6 +494,71 @@ export default function TechTaskFormPage() {
                       >
                         <CloseIcon />
                       </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* PR / 브랜치 */}
+            <div className="space-y-2">
+              <label className="text-[12px] font-semibold text-gray-600 block">
+                PR / 브랜치
+                <span className="ml-1 font-normal text-gray-400">(선택)</span>
+              </label>
+
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] text-gray-400">브랜치명 기준으로 저장됩니다. PR 번호/URL은 선택 입력입니다.</p>
+                <button
+                  type="button"
+                  onClick={addPrLink}
+                  className="h-8 px-3 border border-gray-200 rounded-lg text-[12px] text-gray-500 hover:bg-gray-50 hover:border-gray-300 transition-colors flex items-center gap-1"
+                >
+                  <PlusIcon />
+                  추가
+                </button>
+              </div>
+
+              {prLinks.length === 0 ? (
+                <div className="px-3 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-[12px] text-gray-400">
+                  등록된 PR/브랜치 항목이 없습니다.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {prLinks.map((item) => (
+                    <div key={item.id} className="px-3 py-3 bg-gray-50 border border-gray-100 rounded-lg space-y-2">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                        <input
+                          type="text"
+                          value={item.branchName}
+                          onChange={(event) => updatePrLink(item.id, 'branchName', event.target.value)}
+                          placeholder="브랜치명 (예: feature/login)"
+                          className={inputCls(false)}
+                        />
+                        <input
+                          type="text"
+                          value={item.prNo}
+                          onChange={(event) => updatePrLink(item.id, 'prNo', event.target.value)}
+                          placeholder="PR 번호 (선택)"
+                          className={inputCls(false)}
+                        />
+                        <input
+                          type="url"
+                          value={item.prUrl}
+                          onChange={(event) => updatePrLink(item.id, 'prUrl', event.target.value)}
+                          placeholder="PR URL (선택)"
+                          className={inputCls(false)}
+                        />
+                      </div>
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => removePrLink(item.id)}
+                          className="text-[12px] text-gray-400 hover:text-red-500 transition-colors"
+                        >
+                          항목 제거
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
