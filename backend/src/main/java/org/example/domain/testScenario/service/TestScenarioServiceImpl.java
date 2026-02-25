@@ -1,5 +1,7 @@
 package org.example.domain.testScenario.service;
 
+import org.example.domain.activityLog.service.ActivityLogCreateCommand;
+import org.example.domain.activityLog.service.ActivityLogService;
 import org.example.domain.documentIndex.service.DocumentIndexSyncService;
 import org.example.domain.notification.service.NotificationEventService;
 import org.example.domain.testScenario.dto.TestScenarioCreateRequest;
@@ -15,8 +17,10 @@ import org.example.domain.testScenario.entity.TestScenarioRelatedRef;
 import org.example.domain.testScenario.mapper.TestScenarioMapper;
 import org.example.domain.testScenario.repository.TestScenarioRelatedRefRepository;
 import org.example.domain.testScenario.repository.TestScenarioRepository;
+import org.example.global.team.TeamRequestContext;
 import org.example.global.team.TeamScopeUtil;
 import org.example.global.util.DocumentNoGenerator;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -39,6 +43,8 @@ public class TestScenarioServiceImpl implements TestScenarioService {
     private final DocumentNoGenerator documentNoGenerator;
     private final NotificationEventService notificationEventService;
     private final DocumentIndexSyncService documentIndexSyncService;
+    @Autowired(required = false)
+    private ActivityLogService activityLogService;
 
     public TestScenarioServiceImpl(
             TestScenarioRepository testScenarioRepository,
@@ -88,6 +94,7 @@ public class TestScenarioServiceImpl implements TestScenarioService {
 
         TestScenario saved = testScenarioRepository.save(entity);
         syncDocumentIndex(saved);
+        recordCreated(saved);
         notifyAssigneeAssigned(saved);
         return saved.getId();
     }
@@ -124,6 +131,9 @@ public class TestScenarioServiceImpl implements TestScenarioService {
             entity.setSteps(defaultIfBlank(request.steps(), "[]"));
         }
         syncDocumentIndex(entity);
+        recordUpdated(entity);
+        recordAssigneeChanged(entity, previousAssigneeId);
+        recordStatusChanged(entity, previousStatus);
 
         notifyAssigneeChanged(entity, previousAssigneeId);
         notifyStatusChanged(entity, previousStatus);
@@ -135,6 +145,7 @@ public class TestScenarioServiceImpl implements TestScenarioService {
         TestScenario entity = testScenarioRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "테스트 시나리오를 찾을 수 없습니다."));
         TeamScopeUtil.ensureAccessible(entity.getTeamId());
+        recordDeleted(entity);
 
         testScenarioRelatedRefRepository.deleteByTestScenarioId(id);
         testScenarioRepository.delete(entity);
@@ -158,6 +169,7 @@ public class TestScenarioServiceImpl implements TestScenarioService {
             entity.setStatusNote(normalizeNullable(request.statusNote()));
         }
         syncDocumentIndex(entity);
+        recordStatusChanged(entity, previousStatus);
 
         notifyStatusChanged(entity, previousStatus);
     }
@@ -323,6 +335,81 @@ public class TestScenarioServiceImpl implements TestScenarioService {
                 "TEST_SCENARIO",
                 entity.getId()
         );
+    }
+
+    private void recordCreated(TestScenario entity) {
+        recordActivity(entity, "CREATED", null, null, null, entity.getScenarioNo() + " 테스트 시나리오가 등록되었습니다.");
+    }
+
+    private void recordUpdated(TestScenario entity) {
+        recordActivity(entity, "UPDATED", null, null, null, entity.getScenarioNo() + " 테스트 시나리오 내용이 수정되었습니다.");
+    }
+
+    private void recordStatusChanged(TestScenario entity, String previousStatus) {
+        String currentStatus = entity.getStatus();
+        if (currentStatus == null || currentStatus.equals(previousStatus)) {
+            return;
+        }
+
+        recordActivity(
+                entity,
+                "STATUS_CHANGED",
+                "status",
+                previousStatus,
+                currentStatus,
+                entity.getScenarioNo() + " 상태가 '" + currentStatus + "'(으)로 변경되었습니다."
+        );
+    }
+
+    private void recordAssigneeChanged(TestScenario entity, Long previousAssigneeId) {
+        Long currentAssigneeId = entity.getAssigneeId();
+        if ((previousAssigneeId == null && currentAssigneeId == null)
+                || (previousAssigneeId != null && previousAssigneeId.equals(currentAssigneeId))) {
+            return;
+        }
+
+        recordActivity(
+                entity,
+                "ASSIGNEE_CHANGED",
+                "assigneeId",
+                previousAssigneeId == null ? null : String.valueOf(previousAssigneeId),
+                currentAssigneeId == null ? null : String.valueOf(currentAssigneeId),
+                entity.getScenarioNo() + " 담당자가 변경되었습니다."
+        );
+    }
+
+    private void recordDeleted(TestScenario entity) {
+        recordActivity(entity, "DELETED", null, null, null, entity.getScenarioNo() + " 테스트 시나리오가 삭제되었습니다.");
+    }
+
+    private void recordActivity(
+            TestScenario entity,
+            String actionType,
+            String fieldName,
+            String beforeValue,
+            String afterValue,
+            String message
+    ) {
+        if (activityLogService == null || entity == null || entity.getId() == null || entity.getTeamId() == null) {
+            return;
+        }
+
+        Long actorId = TeamRequestContext.getCurrentUserId();
+        try {
+            activityLogService.record(new ActivityLogCreateCommand(
+                    entity.getTeamId(),
+                    "TEST_SCENARIO",
+                    entity.getId(),
+                    actionType,
+                    actorId,
+                    fieldName,
+                    beforeValue,
+                    afterValue,
+                    message
+            ));
+        } catch (RuntimeException ignored) {
+            // 처리 이력 저장 실패가 본 작업 트랜잭션을 깨지 않도록 방어한다.
+        }
     }
 
     private void syncDocumentIndex(TestScenario entity) {
