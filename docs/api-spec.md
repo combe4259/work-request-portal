@@ -29,7 +29,6 @@
   - 다수 목록 API는 서버에서 `page/size` 중심으로 동작하며, 상세 검색/정렬/필터는 프론트 보정 포함
 - 미구현(계획):
   - 팀 초대 API (`/teams/{teamId}/invitations*`)
-  - 사용자 설정 API (`/users/me/*`)
 
 ## 4. 도메인별 API 명세
 
@@ -191,23 +190,23 @@ Auth/Team 응답 필드:
 | PATCH | `/notifications/{id}/read` | `read?(default=true)` | `204` | [x] |
 | DELETE | `/notifications/{id}` | - | `204` | [x] |
 | PATCH | `/notifications/read-all` | - | `204` | [x] |
-| GET | `/dashboard` | `teamId?` | `DashboardResponse` | [x] |
+| GET | `/dashboard` | `teamId?, scope(team\|mine), domain(ALL\|WORK_REQUEST\|TECH_TASK\|TEST_SCENARIO\|DEFECT\|DEPLOYMENT)` | `DashboardResponse` | [x] |
 | GET | `/statistics` | `teamId?` | `StatisticsResponse` | [x] |
 | GET | `/document-index/search` | `q?,types?,teamId?,page,size` | `Page<DocumentIndexSearchItemResponse>` | [x] |
 | GET | `/activity-logs` | `refType,refId,page,size` | `Page<ActivityLogListResponse>` | [x] |
 
-### 4.12 User Profile / Preferences (계획)
+### 4.12 User Profile / Preferences (P1)
 | Method | Path | Request | Response | 구현 |
 |---|---|---|---|---|
-| GET | `/users/me/profile` | - | `{name,email,role,avatarUrl?}` | [ ] |
-| PATCH | `/users/me/profile` | `{name,email,role,avatarUrl?}` | `204` | [ ] |
-| PATCH | `/users/me/password` | `{currentPassword,newPassword}` | `204` | [ ] |
-| GET/PATCH | `/users/me/preferences` | `{notification:{...},display:{landing,rowCount}}` | same | [ ] |
+| GET | `/users/me/profile` | Header: Bearer | `{name,email,role,avatarColor,photoUrl}` | [x] |
+| PATCH | `/users/me/profile` | Header: Bearer + `{name,email,role,avatarColor,photoUrl}` | `{name,email,role,avatarColor,photoUrl}` | [x] |
+| PATCH | `/users/me/password` | Header: Bearer + `{currentPassword,newPassword}` | `204` | [x] |
+| GET | `/users/me/preferences` | Header: Bearer | `{notification:{...},display:{landing,rowCount}}` | [x] |
+| PATCH | `/users/me/preferences` | Header: Bearer + `{notification:{...},display:{landing,rowCount}}` | same | [x] |
 
 ## 5. 스키마-프론트 갭 및 보완 필요
 - 서버 목록 API의 검색/정렬/필터 기능이 도메인별로 완전 일치하지 않음(현재 프론트 보정 포함)
 - 팀 초대 플로우 API 부재 (`/teams/{teamId}/invitations*`)
-- 사용자 설정 영속 API 부재 (`/users/me/*`)
 - 첨부파일은 현재 메타데이터 JSON 기반이며, 파일 스토리지 업로드 정책(`multipart/S3/local`) 표준화 필요
 
 ## 6. 체크리스트 운영 규칙
