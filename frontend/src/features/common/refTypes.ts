@@ -1,0 +1,9 @@
+export type RefType =
+  | 'WORK_REQUEST'
+  | 'TECH_TASK'
+  | 'TEST_SCENARIO'
+  | 'DEFECT'
+  | 'DEPLOYMENT'
+  | 'MEETING_NOTE'
+  | 'PROJECT_IDEA'
+  | 'KNOWLEDGE_BASE'
