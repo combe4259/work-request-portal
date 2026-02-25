@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -6,6 +6,7 @@ import { z } from 'zod'
 import type { KBCategory } from '@/types/knowledge-base'
 import { ChevronLeftIcon } from '@/components/common/Icons'
 import { ErrorState, LoadingState } from '@/components/common/AsyncState'
+import MarkdownRenderer from '@/components/common/MarkdownRenderer'
 import { useCreateKnowledgeBaseArticleMutation, useUpdateKnowledgeBaseArticleMutation } from '@/features/knowledge-base/mutations'
 import { useKnowledgeBaseArticleQuery } from '@/features/knowledge-base/queries'
 import { useTeamMembersQuery } from '@/features/auth/queries'
@@ -58,6 +59,8 @@ export default function KnowledgeBaseFormPage() {
 
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [customTagInput, setCustomTagInput] = useState('')
+  const [isTagInputComposing, setIsTagInputComposing] = useState(false)
+  const contentTextareaRef = useRef<HTMLTextAreaElement | null>(null)
 
   const authorOptions = useMemo(() => {
     const options = new Map<number, string>()
@@ -75,6 +78,7 @@ export default function KnowledgeBaseFormPage() {
     handleSubmit,
     watch,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -87,6 +91,7 @@ export default function KnowledgeBaseFormPage() {
   const summaryVal = watch('summary') ?? ''
   const contentVal = watch('content') ?? ''
   const selectedCategory = watch('category')
+  const contentField = register('content')
 
   useEffect(() => {
     if (!detailQuery.data) {
@@ -117,6 +122,100 @@ export default function KnowledgeBaseFormPage() {
       setSelectedTags((prev) => [...prev, value])
     }
     setCustomTagInput('')
+  }
+
+  const applyInlineWrap = (prefix: string, suffix: string, placeholder: string) => {
+    const textarea = contentTextareaRef.current
+    if (!textarea) {
+      return
+    }
+
+    const value = textarea.value
+    const start = textarea.selectionStart ?? value.length
+    const end = textarea.selectionEnd ?? value.length
+    const selected = value.slice(start, end)
+    const target = selected || placeholder
+    const inserted = `${prefix}${target}${suffix}`
+    const next = value.slice(0, start) + inserted + value.slice(end)
+
+    setValue('content', next, {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    })
+
+    requestAnimationFrame(() => {
+      textarea.focus()
+      if (selected) {
+        const pos = start + inserted.length
+        textarea.setSelectionRange(pos, pos)
+      } else {
+        const from = start + prefix.length
+        textarea.setSelectionRange(from, from + target.length)
+      }
+    })
+  }
+
+  const applyCodeBlock = () => {
+    const textarea = contentTextareaRef.current
+    if (!textarea) {
+      return
+    }
+
+    const value = textarea.value
+    const start = textarea.selectionStart ?? value.length
+    const end = textarea.selectionEnd ?? value.length
+    const selected = value.slice(start, end)
+    const target = selected || '코드를 입력하세요'
+    const prefix = '```\\n'
+    const suffix = '\\n```'
+    const inserted = `${prefix}${target}${suffix}`
+    const next = value.slice(0, start) + inserted + value.slice(end)
+
+    setValue('content', next, {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    })
+
+    requestAnimationFrame(() => {
+      textarea.focus()
+      if (selected) {
+        const pos = start + inserted.length
+        textarea.setSelectionRange(pos, pos)
+      } else {
+        const from = start + prefix.length
+        textarea.setSelectionRange(from, from + target.length)
+      }
+    })
+  }
+
+  const applyLink = () => {
+    const textarea = contentTextareaRef.current
+    if (!textarea) {
+      return
+    }
+
+    const value = textarea.value
+    const start = textarea.selectionStart ?? value.length
+    const end = textarea.selectionEnd ?? value.length
+    const selected = value.slice(start, end)
+    const label = selected || '링크 텍스트'
+    const defaultUrl = 'https://example.com'
+    const inserted = `[${label}](${defaultUrl})`
+    const next = value.slice(0, start) + inserted + value.slice(end)
+
+    setValue('content', next, {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    })
+
+    requestAnimationFrame(() => {
+      textarea.focus()
+      const urlStart = start + label.length + 3
+      textarea.setSelectionRange(urlStart, urlStart + defaultUrl.length)
+    })
   }
 
   const onSubmit = async (data: FormValues) => {
@@ -271,8 +370,10 @@ export default function KnowledgeBaseFormPage() {
                 type="text"
                 value={customTagInput}
                 onChange={(event) => setCustomTagInput(event.target.value)}
+                onCompositionStart={() => setIsTagInputComposing(true)}
+                onCompositionEnd={() => setIsTagInputComposing(false)}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
+                  if (event.key === 'Enter' && !isTagInputComposing && !event.nativeEvent.isComposing) {
                     event.preventDefault()
                     addCustomTag()
                   }
@@ -333,12 +434,35 @@ export default function KnowledgeBaseFormPage() {
                 <label className={`${labelCls} mb-0`}>본문 <span className="text-red-400">*</span></label>
                 <span className="text-[11px] text-gray-300">{contentVal.length}자</span>
               </div>
-              <textarea
-                {...register('content')}
-                rows={14}
-                placeholder={`마크다운 형식으로 작성하세요.\n\n## 개요\n...\n\n## 상세 내용\n...`}
-                className={`${textareaCls} font-mono text-[12px] leading-relaxed`}
-              />
+              <p className="text-[11px] text-gray-400 mb-2">
+                지원 문법: <code className="px-1 py-0.5 bg-gray-100 rounded"># 제목</code>, <code className="px-1 py-0.5 bg-gray-100 rounded">**강조**</code>, <code className="px-1 py-0.5 bg-gray-100 rounded">- 목록</code>, <code className="px-1 py-0.5 bg-gray-100 rounded">```코드```</code>, <code className="px-1 py-0.5 bg-gray-100 rounded">|테이블|</code>
+              </p>
+              <div className="flex items-center gap-1.5 mb-2">
+                <ToolbarButton label="굵게" onClick={() => applyInlineWrap('**', '**', '강조 텍스트')} />
+                <ToolbarButton label="코드블록" onClick={applyCodeBlock} />
+                <ToolbarButton label="링크" onClick={applyLink} />
+              </div>
+
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                <textarea
+                  {...contentField}
+                  ref={(element) => {
+                    contentField.ref(element)
+                    contentTextareaRef.current = element
+                  }}
+                  rows={14}
+                  placeholder={`마크다운 형식으로 작성하세요.\n\n## 개요\n...\n\n## 상세 내용\n...`}
+                  className={`${textareaCls} font-mono text-[12px] leading-relaxed`}
+                />
+                <div className="rounded-lg border border-gray-200 bg-gray-50/40 px-3 py-2.5 min-h-[312px] max-h-[312px] overflow-y-auto">
+                  <p className="text-[11px] font-semibold text-gray-500 mb-2">실시간 미리보기</p>
+                  <MarkdownRenderer
+                    content={contentVal}
+                    emptyMessage="본문을 입력하면 마크다운 미리보기가 표시됩니다."
+                    className="text-[13px]"
+                  />
+                </div>
+              </div>
               {errors.content && <p className={errCls}>{errors.content.message}</p>}
             </div>
           </div>
@@ -362,5 +486,17 @@ export default function KnowledgeBaseFormPage() {
         </form>
       </div>
     </div>
+  )
+}
+
+function ToolbarButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="h-7 px-2.5 text-[11px] font-medium text-gray-600 border border-gray-200 rounded-md bg-white hover:bg-gray-50 hover:border-gray-300 transition-colors"
+    >
+      {label}
+    </button>
   )
 }

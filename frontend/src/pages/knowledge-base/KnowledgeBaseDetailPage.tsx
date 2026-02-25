@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { EmptyState, ErrorState, LoadingState } from '@/components/common/AsyncState'
 import { useKnowledgeBaseArticleQuery } from '@/features/knowledge-base/queries'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
+import MarkdownRenderer from '@/components/common/MarkdownRenderer'
 import { useDeleteKnowledgeBaseArticleMutation, useIncreaseKnowledgeBaseViewMutation } from '@/features/knowledge-base/mutations'
 import type { KBCategory } from '@/types/knowledge-base'
 
@@ -149,7 +150,7 @@ export default function KnowledgeBaseDetailPage() {
 
       <div className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] px-5 py-5">
         <p className="text-[12px] font-semibold text-gray-700 mb-3">본문</p>
-        <div className="text-[13px] text-gray-700 leading-relaxed whitespace-pre-wrap">{data.content}</div>
+        <MarkdownRenderer content={data.content} className="text-[13px]" />
       </div>
 
       {data.relatedDocs.length > 0 ? (
