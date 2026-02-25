@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
+import ConfirmDialog from '@/components/common/ConfirmDialog'
 
 interface TopbarProps {
   onOpenSidebar?: () => void
@@ -44,7 +45,7 @@ const MOCK_NOTIFICATIONS = [
   {
     id: 2,
     type: 'comment',
-    message: '김개발님이 WR-2026-0038에 댓글을 남겼습니다',
+    message: '팀원이 WR-2026-0038에 댓글을 남겼습니다',
     time: '23분 전',
   },
   {
@@ -64,9 +65,10 @@ const MOCK_NOTIFICATIONS = [
 export default function Topbar({ onOpenSidebar }: TopbarProps) {
   const location = useLocation()
   const navigate = useNavigate()
-  const { user, currentTeam, logout } = useAuthStore()
+  const { user, currentTeam, logout, setCurrentTeam } = useAuthStore()
   const { displayName, role, avatarColor, photoUrl } = useProfileStore()
   const [notifOpen, setNotifOpen] = useState(false)
+  const [teamSwitchOpen, setTeamSwitchOpen] = useState(false)
 
   const pageTitle = PAGE_TITLES[location.pathname] ?? '페이지'
   const unreadCount = MOCK_NOTIFICATIONS.length
@@ -76,6 +78,16 @@ export default function Topbar({ onOpenSidebar }: TopbarProps) {
   const handleLogout = () => {
     logout()
     navigate('/login')
+  }
+
+  const handleTeamSwitch = () => {
+    setTeamSwitchOpen(true)
+  }
+
+  const confirmTeamSwitch = () => {
+    setTeamSwitchOpen(false)
+    setCurrentTeam(null)
+    navigate('/team-select')
   }
 
   return (
@@ -194,6 +206,11 @@ export default function Topbar({ onOpenSidebar }: TopbarProps) {
               팀 관리
             </DropdownMenuItem>
             <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={handleTeamSwitch}>
+              <TeamIcon />
+              팀 전환
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem
               variant="destructive"
               onClick={handleLogout}
@@ -204,6 +221,15 @@ export default function Topbar({ onOpenSidebar }: TopbarProps) {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+      <ConfirmDialog
+        open={teamSwitchOpen}
+        onOpenChange={setTeamSwitchOpen}
+        title="팀 전환 화면으로 이동할까요?"
+        description="현재 선택된 팀이 해제되고 팀 선택 화면으로 이동합니다."
+        cancelText="취소"
+        confirmText="이동"
+        onConfirm={confirmTeamSwitch}
+      />
     </header>
   )
 }
