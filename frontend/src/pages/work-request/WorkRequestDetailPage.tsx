@@ -3,20 +3,13 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { EmptyState, ErrorState, LoadingState } from '@/components/common/AsyncState'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import { TypeBadge, PriorityBadge, StatusBadge } from '@/components/work-request/Badges'
+import { useCreateCommentMutation } from '@/features/comment/mutations'
+import { useCommentsQuery } from '@/features/comment/queries'
+import { useAttachmentsQuery } from '@/features/attachment/queries'
+import { useActivityLogsQuery } from '@/features/activity-log/queries'
 import { useDeleteWorkRequestMutation, useUpdateWorkRequestStatusMutation } from '@/features/work-request/mutations'
 import { useWorkRequestDetailQuery, useWorkRequestRelatedRefsQuery } from '@/features/work-request/queries'
 import type { Status } from '@/types/work-request'
-
-const MOCK_COMMENTS = [
-  { id: 1, author: '이설계', content: '레이아웃 분석 완료했습니다. 반영 범위를 검토 중입니다.', createdAt: '2026-02-12 14:23' },
-  { id: 2, author: '김개발', content: 'API 연동 후 상세 검증 예정입니다.', createdAt: '2026-02-14 09:11' },
-]
-
-const MOCK_HISTORY = [
-  { action: '상태 변경', from: '검토중', to: '개발중', actor: '김개발', at: '2026-02-14 09:11' },
-  { action: '담당자 배정', from: '미배정', to: '김개발', actor: '이설계', at: '2026-02-12 14:20' },
-  { action: '등록', from: '', to: '', actor: '홍길동', at: '2026-02-10 16:32' },
-]
 
 const STATUS_OPTIONS: Status[] = ['접수대기', '검토중', '개발중', '테스트중', '완료', '반려']
 
@@ -51,13 +44,16 @@ export default function WorkRequestDetailPage() {
 
   const { data, isPending, isError, refetch } = useWorkRequestDetailQuery(hasValidId ? numericId : undefined)
   const relatedRefsQuery = useWorkRequestRelatedRefsQuery(hasValidId ? numericId : undefined)
+  const commentsQuery = useCommentsQuery('WORK_REQUEST', hasValidId ? numericId : undefined)
+  const attachmentsQuery = useAttachmentsQuery('WORK_REQUEST', hasValidId ? numericId : undefined)
+  const activityLogsQuery = useActivityLogsQuery('WORK_REQUEST', hasValidId ? numericId : undefined)
   const updateStatusMutation = useUpdateWorkRequestStatusMutation(hasValidId ? numericId : undefined)
+  const createCommentMutation = useCreateCommentMutation('WORK_REQUEST', hasValidId ? numericId : undefined)
   const deleteMutation = useDeleteWorkRequestMutation()
 
   const [statusOpen, setStatusOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [comment, setComment] = useState('')
-  const [comments, setComments] = useState(MOCK_COMMENTS)
 
   const handleStatusChange = async (next: Status) => {
     if (!hasValidId || !data || next === data.status) {
@@ -74,12 +70,17 @@ export default function WorkRequestDetailPage() {
     }
   }
 
-  const handleComment = () => {
-    if (!comment.trim()) return
-    setComments((prev) => [
-      ...prev,
-      { id: Date.now(), author: '나', content: comment.trim(), createdAt: '방금 전' },
-    ])
+  const comments = commentsQuery.data?.items ?? []
+  const attachments = attachmentsQuery.data ?? []
+  const activityLogs = activityLogsQuery.data?.items ?? []
+
+  const handleComment = async () => {
+    const trimmed = comment.trim()
+    if (!trimmed) {
+      return
+    }
+
+    await createCommentMutation.mutateAsync({ content: trimmed })
     setComment('')
   }
 
@@ -231,23 +232,43 @@ export default function WorkRequestDetailPage() {
               </div>
             </Section>
           ) : null}
+
+          <Section title="첨부파일">
+            {attachmentsQuery.isPending ? (
+              <p className="text-[12px] text-gray-400">불러오는 중...</p>
+            ) : attachments.length === 0 ? (
+              <p className="text-[12px] text-gray-400">등록된 첨부파일이 없습니다.</p>
+            ) : (
+              <div className="space-y-2">
+                {attachments.map((file) => (
+                  <div key={file.id} className="flex items-center gap-2.5 px-3 py-2 bg-gray-50 rounded-lg border border-gray-100">
+                    <FileIcon />
+                    <span className="text-[12px] text-gray-700 flex-1 truncate">{file.originalName}</span>
+                    <span className="text-[11px] text-gray-400">{formatFileSize(file.fileSize)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Section>
         </div>
 
         <div className="w-[300px] flex-shrink-0 space-y-4">
           <div className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] px-4 py-4">
             <p className="text-[12px] font-semibold text-gray-700 mb-3">댓글 {comments.length}</p>
             <div className="space-y-3 mb-3 max-h-[260px] overflow-y-auto">
-              {comments.length === 0 ? (
+              {commentsQuery.isPending ? (
+                <p className="text-[12px] text-gray-400">불러오는 중...</p>
+              ) : comments.length === 0 ? (
                 <EmptyState title="댓글이 없습니다" description="첫 댓글을 남겨보세요." />
               ) : (
                 comments.map((item) => (
-                  <div key={item.id} className="flex gap-2.5">
+                    <div key={item.id} className="flex gap-2.5">
                     <div className="w-6 h-6 rounded-full bg-brand/10 flex items-center justify-center text-brand text-[10px] font-bold flex-shrink-0">
-                      {item.author[0]}
+                      {item.authorName[0]}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-[11px] font-semibold text-gray-800">{item.author}</span>
+                        <span className="text-[11px] font-semibold text-gray-800">{item.authorName}</span>
                         <span className="text-[10px] text-gray-400">{item.createdAt}</span>
                       </div>
                       <p className="text-[12px] text-gray-600 leading-relaxed">{item.content}</p>
@@ -262,7 +283,7 @@ export default function WorkRequestDetailPage() {
                 onChange={(e) => setComment(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && e.metaKey) {
-                    handleComment()
+                    void handleComment()
                   }
                 }}
                 placeholder="댓글 입력 (⌘+Enter 전송)"
@@ -270,8 +291,10 @@ export default function WorkRequestDetailPage() {
                 className="flex-1 px-2.5 py-2 text-[12px] border border-gray-200 rounded-lg focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand/20 resize-none"
               />
               <button
-                onClick={handleComment}
-                disabled={!comment.trim()}
+                onClick={() => {
+                  void handleComment()
+                }}
+                disabled={!comment.trim() || createCommentMutation.isPending}
                 className="h-fit px-2.5 py-2 bg-brand text-white text-[11px] font-semibold rounded-lg hover:bg-brand-hover transition-colors disabled:opacity-40 self-end"
               >
                 전송
@@ -284,24 +307,33 @@ export default function WorkRequestDetailPage() {
             <div className="relative">
               <div className="absolute left-2.5 top-0 bottom-0 w-px bg-gray-100" />
               <div className="space-y-4">
-                {MOCK_HISTORY.map((item, index) => (
-                  <div key={item.at + item.action} className="flex gap-3 relative">
-                    <div className="w-5 h-5 rounded-full bg-white border-2 border-gray-200 flex-shrink-0 z-10 flex items-center justify-center">
-                      <div className={`w-1.5 h-1.5 rounded-full ${index === 0 ? 'bg-brand' : 'bg-gray-300'}`} />
-                    </div>
-                    <div className="flex-1 min-w-0 pb-1">
-                      <p className="text-[11px] font-semibold text-gray-700">{item.action}</p>
-                      {item.from ? (
+                {activityLogsQuery.isPending ? (
+                  <p className="text-[12px] text-gray-400">불러오는 중...</p>
+                ) : activityLogs.length === 0 ? (
+                  <p className="text-[12px] text-gray-400">처리 이력이 없습니다.</p>
+                ) : (
+                  activityLogs.map((item, index) => (
+                    <div key={item.id} className="flex gap-3 relative">
+                      <div className="w-5 h-5 rounded-full bg-white border-2 border-gray-200 flex-shrink-0 z-10 flex items-center justify-center">
+                        <div className={`w-1.5 h-1.5 rounded-full ${index === 0 ? 'bg-brand' : 'bg-gray-300'}`} />
+                      </div>
+                      <div className="flex-1 min-w-0 pb-1">
+                        <p className="text-[11px] font-semibold text-gray-700">{toActionLabel(item.actionType)}</p>
+                        {item.beforeValue || item.afterValue ? (
+                          <p className="text-[10px] text-gray-400 mt-0.5">
+                            {item.beforeValue ?? '-'} → {item.afterValue ?? '-'}
+                          </p>
+                        ) : null}
                         <p className="text-[10px] text-gray-400 mt-0.5">
-                          {item.from} → {item.to}
+                          {item.actorName} · {item.createdAt.slice(5)}
                         </p>
-                      ) : null}
-                      <p className="text-[10px] text-gray-400 mt-0.5">
-                        {item.actor} · {item.at.slice(5)}
-                      </p>
+                        {item.message ? (
+                          <p className="text-[10px] text-gray-400 mt-0.5">{item.message}</p>
+                        ) : null}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           </div>
@@ -361,6 +393,31 @@ function DeadlineText({ date }: { date: string }) {
     <p className={`text-[13px] font-medium ${cls}`}>
       {date} {diff >= 0 ? `(D-${diff})` : `(D+${Math.abs(diff)})`}
     </p>
+  )
+}
+
+function toActionLabel(actionType: string): string {
+  if (actionType === 'CREATED') return '등록'
+  if (actionType === 'UPDATED') return '수정'
+  if (actionType === 'STATUS_CHANGED') return '상태 변경'
+  if (actionType === 'ASSIGNEE_CHANGED') return '담당자 변경'
+  if (actionType === 'DELETED') return '삭제'
+  return actionType
+}
+
+function formatFileSize(bytes: number | null): string {
+  if (bytes == null || bytes < 0) return '-'
+  if (bytes < 1024) return `${bytes}B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
+}
+
+function FileIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+      <path d="M3 1H8L11 4V12H3V1Z" stroke="#9CA3AF" strokeWidth="1.2" strokeLinejoin="round" />
+      <path d="M8 1V4H11" stroke="#9CA3AF" strokeWidth="1.2" strokeLinejoin="round" />
+    </svg>
   )
 }
 

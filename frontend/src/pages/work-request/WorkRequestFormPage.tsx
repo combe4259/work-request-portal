@@ -10,6 +10,7 @@ import { useDocumentIndexQuery } from '@/features/document-index/queries'
 import { useCreateWorkRequestMutation, useUpdateWorkRequestMutation } from '@/features/work-request/mutations'
 import { useWorkRequestDetailQuery, useWorkRequestRelatedRefsQuery } from '@/features/work-request/queries'
 import { workRequestFormSchema, type WorkRequestFormValues } from '@/features/work-request/schemas'
+import { createAttachmentsFromFiles } from '@/features/attachment/service'
 import { useAuthStore } from '@/stores/authStore'
 
 const ALLOWED_REF_TYPES = [
@@ -144,11 +145,18 @@ export default function WorkRequestFormPage() {
         background: data.background,
         description: data.description,
       })
+      if (fileList.length > 0) {
+        await createAttachmentsFromFiles({
+          refType: 'WORK_REQUEST',
+          refId: validEditId,
+          files: fileList,
+        })
+      }
       navigate(`/work-requests/${validEditId}`)
       return
     }
 
-    await createWorkRequest.mutateAsync({
+    const created = await createWorkRequest.mutateAsync({
       title: data.title,
       type: data.type,
       priority: data.priority,
@@ -158,7 +166,14 @@ export default function WorkRequestFormPage() {
       background: data.background,
       description: data.description,
     })
-    navigate('/work-requests')
+    if (fileList.length > 0) {
+      await createAttachmentsFromFiles({
+        refType: 'WORK_REQUEST',
+        refId: created.id,
+        files: fileList,
+      })
+    }
+    navigate(`/work-requests/${created.id}`)
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
