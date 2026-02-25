@@ -107,6 +107,15 @@ public class NotificationServiceImpl implements NotificationService {
 
     @Override
     @Transactional
+    public void updateAllReadState(Long userId, boolean isRead) {
+        if (userId == null || userId <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "userId는 필수입니다.");
+        }
+        notificationRepository.updateReadStateByUserId(userId, isRead);
+    }
+
+    @Override
+    @Transactional
     public void delete(Long id) {
         Notification entity = getNotificationOrThrow(id);
         notificationRepository.delete(entity);

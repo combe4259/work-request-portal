@@ -6,6 +6,8 @@ import org.example.domain.notification.dto.NotificationDetailResponse;
 import org.example.domain.notification.dto.NotificationListResponse;
 import org.example.domain.notification.dto.NotificationUpdateRequest;
 import org.example.domain.notification.service.NotificationService;
+import org.example.global.team.TeamRequestContext;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +43,11 @@ class NotificationControllerTest {
 
     @MockBean
     private NotificationService notificationService;
+
+    @AfterEach
+    void tearDown() {
+        TeamRequestContext.clear();
+    }
 
     @Test
     @DisplayName("알림 목록 조회는 기본 페이지 파라미터를 사용한다")
@@ -148,6 +155,17 @@ class NotificationControllerTest {
                 .andExpect(status().isNoContent());
 
         verify(notificationService).updateReadState(50L, true);
+    }
+
+    @Test
+    @DisplayName("알림 전체 읽음 처리 성공 시 204를 반환한다")
+    void updateAllReadStateSuccess() throws Exception {
+        TeamRequestContext.set(2L, 10L);
+
+        mockMvc.perform(patch("/api/notifications/read-all"))
+                .andExpect(status().isNoContent());
+
+        verify(notificationService).updateAllReadState(2L, true);
     }
 
     @Test

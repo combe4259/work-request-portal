@@ -143,6 +143,14 @@ class NotificationServiceImplTest {
     }
 
     @Test
+    @DisplayName("전체 읽음 상태 변경 시 userId 기준 update 쿼리를 호출한다")
+    void updateAllReadState() {
+        notificationService.updateAllReadState(2L, true);
+
+        verify(notificationRepository).updateReadStateByUserId(2L, true);
+    }
+
+    @Test
     @DisplayName("삭제 시 대상을 조회한 뒤 삭제한다")
     void delete() {
         Notification entity = sampleEntity(8L);

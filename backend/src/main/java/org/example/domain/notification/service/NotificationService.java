@@ -18,5 +18,7 @@ public interface NotificationService {
 
     void updateReadState(Long id, boolean isRead);
 
+    void updateAllReadState(Long userId, boolean isRead);
+
     void delete(Long id);
 }

@@ -5,7 +5,9 @@ import org.example.domain.notification.dto.NotificationDetailResponse;
 import org.example.domain.notification.dto.NotificationListResponse;
 import org.example.domain.notification.dto.NotificationUpdateRequest;
 import org.example.domain.notification.service.NotificationService;
+import org.example.global.team.TeamRequestContext;
 import org.springframework.data.domain.Page;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -66,6 +68,18 @@ public class NotificationController {
             @RequestParam(defaultValue = "true") boolean read
     ) {
         notificationService.updateReadState(id, read);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/read-all")
+    public ResponseEntity<Void> updateAllReadState(
+            @RequestParam(defaultValue = "true") boolean read
+    ) {
+        Long currentUserId = TeamRequestContext.getCurrentUserId();
+        if (currentUserId == null || currentUserId <= 0) {
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증 정보가 없습니다.");
+        }
+        notificationService.updateAllReadState(currentUserId, read);
         return ResponseEntity.noContent().build();
     }
 
