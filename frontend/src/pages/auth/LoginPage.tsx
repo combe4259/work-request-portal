@@ -37,10 +37,8 @@ export default function LoginPage() {
     try {
       const response = await loginMutation.mutateAsync(_data)
       setAuth(response.user, response.accessToken, response.teams)
-      if (response.teams.length > 0) {
-        setCurrentTeam(response.teams[0])
-      }
-      navigate('/dashboard', { replace: true })
+      setCurrentTeam(null)
+      navigate('/team-select', { replace: true })
     } catch (error) {
       setServerError(resolveErrorMessage(error, '이메일 또는 비밀번호가 올바르지 않습니다.'))
     }

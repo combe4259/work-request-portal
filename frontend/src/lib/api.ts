@@ -7,9 +7,13 @@ const api = axios.create({
 })
 
 api.interceptors.request.use((config) => {
-  const token = useAuthStore.getState().token ?? localStorage.getItem('accessToken')
+  const auth = useAuthStore.getState()
+  const token = auth.token ?? localStorage.getItem('accessToken')
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
+  }
+  if (auth.currentTeam?.id) {
+    config.headers['X-Team-Id'] = String(auth.currentTeam.id)
   }
   return config
 })

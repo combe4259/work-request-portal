@@ -37,10 +37,15 @@ type JoinTeamValues = z.infer<typeof joinTeamSchema>
 export default function TeamSelectPage() {
   const navigate = useNavigate()
   const [mode, setMode] = useState<Mode>(null)
-  const { addTeam } = useAuthStore()
+  const { teams, addTeam, setCurrentTeam } = useAuthStore()
 
   const handleSuccess = (team: Team) => {
     addTeam(team)
+    navigate('/dashboard', { replace: true })
+  }
+
+  const handleSelectExistingTeam = (team: Team) => {
+    setCurrentTeam(team)
     navigate('/dashboard', { replace: true })
   }
 
@@ -48,8 +53,27 @@ export default function TeamSelectPage() {
     <AuthLayout>
       <div className="mb-7">
         <h2 className="text-2xl font-bold text-gray-900 mb-1.5">팀 설정</h2>
-        <p className="text-sm text-gray-500">새 팀을 만들거나 기존 팀에 참여하세요</p>
+        <p className="text-sm text-gray-500">입장할 팀을 먼저 선택하세요</p>
       </div>
+
+      {teams.length > 0 && (
+        <div className="mb-5 bg-white rounded-xl border border-gray-200 p-4">
+          <p className="text-sm font-semibold text-gray-800 mb-3">내 팀 선택</p>
+          <div className="space-y-2">
+            {teams.map((team) => (
+              <button
+                key={team.id}
+                type="button"
+                onClick={() => handleSelectExistingTeam(team)}
+                className="w-full text-left rounded-lg border border-gray-200 px-3 py-2.5 hover:border-brand/40 hover:bg-brand/5 transition-colors"
+              >
+                <p className="text-sm font-semibold text-gray-900">{team.name}</p>
+                <p className="text-[11px] text-gray-500 mt-0.5">{team.teamRole}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 옵션 카드 */}
       <div className="grid grid-cols-2 gap-3 mb-5">

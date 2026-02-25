@@ -8,7 +8,7 @@ interface AuthState {
   currentTeam: Team | null
   teams: Team[]
   setAuth: (user: User, token: string, teams: Team[]) => void
-  setCurrentTeam: (team: Team) => void
+  setCurrentTeam: (team: Team | null) => void
   setTeams: (teams: Team[]) => void
   addTeam: (team: Team) => void
   logout: () => void
@@ -24,7 +24,14 @@ export const useAuthStore = create<AuthState>()(
 
       setAuth: (user, token, teams) => {
         localStorage.setItem('accessToken', token)
-        set({ user, token, teams, currentTeam: teams[0] ?? null })
+        set((state) => ({
+          user,
+          token,
+          teams,
+          currentTeam: state.currentTeam && teams.some((team) => team.id === state.currentTeam?.id)
+            ? state.currentTeam
+            : null,
+        }))
       },
 
       setCurrentTeam: (team) => set({ currentTeam: team }),

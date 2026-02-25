@@ -81,11 +81,8 @@ export default function RegisterPage() {
       })
 
       setAuth(loginResponse.user, loginResponse.accessToken, loginResponse.teams)
-      if (loginResponse.teams.length > 0) {
-        setCurrentTeam(loginResponse.teams[0])
-      }
-
-      navigate('/dashboard', { replace: true })
+      setCurrentTeam(null)
+      navigate('/team-select', { replace: true })
     } catch (error) {
       setServerError(resolveErrorMessage(error, '회원가입 처리 중 오류가 발생했습니다.'))
     }

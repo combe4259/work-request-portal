@@ -33,7 +33,7 @@ import ResourcesPage from '@/pages/resource/ResourcesPage'
 import ResourceFormPage from '@/pages/resource/ResourceFormPage'
 import SettingsPage from '@/pages/settings/SettingsPage'
 import SettingsTeamPage from '@/pages/settings/SettingsTeamPage'
-import { RedirectIfAuthenticated, RequireAuth } from './RouteGuards'
+import { RedirectIfAuthenticated, RequireAuth, RequireTeam } from './RouteGuards'
 
 const router = createBrowserRouter([
   {
@@ -67,34 +67,43 @@ const router = createBrowserRouter([
   {
     element: (
       <RequireAuth>
-        <AppLayout />
+        <RequireTeam>
+          <AppLayout />
+        </RequireTeam>
       </RequireAuth>
     ),
     children: [
       { path: '/dashboard', element: <DashboardPage /> },
       { path: '/work-requests', element: <WorkRequestsPage /> },
       { path: '/work-requests/new', element: <WorkRequestFormPage /> },
+      { path: '/work-requests/:id/edit', element: <WorkRequestFormPage /> },
       { path: '/work-requests/:id', element: <WorkRequestDetailPage /> },
       { path: '/tech-tasks', element: <TechTasksPage /> },
       { path: '/tech-tasks/new', element: <TechTaskFormPage /> },
+      { path: '/tech-tasks/:id/edit', element: <TechTaskFormPage /> },
       { path: '/tech-tasks/:id', element: <TechTaskDetailPage /> },
       { path: '/test-scenarios', element: <TestScenariosPage /> },
       { path: '/test-scenarios/new', element: <TestScenarioFormPage /> },
+      { path: '/test-scenarios/:id/edit', element: <TestScenarioFormPage /> },
       { path: '/test-scenarios/:id', element: <TestScenarioDetailPage /> },
       { path: '/defects', element: <DefectsPage /> },
       { path: '/defects/new', element: <DefectFormPage /> },
+      { path: '/defects/:id/edit', element: <DefectFormPage /> },
       { path: '/defects/:id', element: <DefectDetailPage /> },
       { path: '/deployments', element: <DeploymentsPage /> },
       { path: '/deployments/new', element: <DeploymentFormPage /> },
+      { path: '/deployments/:id/edit', element: <DeploymentFormPage /> },
       { path: '/deployments/:id', element: <DeploymentDetailPage /> },
       { path: '/knowledge-base', element: <KnowledgeBasePage /> },
       { path: '/knowledge-base/new', element: <KnowledgeBaseFormPage /> },
+      { path: '/knowledge-base/:id/edit', element: <KnowledgeBaseFormPage /> },
       { path: '/knowledge-base/:id', element: <KnowledgeBaseDetailPage /> },
       { path: '/meeting-notes', element: <MeetingNotesPage /> },
       { path: '/meeting-notes/new', element: <MeetingNoteFormPage /> },
       { path: '/meeting-notes/:id', element: <MeetingNoteDetailPage /> },
       { path: '/ideas', element: <IdeasPage /> },
       { path: '/ideas/new', element: <IdeaFormPage /> },
+      { path: '/ideas/:id/edit', element: <IdeaFormPage /> },
       { path: '/ideas/:id', element: <IdeaDetailPage /> },
       { path: '/statistics', element: <StatisticsPage /> },
       { path: '/resources', element: <ResourcesPage /> },

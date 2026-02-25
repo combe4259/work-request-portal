@@ -1,8 +1,9 @@
-import { useState, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useProfileStore, AVATAR_COLOR_HEX } from '@/stores/profileStore'
+import { useAuthStore } from '@/stores/authStore'
 
 // ── 탭 정의 ───────────────────────────────────────────
 type TabKey = 'profile' | 'notification' | 'security' | 'display'
@@ -115,6 +116,7 @@ function SaveToast({ visible }: { visible: boolean }) {
 // ── 메인 ─────────────────────────────────────────────
 export default function SettingsPage() {
   const { displayName, email, role, avatarColor, photoUrl, updateProfile } = useProfileStore()
+  const { user } = useAuthStore()
   const [activeTab, setActiveTab] = useState<TabKey>('profile')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [notifs, setNotifs] = useState<Record<string, boolean>>({
@@ -123,6 +125,8 @@ export default function SettingsPage() {
   const [landing, setLanding] = useState('/dashboard')
   const [rowCount, setRowCount] = useState(20)
   const [toast, setToast] = useState(false)
+  const effectiveDisplayName = displayName || user?.name || ''
+  const effectiveEmail = email || user?.email || ''
 
   const showToast = () => {
     setToast(true)
@@ -139,8 +143,9 @@ export default function SettingsPage() {
 
   const profileForm = useForm<ProfileForm>({
     resolver: zodResolver(profileSchema),
-    defaultValues: { name: displayName, email, role },
+    defaultValues: { name: effectiveDisplayName, email: effectiveEmail, role },
   })
+  const { reset: resetProfileForm } = profileForm
 
   const pwForm = useForm<PwForm>({
     resolver: zodResolver(pwSchema),
@@ -152,6 +157,14 @@ export default function SettingsPage() {
     showToast()
   }
   const onPwSave = () => { pwForm.reset(); showToast() }
+
+  useEffect(() => {
+    resetProfileForm({
+      name: effectiveDisplayName,
+      email: effectiveEmail,
+      role,
+    })
+  }, [effectiveDisplayName, effectiveEmail, role, resetProfileForm])
 
   const selectedColorHex = AVATAR_COLOR_HEX[avatarColor] ?? AVATAR_COLOR_HEX['brand']
 

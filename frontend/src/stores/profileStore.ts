@@ -25,8 +25,8 @@ interface ProfileState {
 export const useProfileStore = create<ProfileState>()(
   persist(
     (set) => ({
-      displayName: '김개발',
-      email: 'kim.dev@shinhan.com',
+      displayName: '',
+      email: '',
       role: '개발자',
       avatarColor: 'brand',
       photoUrl: null,
@@ -34,6 +34,25 @@ export const useProfileStore = create<ProfileState>()(
     }),
     {
       name: 'profile-storage',
+      version: 2,
+      migrate: (persistedState, version) => {
+        const state = persistedState as Partial<ProfileState> | undefined
+        if (!state) {
+          return state
+        }
+        if (
+          version < 2 &&
+          state.displayName === '김개발' &&
+          state.email === 'kim.dev@shinhan.com'
+        ) {
+          return {
+            ...state,
+            displayName: '',
+            email: '',
+          }
+        }
+        return state
+      },
     }
   )
 )
