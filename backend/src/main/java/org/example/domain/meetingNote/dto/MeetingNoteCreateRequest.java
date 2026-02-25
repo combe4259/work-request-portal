@@ -13,6 +13,8 @@ public record MeetingNoteCreateRequest(
         List<String> decisions,
         Long teamId,
         Long createdBy,
-        List<MeetingActionItemItemRequest> actionItems
+        List<Long> attendeeIds,
+        List<MeetingActionItemItemRequest> actionItems,
+        List<MeetingNoteRelatedRefItemRequest> relatedRefs
 ) {
 }

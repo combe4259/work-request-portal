@@ -5,9 +5,12 @@ import org.example.domain.meetingNote.dto.MeetingActionItemResponse;
 import org.example.domain.meetingNote.dto.MeetingNoteCreateRequest;
 import org.example.domain.meetingNote.dto.MeetingNoteDetailResponse;
 import org.example.domain.meetingNote.dto.MeetingNoteListResponse;
+import org.example.domain.meetingNote.dto.MeetingNoteRelatedRefItemRequest;
+import org.example.domain.meetingNote.dto.MeetingNoteRelatedRefResponse;
 import org.example.domain.meetingNote.dto.MeetingNoteUpdateRequest;
 import org.example.domain.meetingNote.entity.MeetingActionItem;
 import org.example.domain.meetingNote.entity.MeetingNote;
+import org.example.domain.meetingNote.entity.MeetingNoteRelatedRef;
 
 import java.util.List;
 
@@ -78,7 +81,12 @@ public final class MeetingNoteMapper {
         );
     }
 
-    public static MeetingNoteDetailResponse toDetailResponse(MeetingNote entity, List<String> agenda, List<String> decisions) {
+    public static MeetingNoteDetailResponse toDetailResponse(
+            MeetingNote entity,
+            List<Long> attendeeIds,
+            List<String> agenda,
+            List<String> decisions
+    ) {
         return new MeetingNoteDetailResponse(
                 entity.getId(),
                 entity.getNoteNo(),
@@ -87,6 +95,7 @@ public final class MeetingNoteMapper {
                 entity.getMeetingDate(),
                 entity.getLocation(),
                 entity.getFacilitatorId(),
+                attendeeIds,
                 agenda,
                 entity.getContent(),
                 decisions,
@@ -117,6 +126,33 @@ public final class MeetingNoteMapper {
                 entity.getStatus(),
                 entity.getLinkedRefType(),
                 entity.getLinkedRefId()
+        );
+    }
+
+    public static MeetingNoteRelatedRef toRelatedRefEntity(
+            Long meetingNoteId,
+            MeetingNoteRelatedRefItemRequest request,
+            String normalizedRefType,
+            Integer sortOrder
+    ) {
+        MeetingNoteRelatedRef row = new MeetingNoteRelatedRef();
+        row.setMeetingNoteId(meetingNoteId);
+        row.setRefType(normalizedRefType);
+        row.setRefId(request.refId());
+        row.setSortOrder(sortOrder);
+        return row;
+    }
+
+    public static MeetingNoteRelatedRefResponse toRelatedRefResponse(
+            MeetingNoteRelatedRef entity,
+            String refNo,
+            String title
+    ) {
+        return new MeetingNoteRelatedRefResponse(
+                entity.getRefType(),
+                entity.getRefId(),
+                refNo,
+                title
         );
     }
 }

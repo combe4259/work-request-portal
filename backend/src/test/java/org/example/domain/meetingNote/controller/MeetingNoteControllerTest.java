@@ -7,6 +7,8 @@ import org.example.domain.meetingNote.dto.MeetingActionItemStatusUpdateRequest;
 import org.example.domain.meetingNote.dto.MeetingNoteCreateRequest;
 import org.example.domain.meetingNote.dto.MeetingNoteDetailResponse;
 import org.example.domain.meetingNote.dto.MeetingNoteListResponse;
+import org.example.domain.meetingNote.dto.MeetingNoteRelatedRefItemRequest;
+import org.example.domain.meetingNote.dto.MeetingNoteRelatedRefResponse;
 import org.example.domain.meetingNote.dto.MeetingNoteUpdateRequest;
 import org.example.domain.meetingNote.service.MeetingNoteService;
 import org.junit.jupiter.api.DisplayName;
@@ -90,7 +92,9 @@ class MeetingNoteControllerTest {
                 List.of("우선순위 확정"),
                 10L,
                 2L,
-                List.of(new MeetingActionItemItemRequest("요구사항 정리", 3L, LocalDate.of(2026, 3, 3), "대기", "WORK_REQUEST", 11L))
+                List.of(2L, 3L),
+                List.of(new MeetingActionItemItemRequest("요구사항 정리", 3L, LocalDate.of(2026, 3, 3), "대기", "WORK_REQUEST", 11L)),
+                List.of(new MeetingNoteRelatedRefItemRequest("WORK_REQUEST", 11L, 1))
         );
 
         when(meetingNoteService.create(eq(request))).thenReturn(7L);
@@ -115,7 +119,9 @@ class MeetingNoteControllerTest {
                 List.of("안건 수정"),
                 "내용 수정",
                 List.of("결정 수정"),
-                List.of(new MeetingActionItemItemRequest("QA 점검", 4L, LocalDate.of(2026, 3, 4), "진행중", null, null))
+                List.of(4L, 5L),
+                List.of(new MeetingActionItemItemRequest("QA 점검", 4L, LocalDate.of(2026, 3, 4), "진행중", null, null)),
+                List.of(new MeetingNoteRelatedRefItemRequest("TECH_TASK", 22L, 2))
         );
 
         mockMvc.perform(put("/api/meeting-notes/{id}", 7L)
@@ -137,6 +143,30 @@ class MeetingNoteControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(1L))
                 .andExpect(jsonPath("$[0].status").value("진행중"));
+    }
+
+    @Test
+    @DisplayName("회의 연관 문서 조회 성공")
+    void getRelatedRefsSuccess() throws Exception {
+        when(meetingNoteService.getRelatedRefs(7L)).thenReturn(List.of(
+                new MeetingNoteRelatedRefResponse("WORK_REQUEST", 11L, "WR-011", "업무 요청")
+        ));
+
+        mockMvc.perform(get("/api/meeting-notes/{id}/related-refs", 7L))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].refType").value("WORK_REQUEST"))
+                .andExpect(jsonPath("$[0].refNo").value("WR-011"));
+    }
+
+    @Test
+    @DisplayName("회의 참석자 조회 성공")
+    void getAttendeesSuccess() throws Exception {
+        when(meetingNoteService.getAttendeeIds(7L)).thenReturn(List.of(2L, 3L));
+
+        mockMvc.perform(get("/api/meeting-notes/{id}/attendees", 7L))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0]").value(2L))
+                .andExpect(jsonPath("$[1]").value(3L));
     }
 
     @Test
@@ -174,6 +204,7 @@ class MeetingNoteControllerTest {
                 LocalDate.of(2026, 3, 1),
                 "회의실 A",
                 2L,
+                List.of(2L, 3L),
                 List.of("안건1"),
                 "회의 내용",
                 List.of("결정1"),

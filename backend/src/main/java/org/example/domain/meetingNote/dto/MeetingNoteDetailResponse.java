@@ -12,6 +12,7 @@ public record MeetingNoteDetailResponse(
         LocalDate meetingDate,
         String location,
         Long facilitatorId,
+        List<Long> attendeeIds,
         List<String> agenda,
         String content,
         List<String> decisions,

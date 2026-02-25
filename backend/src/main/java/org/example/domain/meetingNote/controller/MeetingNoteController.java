@@ -5,6 +5,7 @@ import org.example.domain.meetingNote.dto.MeetingActionItemStatusUpdateRequest;
 import org.example.domain.meetingNote.dto.MeetingNoteCreateRequest;
 import org.example.domain.meetingNote.dto.MeetingNoteDetailResponse;
 import org.example.domain.meetingNote.dto.MeetingNoteListResponse;
+import org.example.domain.meetingNote.dto.MeetingNoteRelatedRefResponse;
 import org.example.domain.meetingNote.dto.MeetingNoteUpdateRequest;
 import org.example.domain.meetingNote.service.MeetingNoteService;
 import org.springframework.data.domain.Page;
@@ -63,6 +64,16 @@ public class MeetingNoteController {
     @GetMapping("/{id}/action-items")
     public ResponseEntity<List<MeetingActionItemResponse>> getActionItems(@PathVariable Long id) {
         return ResponseEntity.ok(meetingNoteService.getActionItems(id));
+    }
+
+    @GetMapping("/{id}/attendees")
+    public ResponseEntity<List<Long>> getAttendees(@PathVariable Long id) {
+        return ResponseEntity.ok(meetingNoteService.getAttendeeIds(id));
+    }
+
+    @GetMapping("/{id}/related-refs")
+    public ResponseEntity<List<MeetingNoteRelatedRefResponse>> getRelatedRefs(@PathVariable Long id) {
+        return ResponseEntity.ok(meetingNoteService.getRelatedRefs(id));
     }
 
     @PatchMapping("/{id}/action-items/{itemId}")

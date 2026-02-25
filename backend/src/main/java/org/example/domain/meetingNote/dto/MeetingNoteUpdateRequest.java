@@ -11,6 +11,8 @@ public record MeetingNoteUpdateRequest(
         List<String> agenda,
         String content,
         List<String> decisions,
-        List<MeetingActionItemItemRequest> actionItems
+        List<Long> attendeeIds,
+        List<MeetingActionItemItemRequest> actionItems,
+        List<MeetingNoteRelatedRefItemRequest> relatedRefs
 ) {
 }

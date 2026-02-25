@@ -5,6 +5,7 @@ import org.example.domain.meetingNote.dto.MeetingActionItemStatusUpdateRequest;
 import org.example.domain.meetingNote.dto.MeetingNoteCreateRequest;
 import org.example.domain.meetingNote.dto.MeetingNoteDetailResponse;
 import org.example.domain.meetingNote.dto.MeetingNoteListResponse;
+import org.example.domain.meetingNote.dto.MeetingNoteRelatedRefResponse;
 import org.example.domain.meetingNote.dto.MeetingNoteUpdateRequest;
 import org.springframework.data.domain.Page;
 
@@ -20,6 +21,10 @@ public interface MeetingNoteService {
     void update(Long id, MeetingNoteUpdateRequest request);
 
     List<MeetingActionItemResponse> getActionItems(Long id);
+
+    List<Long> getAttendeeIds(Long id);
+
+    List<MeetingNoteRelatedRefResponse> getRelatedRefs(Long id);
 
     void updateActionItemStatus(Long id, Long itemId, MeetingActionItemStatusUpdateRequest request);
 }

@@ -3,18 +3,36 @@ package org.example.domain.meetingNote.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.example.domain.defect.entity.Defect;
+import org.example.domain.defect.repository.DefectRepository;
+import org.example.domain.deployment.entity.Deployment;
+import org.example.domain.deployment.repository.DeploymentRepository;
+import org.example.domain.knowledgeBase.repository.KnowledgeBaseArticleRepository;
 import org.example.domain.meetingNote.dto.MeetingActionItemItemRequest;
 import org.example.domain.meetingNote.dto.MeetingActionItemResponse;
 import org.example.domain.meetingNote.dto.MeetingActionItemStatusUpdateRequest;
 import org.example.domain.meetingNote.dto.MeetingNoteCreateRequest;
 import org.example.domain.meetingNote.dto.MeetingNoteDetailResponse;
 import org.example.domain.meetingNote.dto.MeetingNoteListResponse;
+import org.example.domain.meetingNote.dto.MeetingNoteRelatedRefItemRequest;
+import org.example.domain.meetingNote.dto.MeetingNoteRelatedRefResponse;
 import org.example.domain.meetingNote.dto.MeetingNoteUpdateRequest;
 import org.example.domain.meetingNote.entity.MeetingActionItem;
+import org.example.domain.meetingNote.entity.MeetingAttendee;
 import org.example.domain.meetingNote.entity.MeetingNote;
+import org.example.domain.meetingNote.entity.MeetingNoteRelatedRef;
 import org.example.domain.meetingNote.mapper.MeetingNoteMapper;
 import org.example.domain.meetingNote.repository.MeetingActionItemRepository;
+import org.example.domain.meetingNote.repository.MeetingAttendeeRepository;
 import org.example.domain.meetingNote.repository.MeetingNoteRepository;
+import org.example.domain.meetingNote.repository.MeetingNoteRelatedRefRepository;
+import org.example.domain.techTask.entity.TechTask;
+import org.example.domain.techTask.repository.TechTaskRepository;
+import org.example.domain.testScenario.entity.TestScenario;
+import org.example.domain.testScenario.repository.TestScenarioRepository;
+import org.example.domain.workRequest.entity.WorkRequest;
+import org.example.domain.workRequest.repository.WorkRequestRepository;
+import org.example.global.util.DocumentNoGenerator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -24,7 +42,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 
 @Service
 @Transactional(readOnly = true)
@@ -32,15 +52,42 @@ public class MeetingNoteServiceImpl implements MeetingNoteService {
 
     private final MeetingNoteRepository meetingNoteRepository;
     private final MeetingActionItemRepository meetingActionItemRepository;
+    private final MeetingAttendeeRepository meetingAttendeeRepository;
+    private final MeetingNoteRelatedRefRepository meetingNoteRelatedRefRepository;
+    private final WorkRequestRepository workRequestRepository;
+    private final TechTaskRepository techTaskRepository;
+    private final TestScenarioRepository testScenarioRepository;
+    private final DefectRepository defectRepository;
+    private final DeploymentRepository deploymentRepository;
+    private final KnowledgeBaseArticleRepository knowledgeBaseArticleRepository;
+    private final DocumentNoGenerator documentNoGenerator;
     private final ObjectMapper objectMapper;
 
     public MeetingNoteServiceImpl(
             MeetingNoteRepository meetingNoteRepository,
             MeetingActionItemRepository meetingActionItemRepository,
+            MeetingAttendeeRepository meetingAttendeeRepository,
+            MeetingNoteRelatedRefRepository meetingNoteRelatedRefRepository,
+            WorkRequestRepository workRequestRepository,
+            TechTaskRepository techTaskRepository,
+            TestScenarioRepository testScenarioRepository,
+            DefectRepository defectRepository,
+            DeploymentRepository deploymentRepository,
+            KnowledgeBaseArticleRepository knowledgeBaseArticleRepository,
+            DocumentNoGenerator documentNoGenerator,
             ObjectMapper objectMapper
     ) {
         this.meetingNoteRepository = meetingNoteRepository;
         this.meetingActionItemRepository = meetingActionItemRepository;
+        this.meetingAttendeeRepository = meetingAttendeeRepository;
+        this.meetingNoteRelatedRefRepository = meetingNoteRelatedRefRepository;
+        this.workRequestRepository = workRequestRepository;
+        this.techTaskRepository = techTaskRepository;
+        this.testScenarioRepository = testScenarioRepository;
+        this.defectRepository = defectRepository;
+        this.deploymentRepository = deploymentRepository;
+        this.knowledgeBaseArticleRepository = knowledgeBaseArticleRepository;
+        this.documentNoGenerator = documentNoGenerator;
         this.objectMapper = objectMapper;
     }
 
@@ -58,7 +105,15 @@ public class MeetingNoteServiceImpl implements MeetingNoteService {
     @Override
     public MeetingNoteDetailResponse findById(Long id) {
         MeetingNote entity = getMeetingNoteOrThrow(id);
-        return MeetingNoteMapper.toDetailResponse(entity, fromJsonList(entity.getAgenda()), fromJsonList(entity.getDecisions()));
+        List<Long> attendeeIds = meetingAttendeeRepository.findByMeetingNoteIdOrderByIdAsc(id).stream()
+                .map(MeetingAttendee::getUserId)
+                .toList();
+        return MeetingNoteMapper.toDetailResponse(
+                entity,
+                attendeeIds,
+                fromJsonList(entity.getAgenda()),
+                fromJsonList(entity.getDecisions())
+        );
     }
 
     @Override
@@ -75,13 +130,19 @@ public class MeetingNoteServiceImpl implements MeetingNoteService {
                 decisionsJson,
                 normalizeContent(request.content())
         );
-        entity.setNoteNo("MN-" + System.currentTimeMillis());
+        entity.setNoteNo(documentNoGenerator.next("MN"));
         entity.setLocation(normalizeNullable(request.location()));
 
         MeetingNote saved = meetingNoteRepository.save(entity);
 
         if (request.actionItems() != null) {
             persistActionItems(saved.getId(), request.actionItems());
+        }
+        if (request.attendeeIds() != null) {
+            persistAttendees(saved.getId(), request.attendeeIds());
+        }
+        if (request.relatedRefs() != null) {
+            persistRelatedRefs(saved.getId(), request.relatedRefs());
         }
 
         return saved.getId();
@@ -113,6 +174,12 @@ public class MeetingNoteServiceImpl implements MeetingNoteService {
         if (request.actionItems() != null) {
             persistActionItems(id, request.actionItems());
         }
+        if (request.attendeeIds() != null) {
+            persistAttendees(id, request.attendeeIds());
+        }
+        if (request.relatedRefs() != null) {
+            persistRelatedRefs(id, request.relatedRefs());
+        }
     }
 
     @Override
@@ -120,6 +187,26 @@ public class MeetingNoteServiceImpl implements MeetingNoteService {
         ensureMeetingNoteExists(id);
         return meetingActionItemRepository.findByMeetingNoteIdOrderByIdAsc(id).stream()
                 .map(MeetingNoteMapper::toActionItemResponse)
+                .toList();
+    }
+
+    @Override
+    public List<Long> getAttendeeIds(Long id) {
+        ensureMeetingNoteExists(id);
+        return meetingAttendeeRepository.findByMeetingNoteIdOrderByIdAsc(id).stream()
+                .map(MeetingAttendee::getUserId)
+                .toList();
+    }
+
+    @Override
+    public List<MeetingNoteRelatedRefResponse> getRelatedRefs(Long id) {
+        ensureMeetingNoteExists(id);
+
+        return meetingNoteRelatedRefRepository.findByMeetingNoteIdOrderBySortOrderAscIdAsc(id).stream()
+                .map(ref -> {
+                    RefMetadata metadata = resolveRefMetadata(ref.getRefType(), ref.getRefId());
+                    return MeetingNoteMapper.toRelatedRefResponse(ref, metadata.refNo(), metadata.title());
+                })
                 .toList();
     }
 
@@ -194,6 +281,74 @@ public class MeetingNoteServiceImpl implements MeetingNoteService {
         }
     }
 
+    private void persistAttendees(Long meetingNoteId, List<Long> attendeeIds) {
+        meetingAttendeeRepository.deleteByMeetingNoteId(meetingNoteId);
+
+        if (attendeeIds == null || attendeeIds.isEmpty()) {
+            return;
+        }
+
+        LinkedHashSet<Long> uniqueIds = attendeeIds.stream()
+                .filter(userId -> userId != null && userId > 0)
+                .collect(LinkedHashSet::new, LinkedHashSet::add, LinkedHashSet::addAll);
+
+        if (uniqueIds.isEmpty()) {
+            return;
+        }
+
+        List<MeetingAttendee> rows = new ArrayList<>();
+        for (Long userId : uniqueIds) {
+            MeetingAttendee row = new MeetingAttendee();
+            row.setMeetingNoteId(meetingNoteId);
+            row.setUserId(userId);
+            row.setAttended(true);
+            rows.add(row);
+        }
+
+        meetingAttendeeRepository.saveAll(rows);
+    }
+
+    private void persistRelatedRefs(Long meetingNoteId, List<MeetingNoteRelatedRefItemRequest> items) {
+        meetingNoteRelatedRefRepository.deleteByMeetingNoteId(meetingNoteId);
+
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+
+        List<MeetingNoteRelatedRefItemRequest> sortedItems = items.stream()
+                .filter(item -> item != null)
+                .sorted((a, b) -> {
+                    int left = a.sortOrder() == null ? Integer.MAX_VALUE : a.sortOrder();
+                    int right = b.sortOrder() == null ? Integer.MAX_VALUE : b.sortOrder();
+                    return Integer.compare(left, right);
+                })
+                .toList();
+
+        LinkedHashSet<String> seen = new LinkedHashSet<>();
+        List<MeetingNoteRelatedRef> rows = new ArrayList<>();
+        int defaultSortOrder = 1;
+
+        for (MeetingNoteRelatedRefItemRequest item : sortedItems) {
+            if (item.refId() == null || isBlank(item.refType())) {
+                continue;
+            }
+
+            String normalizedRefType = normalizeRelatedRefType(item.refType());
+            String uniqueKey = normalizedRefType + ":" + item.refId();
+            if (!seen.add(uniqueKey)) {
+                continue;
+            }
+
+            Integer sortOrder = item.sortOrder() == null ? defaultSortOrder : item.sortOrder();
+            rows.add(MeetingNoteMapper.toRelatedRefEntity(meetingNoteId, item, normalizedRefType, sortOrder));
+            defaultSortOrder++;
+        }
+
+        if (!rows.isEmpty()) {
+            meetingNoteRelatedRefRepository.saveAll(rows);
+        }
+    }
+
     private MeetingNote getMeetingNoteOrThrow(Long id) {
         return meetingNoteRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "회의록을 찾을 수 없습니다."));
@@ -217,11 +372,90 @@ public class MeetingNoteServiceImpl implements MeetingNoteService {
         if (isBlank(rawType)) {
             return null;
         }
-        String normalized = rawType.trim().toUpperCase();
+        String normalized = rawType.trim().toUpperCase(Locale.ROOT);
         if ("WORK_REQUEST".equals(normalized) || "TECH_TASK".equals(normalized)) {
             return normalized;
         }
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "유효하지 않은 linkedRefType입니다.");
+    }
+
+    private String normalizeRelatedRefType(String rawType) {
+        String normalized = rawType.trim().toUpperCase(Locale.ROOT);
+        return switch (normalized) {
+            case "WORK_REQUEST", "TECH_TASK", "TEST_SCENARIO", "DEFECT", "DEPLOYMENT", "MEETING_NOTE", "KNOWLEDGE_BASE" ->
+                    normalized;
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "유효하지 않은 relatedRefType입니다.");
+        };
+    }
+
+    private RefMetadata resolveRefMetadata(String rawRefType, Long refId) {
+        String refType = normalizeRelatedRefType(rawRefType);
+
+        if ("WORK_REQUEST".equals(refType)) {
+            WorkRequest row = workRequestRepository.findById(refId).orElse(null);
+            if (row != null) {
+                return new RefMetadata(row.getRequestNo(), row.getTitle());
+            }
+        }
+
+        if ("TECH_TASK".equals(refType)) {
+            TechTask row = techTaskRepository.findById(refId).orElse(null);
+            if (row != null) {
+                return new RefMetadata(row.getTaskNo(), row.getTitle());
+            }
+        }
+
+        if ("TEST_SCENARIO".equals(refType)) {
+            TestScenario row = testScenarioRepository.findById(refId).orElse(null);
+            if (row != null) {
+                return new RefMetadata(row.getScenarioNo(), row.getTitle());
+            }
+        }
+
+        if ("DEFECT".equals(refType)) {
+            Defect row = defectRepository.findById(refId).orElse(null);
+            if (row != null) {
+                return new RefMetadata(row.getDefectNo(), row.getTitle());
+            }
+        }
+
+        if ("DEPLOYMENT".equals(refType)) {
+            Deployment row = deploymentRepository.findById(refId).orElse(null);
+            if (row != null) {
+                return new RefMetadata(row.getDeployNo(), row.getTitle());
+            }
+        }
+
+        if ("MEETING_NOTE".equals(refType)) {
+            MeetingNote row = meetingNoteRepository.findById(refId).orElse(null);
+            if (row != null) {
+                return new RefMetadata(row.getNoteNo(), row.getTitle());
+            }
+        }
+
+        if ("KNOWLEDGE_BASE".equals(refType)) {
+            boolean exists = knowledgeBaseArticleRepository.existsById(refId);
+            if (exists) {
+                return new RefMetadata(toFallbackRefNo(refType, refId), null);
+            }
+        }
+
+        return new RefMetadata(toFallbackRefNo(refType, refId), null);
+    }
+
+    private String toFallbackRefNo(String refType, Long refId) {
+        String prefix = switch (refType) {
+            case "WORK_REQUEST" -> "WR";
+            case "TECH_TASK" -> "TK";
+            case "TEST_SCENARIO" -> "TS";
+            case "DEFECT" -> "DF";
+            case "DEPLOYMENT" -> "DP";
+            case "MEETING_NOTE" -> "MN";
+            case "KNOWLEDGE_BASE" -> "KB";
+            default -> "REF";
+        };
+
+        return prefix + "-" + refId;
     }
 
     private String normalizeContent(String content) {
@@ -264,5 +498,8 @@ public class MeetingNoteServiceImpl implements MeetingNoteService {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private record RefMetadata(String refNo, String title) {
     }
 }
