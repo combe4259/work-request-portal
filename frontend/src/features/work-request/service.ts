@@ -1,5 +1,7 @@
 import api from '@/lib/api'
+import { toRelatedRefsPayload } from '@/lib/relatedRefs'
 import { useAuthStore } from '@/stores/authStore'
+import { resolveTeamMemberIdByName } from '@/features/auth/memberResolver'
 import type { Priority, RequestType, Status, WorkRequest, WorkRequestDetail } from '@/types/work-request'
 
 export type WorkRequestSortKey = 'docNo' | 'deadline'
@@ -29,12 +31,26 @@ export interface CreateWorkRequestInput {
   priority: Priority
   deadline: string
   assignee?: string
+  relatedDocs?: string[]
   background?: string
   description: string
 }
 
 export interface CreateWorkRequestResult {
   id: string
+}
+
+export interface UpdateWorkRequestInput {
+  id: string | number
+  title: string
+  type: RequestType
+  priority: Priority
+  status: Status
+  assignee?: string
+  deadline: string
+  background?: string
+  description: string
+  relatedDocs?: string[]
 }
 
 interface ApiPageResponse<T> {
@@ -67,6 +83,13 @@ interface ApiWorkRequestDetailResponse {
   createdAt: string | null
 }
 
+interface ApiWorkRequestRelatedRefResponse {
+  refType: string
+  refId: number
+  refNo: string
+  title: string | null
+}
+
 interface ApiCreateWorkRequestRequest {
   title: string
   background?: string
@@ -85,7 +108,14 @@ interface ApiCreateWorkRequestResponse {
 }
 
 interface ApiUpdateWorkRequestRequest {
+  title?: string
+  background?: string | null
+  description?: string
+  type?: RequestType
+  priority?: Priority
   status: Status
+  assigneeId?: number | null
+  deadline?: string
 }
 
 const LIST_FETCH_SIZE = 500
@@ -182,6 +212,11 @@ export async function getWorkRequest(id: string | number): Promise<WorkRequestDe
   return mapDetailItem(data)
 }
 
+export async function listWorkRequestRelatedRefs(id: string | number): Promise<ApiWorkRequestRelatedRefResponse[]> {
+  const { data } = await api.get<ApiWorkRequestRelatedRefResponse[]>(`/work-requests/${id}/related-refs`)
+  return data
+}
+
 export async function createWorkRequest(input: CreateWorkRequestInput): Promise<CreateWorkRequestResult> {
   const auth = useAuthStore.getState()
   const user = auth.user
@@ -190,6 +225,8 @@ export async function createWorkRequest(input: CreateWorkRequestInput): Promise<
   if (!user || !currentTeam) {
     throw new Error('현재 로그인 사용자 또는 팀 정보가 없습니다.')
   }
+
+  const assigneeId = await resolveTeamMemberIdByName(currentTeam.id, input.assignee)
 
   const payload: ApiCreateWorkRequestRequest = {
     title: input.title,
@@ -200,16 +237,51 @@ export async function createWorkRequest(input: CreateWorkRequestInput): Promise<
     status: '접수대기',
     teamId: currentTeam.id,
     requesterId: user.id,
-    // assignee는 현재 UI가 이름 기반이어서 백엔드 userId 매핑 전까지 미배정으로 저장
-    assigneeId: null,
+    assigneeId,
     deadline: input.deadline,
   }
 
   const { data } = await api.post<ApiCreateWorkRequestResponse>('/work-requests', payload)
+
+  const relatedRefs = toRelatedRefsPayload(input.relatedDocs ?? [])
+  if (relatedRefs.length > 0) {
+    await api.put(`/work-requests/${data.id}/related-refs`, { items: relatedRefs })
+  }
+
   return { id: String(data.id) }
 }
 
 export async function updateWorkRequestStatus(id: string | number, status: Status): Promise<void> {
   const payload: ApiUpdateWorkRequestRequest = { status }
   await api.put(`/work-requests/${id}`, payload)
+}
+
+export async function updateWorkRequest(input: UpdateWorkRequestInput): Promise<void> {
+  const auth = useAuthStore.getState()
+  const currentTeam = auth.currentTeam ?? auth.teams[0]
+  if (!currentTeam) {
+    throw new Error('현재 선택된 팀 정보가 없습니다.')
+  }
+
+  const assigneeId = await resolveTeamMemberIdByName(currentTeam.id, input.assignee)
+
+  const payload: ApiUpdateWorkRequestRequest = {
+    title: input.title,
+    background: input.background?.trim() ? input.background.trim() : null,
+    description: input.description,
+    type: input.type,
+    priority: input.priority,
+    status: input.status,
+    assigneeId,
+    deadline: input.deadline,
+  }
+
+  await api.put(`/work-requests/${input.id}`, payload)
+
+  const relatedRefs = toRelatedRefsPayload(input.relatedDocs ?? [])
+  await api.put(`/work-requests/${input.id}/related-refs`, { items: relatedRefs })
+}
+
+export async function deleteWorkRequest(id: string | number): Promise<void> {
+  await api.delete(`/work-requests/${id}`)
 }

@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { createWorkRequest, updateWorkRequestStatus } from './service'
+import { createWorkRequest, deleteWorkRequest, updateWorkRequest, updateWorkRequestStatus } from './service'
 import { workRequestQueryKeys } from './queries'
 import type { Status } from '@/types/work-request'
 
@@ -29,6 +29,30 @@ export function useUpdateWorkRequestStatusMutation(id: string | number | undefin
       if (id != null) {
         await queryClient.invalidateQueries({ queryKey: workRequestQueryKeys.detail(id) })
       }
+    },
+  })
+}
+
+export function useUpdateWorkRequestMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: updateWorkRequest,
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({ queryKey: workRequestQueryKeys.all })
+      await queryClient.invalidateQueries({ queryKey: workRequestQueryKeys.detail(variables.id) })
+      await queryClient.invalidateQueries({ queryKey: workRequestQueryKeys.relatedRefs(variables.id) })
+    },
+  })
+}
+
+export function useDeleteWorkRequestMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: deleteWorkRequest,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: workRequestQueryKeys.all })
     },
   })
 }

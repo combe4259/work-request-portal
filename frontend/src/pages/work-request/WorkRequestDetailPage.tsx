@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { EmptyState, ErrorState, LoadingState } from '@/components/common/AsyncState'
+import ConfirmDialog from '@/components/common/ConfirmDialog'
 import { TypeBadge, PriorityBadge, StatusBadge } from '@/components/work-request/Badges'
-import { useUpdateWorkRequestStatusMutation } from '@/features/work-request/mutations'
-import { useWorkRequestDetailQuery } from '@/features/work-request/queries'
+import { useDeleteWorkRequestMutation, useUpdateWorkRequestStatusMutation } from '@/features/work-request/mutations'
+import { useWorkRequestDetailQuery, useWorkRequestRelatedRefsQuery } from '@/features/work-request/queries'
 import type { Status } from '@/types/work-request'
 
 const MOCK_COMMENTS = [
@@ -19,6 +20,29 @@ const MOCK_HISTORY = [
 
 const STATUS_OPTIONS: Status[] = ['접수대기', '검토중', '개발중', '테스트중', '완료', '반려']
 
+function getRefRoute(refType: string, refId: number): string | null {
+  switch (refType) {
+    case 'WORK_REQUEST':
+      return `/work-requests/${refId}`
+    case 'TECH_TASK':
+      return `/tech-tasks/${refId}`
+    case 'TEST_SCENARIO':
+      return `/test-scenarios/${refId}`
+    case 'DEFECT':
+      return `/defects/${refId}`
+    case 'DEPLOYMENT':
+      return `/deployments/${refId}`
+    case 'MEETING_NOTE':
+      return `/meeting-notes/${refId}`
+    case 'PROJECT_IDEA':
+      return `/ideas/${refId}`
+    case 'KNOWLEDGE_BASE':
+      return `/knowledge-base/${refId}`
+    default:
+      return null
+  }
+}
+
 export default function WorkRequestDetailPage() {
   const navigate = useNavigate()
   const { id } = useParams()
@@ -26,9 +50,12 @@ export default function WorkRequestDetailPage() {
   const hasValidId = Number.isInteger(numericId) && numericId > 0
 
   const { data, isPending, isError, refetch } = useWorkRequestDetailQuery(hasValidId ? numericId : undefined)
+  const relatedRefsQuery = useWorkRequestRelatedRefsQuery(hasValidId ? numericId : undefined)
   const updateStatusMutation = useUpdateWorkRequestStatusMutation(hasValidId ? numericId : undefined)
+  const deleteMutation = useDeleteWorkRequestMutation()
 
   const [statusOpen, setStatusOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const [comment, setComment] = useState('')
   const [comments, setComments] = useState(MOCK_COMMENTS)
 
@@ -140,6 +167,21 @@ export default function WorkRequestDetailPage() {
               </div>
             )}
           </div>
+          <button
+            type="button"
+            onClick={() => navigate(`/work-requests/${numericId}/edit`)}
+            className="h-8 px-3 border border-gray-200 rounded-lg text-[12px] font-medium text-gray-600 hover:bg-white transition-colors flex items-center gap-1.5"
+          >
+            <EditIcon />
+            수정
+          </button>
+          <button
+            type="button"
+            onClick={() => setDeleteOpen(true)}
+            className="h-8 px-3 border border-red-200 rounded-lg text-[12px] font-medium text-red-600 hover:bg-red-50 transition-colors"
+          >
+            삭제
+          </button>
         </div>
       </div>
 
@@ -165,6 +207,30 @@ export default function WorkRequestDetailPage() {
           <Section title="내용">
             <p className="text-[13px] text-gray-700 leading-relaxed whitespace-pre-wrap">{data.description}</p>
           </Section>
+
+          {relatedRefsQuery.data && relatedRefsQuery.data.length > 0 ? (
+            <Section title="연관 문서">
+              <div className="flex flex-wrap gap-2">
+                {relatedRefsQuery.data.map((item) => {
+                  const route = getRefRoute(item.refType, item.refId)
+                  return (
+                    <button
+                      key={`${item.refType}-${item.refId}`}
+                      type="button"
+                      onClick={() => {
+                        if (route) navigate(route)
+                      }}
+                      disabled={!route}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg hover:border-brand/40 hover:bg-blue-50/30 transition-colors group disabled:opacity-70 disabled:cursor-default"
+                    >
+                      <span className="font-mono text-[11px] text-gray-600">{item.refNo}</span>
+                      <span className="text-[12px] text-gray-600 group-hover:text-brand transition-colors">{item.title ?? item.refNo}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </Section>
+          ) : null}
         </div>
 
         <div className="w-[300px] flex-shrink-0 space-y-4">
@@ -241,6 +307,22 @@ export default function WorkRequestDetailPage() {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="업무요청을 삭제할까요?"
+        description="삭제 후에는 복구할 수 없습니다."
+        confirmText={deleteMutation.isPending ? '삭제 중...' : '삭제'}
+        cancelText="취소"
+        destructive
+        onConfirm={() => {
+          if (!hasValidId) return
+          void deleteMutation.mutateAsync(numericId).then(() => {
+            navigate('/work-requests')
+          })
+        }}
+      />
     </div>
   )
 }
@@ -294,6 +376,15 @@ function ChevronDownIcon() {
   return (
     <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
       <path d="M2.5 4L5.5 7L8.5 4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function EditIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+      <path d="M2 11h2l6-6-2-2-6 6v2z" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round" />
+      <path d="M7.6 3.4l2 2" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
     </svg>
   )
 }
