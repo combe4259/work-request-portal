@@ -1,7 +1,9 @@
 package org.example.domain.deployment.service;
 
+import org.example.domain.documentIndex.service.DocumentIndexSyncService;
 import org.example.domain.defect.entity.Defect;
 import org.example.domain.defect.repository.DefectRepository;
+import org.example.domain.notification.service.NotificationEventService;
 import org.example.domain.deployment.dto.DeploymentCreateRequest;
 import org.example.domain.deployment.dto.DeploymentDetailResponse;
 import org.example.domain.deployment.dto.DeploymentListResponse;
@@ -26,6 +28,7 @@ import org.example.domain.testScenario.entity.TestScenario;
 import org.example.domain.testScenario.repository.TestScenarioRepository;
 import org.example.domain.workRequest.entity.WorkRequest;
 import org.example.domain.workRequest.repository.WorkRequestRepository;
+import org.example.global.team.TeamScopeUtil;
 import org.example.global.util.DocumentNoGenerator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -53,6 +56,8 @@ public class DeploymentServiceImpl implements DeploymentService {
     private final TestScenarioRepository testScenarioRepository;
     private final DefectRepository defectRepository;
     private final DocumentNoGenerator documentNoGenerator;
+    private final NotificationEventService notificationEventService;
+    private final DocumentIndexSyncService documentIndexSyncService;
 
     public DeploymentServiceImpl(
             DeploymentRepository deploymentRepository,
@@ -62,7 +67,9 @@ public class DeploymentServiceImpl implements DeploymentService {
             TechTaskRepository techTaskRepository,
             TestScenarioRepository testScenarioRepository,
             DefectRepository defectRepository,
-            DocumentNoGenerator documentNoGenerator
+            DocumentNoGenerator documentNoGenerator,
+            NotificationEventService notificationEventService,
+            DocumentIndexSyncService documentIndexSyncService
     ) {
         this.deploymentRepository = deploymentRepository;
         this.deploymentRelatedRefRepository = deploymentRelatedRefRepository;
@@ -72,12 +79,17 @@ public class DeploymentServiceImpl implements DeploymentService {
         this.testScenarioRepository = testScenarioRepository;
         this.defectRepository = defectRepository;
         this.documentNoGenerator = documentNoGenerator;
+        this.notificationEventService = notificationEventService;
+        this.documentIndexSyncService = documentIndexSyncService;
     }
 
     @Override
     public Page<DeploymentListResponse> findPage(int page, int size) {
         PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
-        return deploymentRepository.findAll(pageable)
+        Long teamId = TeamScopeUtil.currentTeamId();
+        return (teamId == null
+                ? deploymentRepository.findAll(pageable)
+                : deploymentRepository.findByTeamId(teamId, pageable))
                 .map(DeploymentMapper::toListResponse);
     }
 
@@ -94,6 +106,7 @@ public class DeploymentServiceImpl implements DeploymentService {
 
         Deployment deployment = DeploymentMapper.fromCreateRequest(request);
         deployment.setDeployNo(documentNoGenerator.next("DP"));
+        deployment.setTeamId(TeamScopeUtil.requireTeamId(request.teamId()));
         deployment.setType(normalizeType(request.type()));
         deployment.setEnvironment(normalizeEnvironment(request.environment()));
         deployment.setStatus(normalizeStatus(request.status()));
@@ -102,6 +115,7 @@ public class DeploymentServiceImpl implements DeploymentService {
         deployment.setStatusNote(normalizeNullable(request.statusNote()));
 
         Deployment saved = deploymentRepository.save(deployment);
+        syncDocumentIndex(saved);
 
         if (request.relatedRefs() != null) {
             persistRelatedRefs(saved.getId(), request.relatedRefs());
@@ -110,6 +124,7 @@ public class DeploymentServiceImpl implements DeploymentService {
             persistSteps(saved.getId(), request.steps());
         }
 
+        notifyManagerAssigned(saved);
         return saved.getId();
     }
 
@@ -121,6 +136,8 @@ public class DeploymentServiceImpl implements DeploymentService {
         }
 
         Deployment deployment = getDeploymentOrThrow(id);
+        Long previousManagerId = deployment.getManagerId();
+        String previousStatus = deployment.getStatus();
 
         if (request.title() != null && request.title().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "title은 필수입니다.");
@@ -156,6 +173,21 @@ public class DeploymentServiceImpl implements DeploymentService {
         if (request.steps() != null) {
             persistSteps(id, request.steps());
         }
+        syncDocumentIndex(deployment);
+
+        notifyManagerChanged(deployment, previousManagerId);
+        notifyStatusChanged(deployment, previousStatus);
+    }
+
+    @Override
+    @Transactional
+    public void delete(Long id) {
+        Deployment deployment = getDeploymentOrThrow(id);
+
+        deploymentRelatedRefRepository.deleteByDeploymentId(id);
+        deploymentStepRepository.deleteByDeploymentId(id);
+        deploymentRepository.delete(deployment);
+        deleteDocumentIndex(deployment);
     }
 
     @Override
@@ -166,8 +198,12 @@ public class DeploymentServiceImpl implements DeploymentService {
         }
 
         Deployment deployment = getDeploymentOrThrow(id);
+        String previousStatus = deployment.getStatus();
         deployment.setStatus(normalizeStatus(request.status()));
         deployment.setStatusNote(normalizeNullable(request.statusNote()));
+        syncDocumentIndex(deployment);
+
+        notifyStatusChanged(deployment, previousStatus);
     }
 
     @Override
@@ -248,9 +284,7 @@ public class DeploymentServiceImpl implements DeploymentService {
         if (isBlank(request.version())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "version은 필수입니다.");
         }
-        if (request.teamId() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "teamId는 필수입니다.");
-        }
+        TeamScopeUtil.requireTeamId(request.teamId());
         if (request.scheduledAt() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "scheduledAt은 필수입니다.");
         }
@@ -330,17 +364,17 @@ public class DeploymentServiceImpl implements DeploymentService {
     }
 
     private Deployment getDeploymentOrThrow(Long id) {
-        return deploymentRepository.findById(id)
+        Deployment deployment = deploymentRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "배포를 찾을 수 없습니다."));
+        TeamScopeUtil.ensureAccessible(deployment.getTeamId());
+        return deployment;
     }
 
     private void ensureDeploymentExists(Long id) {
         if (id == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "id는 필수입니다.");
         }
-        if (!deploymentRepository.existsById(id)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "배포를 찾을 수 없습니다.");
-        }
+        getDeploymentOrThrow(id);
     }
 
     private String normalizeType(String type) {
@@ -450,6 +484,86 @@ public class DeploymentServiceImpl implements DeploymentService {
         return value == null || value.isBlank();
     }
 
+    private void notifyManagerAssigned(Deployment entity) {
+        if (notificationEventService == null) {
+            return;
+        }
+
+        notificationEventService.create(
+                entity.getManagerId(),
+                "담당자배정",
+                "배포 담당자 배정",
+                entity.getDeployNo() + " '" + entity.getTitle() + "' 배포가 배정되었습니다.",
+                "DEPLOYMENT",
+                entity.getId()
+        );
+    }
+
+    private void notifyManagerChanged(Deployment entity, Long previousManagerId) {
+        Long currentManagerId = entity.getManagerId();
+        if (currentManagerId == null || currentManagerId.equals(previousManagerId)) {
+            return;
+        }
+
+        notifyManagerAssigned(entity);
+    }
+
+    private void notifyStatusChanged(Deployment entity, String previousStatus) {
+        if (notificationEventService == null) {
+            return;
+        }
+
+        String currentStatus = entity.getStatus();
+        if (currentStatus == null || currentStatus.equals(previousStatus)) {
+            return;
+        }
+
+        String type = switch (currentStatus) {
+            case "완료" -> "배포완료";
+            case "실패" -> "배포실패";
+            default -> "상태변경";
+        };
+        String title = switch (currentStatus) {
+            case "완료" -> "배포 완료";
+            case "실패" -> "배포 실패";
+            default -> "배포 상태 변경";
+        };
+
+        notificationEventService.create(
+                entity.getManagerId(),
+                type,
+                title,
+                entity.getDeployNo() + " 상태가 '" + currentStatus + "'(으)로 변경되었습니다.",
+                "DEPLOYMENT",
+                entity.getId()
+        );
+    }
+
     private record RefMetadata(String refNo, String title) {
+    }
+
+    private void syncDocumentIndex(Deployment entity) {
+        if (documentIndexSyncService == null) {
+            return;
+        }
+        documentIndexSyncService.upsert(
+                "DEPLOYMENT",
+                entity.getId(),
+                entity.getTeamId(),
+                entity.getDeployNo(),
+                entity.getTitle(),
+                entity.getStatus()
+        );
+    }
+
+    private void deleteDocumentIndex(Deployment entity) {
+        if (documentIndexSyncService == null) {
+            return;
+        }
+        documentIndexSyncService.delete(
+                "DEPLOYMENT",
+                entity.getId(),
+                entity.getTeamId()
+        );
     }
 }

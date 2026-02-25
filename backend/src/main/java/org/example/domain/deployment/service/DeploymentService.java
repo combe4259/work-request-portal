@@ -23,6 +23,8 @@ public interface DeploymentService {
 
     void update(Long id, DeploymentUpdateRequest request);
 
+    void delete(Long id);
+
     void updateStatus(Long id, DeploymentStatusUpdateRequest request);
 
     List<DeploymentRelatedRefResponse> getRelatedRefs(Long id);
