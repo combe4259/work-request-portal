@@ -1,6 +1,7 @@
 import api from '@/lib/api'
 import { useAuthStore } from '@/stores/authStore'
 import { resolveTeamMemberIdByName } from '@/features/auth/memberResolver'
+import { getTeamMembers } from '@/features/auth/service'
 import type { ActionItem, MeetingNote, MeetingNoteDetail, RelatedDoc } from '@/types/meeting-note'
 
 export type MeetingNoteSortKey = 'docNo' | 'date'
@@ -142,9 +143,18 @@ interface ApiMeetingNoteUpdateRequest {
 
 const LIST_FETCH_SIZE = 500
 
-function mapUserLabel(userId: number | null | undefined, fallbackText: string): string {
+function mapUserLabel(
+  userId: number | null | undefined,
+  fallbackText: string,
+  teamMemberNameById?: Map<number, string>,
+): string {
   if (userId == null) {
     return fallbackText
+  }
+
+  const memberName = teamMemberNameById?.get(userId)
+  if (memberName) {
+    return memberName
   }
 
   const auth = useAuthStore.getState()
@@ -155,29 +165,42 @@ function mapUserLabel(userId: number | null | undefined, fallbackText: string): 
   return `사용자#${userId}`
 }
 
+async function buildTeamMemberNameMap(teamId: number | null | undefined): Promise<Map<number, string>> {
+  if (!teamId || teamId <= 0) {
+    return new Map()
+  }
+
+  try {
+    const members = await getTeamMembers(teamId)
+    return new Map(members.map((member) => [member.userId, member.name]))
+  } catch {
+    return new Map()
+  }
+}
+
 function toDateOnly(value: string | null | undefined): string {
   return value?.slice(0, 10) ?? ''
 }
 
-function mapListItem(item: ApiMeetingNoteListItem): MeetingNote {
+function mapListItem(item: ApiMeetingNoteListItem, teamMemberNameById: Map<number, string>): MeetingNote {
   return {
     id: String(item.id),
     docNo: item.noteNo,
     title: item.title,
     date: toDateOnly(item.meetingDate),
-    facilitator: mapUserLabel(item.facilitatorId, '미지정'),
+    facilitator: mapUserLabel(item.facilitatorId, '미지정', teamMemberNameById),
     actionTotal: item.actionTotal,
     actionDone: item.actionDone,
     createdAt: toDateOnly(item.createdAt),
   }
 }
 
-function mapActionItem(item: ApiMeetingActionItemResponse): ActionItem {
+function mapActionItem(item: ApiMeetingActionItemResponse, teamMemberNameById: Map<number, string>): ActionItem {
   return {
     id: item.id,
     content: item.content,
     assigneeId: item.assigneeId,
-    assignee: mapUserLabel(item.assigneeId, '미지정'),
+    assignee: mapUserLabel(item.assigneeId, '미지정', teamMemberNameById),
     deadline: toDateOnly(item.dueDate),
     done: item.status === '완료',
   }
@@ -186,21 +209,23 @@ function mapActionItem(item: ApiMeetingActionItemResponse): ActionItem {
 function mapDetailItem(
   detail: ApiMeetingNoteDetailResponse,
   actionItems: ApiMeetingActionItemResponse[],
-  relatedRefs: ApiMeetingNoteRelatedRefResponse[]
+  relatedRefs: ApiMeetingNoteRelatedRefResponse[],
+  teamMemberNameById: Map<number, string>,
 ): MeetingNoteDetail {
   return {
     id: String(detail.id),
     docNo: detail.noteNo,
+    teamId: detail.teamId,
     title: detail.title,
     date: toDateOnly(detail.meetingDate),
     location: detail.location ?? '',
     facilitatorId: detail.facilitatorId,
-    facilitator: mapUserLabel(detail.facilitatorId, '미지정'),
+    facilitator: mapUserLabel(detail.facilitatorId, '미지정', teamMemberNameById),
     attendeeIds: detail.attendeeIds ?? [],
     agenda: detail.agenda ?? [],
     content: detail.content ?? '',
     decisions: detail.decisions ?? [],
-    actionItems: actionItems.map(mapActionItem),
+    actionItems: actionItems.map((item) => mapActionItem(item, teamMemberNameById)),
     relatedDocs: relatedRefs.map(mapRelatedRef),
   }
 }
@@ -266,8 +291,8 @@ function toRelatedRefType(docNo: string): string | null {
 function toRelatedRefPayload(relatedDocs: RelatedDoc[]): ApiMeetingNoteRelatedRefPayload[] {
   return relatedDocs
     .map((doc, index) => {
-      const parts = doc.docNo.split('-')
-      const idText = parts[1]
+      const match = doc.docNo.toUpperCase().trim().match(/^([A-Z]+)-(\d+)$/)
+      const idText = match?.[2]
       const refType = toRelatedRefType(doc.docNo)
       const refId = Number(idText)
 
@@ -285,12 +310,17 @@ function toRelatedRefPayload(relatedDocs: RelatedDoc[]): ApiMeetingNoteRelatedRe
 }
 
 export async function listMeetingNotes(params: MeetingNoteListParams): Promise<MeetingNoteListResult> {
+  const auth = useAuthStore.getState()
+  const teamId = auth.currentTeam?.id ?? auth.teams[0]?.id
+
+  const teamMemberNameByIdPromise = buildTeamMemberNameMap(teamId)
   const { data } = await api.get<ApiPageResponse<ApiMeetingNoteListItem>>('/meeting-notes', {
     params: { page: 0, size: LIST_FETCH_SIZE },
   })
+  const teamMemberNameById = await teamMemberNameByIdPromise
 
   const filtered = data.content
-    .map(mapListItem)
+    .map((item) => mapListItem(item, teamMemberNameById))
     .filter((item) => {
       const keyword = params.search.trim()
       return keyword.length === 0
@@ -354,11 +384,16 @@ export async function getMeetingNote(id: string | number): Promise<MeetingNoteDe
     api.get<ApiMeetingActionItemResponse[]>(`/meeting-notes/${id}/action-items`),
     api.get<ApiMeetingNoteRelatedRefResponse[]>(`/meeting-notes/${id}/related-refs`),
   ])
+  const teamMemberNameById = await buildTeamMemberNameMap(detailResponse.data.teamId)
 
-  return mapDetailItem(detailResponse.data, actionItemsResponse.data, relatedRefsResponse.data)
+  return mapDetailItem(detailResponse.data, actionItemsResponse.data, relatedRefsResponse.data, teamMemberNameById)
 }
 
 export async function updateMeetingNote(id: string | number, input: UpdateMeetingNoteInput): Promise<void> {
+  const actionItems = input.actionItems
+    .filter((item) => item.content.trim().length > 0 && item.assigneeId > 0 && item.deadline.trim().length > 0)
+    .map(toActionItemPayload)
+
   const payload: ApiMeetingNoteUpdateRequest = {
     title: input.title,
     meetingDate: input.date,
@@ -368,7 +403,7 @@ export async function updateMeetingNote(id: string | number, input: UpdateMeetin
     agenda: input.agenda,
     content: input.content,
     decisions: input.decisions,
-    actionItems: input.actionItems.map(toActionItemPayload),
+    actionItems,
     relatedRefs: toRelatedRefPayload(input.relatedDocs),
   }
 

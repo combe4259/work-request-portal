@@ -26,6 +26,7 @@ export interface MeetingNote {
 export interface MeetingNoteDetail {
   id: string
   docNo: string
+  teamId: number
   title: string
   date: string
   location: string

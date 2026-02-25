@@ -4,10 +4,13 @@ import SockJS from 'sockjs-client'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ErrorState, LoadingState } from '@/components/common/AsyncState'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
+import ShowMoreButton from '@/components/common/ShowMoreButton'
 import { useTeamMembersQuery } from '@/features/auth/queries'
+import { useDocumentIndexQuery } from '@/features/document-index/queries'
 import { useDeleteMeetingNoteMutation } from '@/features/meeting-note/mutations'
 import { useMeetingNoteDetailQuery } from '@/features/meeting-note/queries'
 import { updateMeetingNote } from '@/features/meeting-note/service'
+import { useExpandableList } from '@/hooks/useExpandableList'
 import { useAuthStore } from '@/stores/authStore'
 import type { ActionItem, MeetingNoteDetail, RelatedDoc } from '@/types/meeting-note'
 
@@ -17,6 +20,7 @@ import type { ActionItem, MeetingNoteDetail, RelatedDoc } from '@/types/meeting-
 interface MeetingDoc {
   id: string
   docNo: string
+  teamId: number
   title: string
   date: string
   location: string
@@ -48,6 +52,7 @@ interface MeetingNotePresenceSnapshotMessage {
 const EMPTY_DOC: MeetingDoc = {
   id: '',
   docNo: '',
+  teamId: 0,
   title: '',
   date: '',
   location: '',
@@ -68,18 +73,21 @@ const DOC_PREFIX_STYLE: Record<string, string> = {
   TK: 'bg-slate-100 text-slate-500',
   TS: 'bg-emerald-50 text-emerald-600',
   DF: 'bg-red-50 text-red-400',
+  DP: 'bg-orange-50 text-orange-500',
   MN: 'bg-violet-50 text-violet-500',
+  KB: 'bg-sky-50 text-sky-600',
 }
 
-const ALL_DOCS = [
-  { docNo: 'WR-042', title: '계좌 개설 UI 개선 요청' },
-  { docNo: 'WR-051', title: '모바일 PDA 화면 레이아웃 개선 요청' },
-  { docNo: 'TK-109', title: '계좌 개설 API 연동 개발' },
-  { docNo: 'TK-112', title: 'API 응답 성능 최적화' },
-  { docNo: 'TS-017', title: '계좌 개설 프로세스 E2E 흐름 검증' },
-]
-
 const RELATED_DOC_PATTERN = /^(WR|TK|TS|DF|DP|MN|KB)-\d+$/i
+const ALLOWED_REF_TYPES = [
+  'WORK_REQUEST',
+  'TECH_TASK',
+  'TEST_SCENARIO',
+  'DEFECT',
+  'DEPLOYMENT',
+  'MEETING_NOTE',
+  'KNOWLEDGE_BASE',
+] as const
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api'
 const WS_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, '')
@@ -126,13 +134,15 @@ export default function MeetingNoteDetailPage() {
   const deleteMeetingNote = useDeleteMeetingNoteMutation()
   const [deleteOpen, setDeleteOpen] = useState(false)
   const { data: fetchedDoc, isPending, isError, refetch } = useMeetingNoteDetailQuery(hasValidId ? numericId : undefined)
-  const teamMembersQuery = useTeamMembersQuery(currentTeam?.id)
   const isDocLoaded = fetchedDoc != null
 
   // ── 문서 상태 ─────────────────────────────────
   const [docById, setDocById] = useState<Record<number, MeetingDoc>>({})
   const loadedDoc = useMemo(() => (fetchedDoc ? toMeetingDoc(fetchedDoc) : EMPTY_DOC), [fetchedDoc])
   const doc = hasValidId ? (docById[numericId] ?? loadedDoc) : EMPTY_DOC
+  const visibleRelatedDocs = useExpandableList(doc.relatedDocs, 5)
+  const meetingTeamId = doc.teamId > 0 ? doc.teamId : currentTeam?.id
+  const teamMembersQuery = useTeamMembersQuery(meetingTeamId)
   const hasDraft = hasValidId && docById[numericId] != null
   const [collaborators, setCollaborators] = useState<MeetingNotePresenceMessage[]>([])
 
@@ -152,12 +162,12 @@ export default function MeetingNoteDetailPage() {
       options.set(member.userId, member.name)
     })
 
-    if (doc.facilitatorId > 0) {
+    if (doc.facilitatorId > 0 && !options.has(doc.facilitatorId)) {
       options.set(doc.facilitatorId, doc.facilitator || mapUserLabel(doc.facilitatorId, '미지정'))
     }
 
     doc.actionItems.forEach((item) => {
-      if (item.assigneeId > 0) {
+      if (item.assigneeId > 0 && !options.has(item.assigneeId)) {
         options.set(item.assigneeId, item.assignee || mapUserLabel(item.assigneeId, '미지정'))
       }
     })
@@ -220,6 +230,51 @@ export default function MeetingNoteDetailPage() {
           }
         })
     }, 800)
+  }, [clientId, hasValidId, isDocLoaded, numericId])
+
+  const persistNow = useCallback((nextDoc: MeetingDoc, patch: Partial<MeetingDoc>) => {
+    if (!hasValidId || !isDocLoaded) {
+      return
+    }
+
+    clearTimeout(saveTimer.current)
+    const currentSeq = ++saveSeqRef.current
+    setSaveStatus('saving')
+
+    void updateMeetingNote(numericId, {
+      title: nextDoc.title,
+      date: nextDoc.date,
+      location: nextDoc.location,
+      facilitatorId: nextDoc.facilitatorId,
+      attendeeIds: nextDoc.attendeeIds,
+      agenda: nextDoc.agenda,
+      content: nextDoc.content,
+      decisions: nextDoc.decisions,
+      actionItems: nextDoc.actionItems,
+      relatedDocs: nextDoc.relatedDocs,
+    })
+      .then(() => {
+        const client = stompClientRef.current
+        if (client?.connected) {
+          const message: MeetingNoteRealtimeMessage = {
+            clientId,
+            patch,
+          }
+          client.publish({
+            destination: `/app/meeting-notes/${numericId}/patch`,
+            body: JSON.stringify(message),
+          })
+        }
+
+        if (saveSeqRef.current === currentSeq) {
+          setSaveStatus('saved')
+        }
+      })
+      .catch(() => {
+        if (saveSeqRef.current === currentSeq) {
+          setSaveStatus('unsaved')
+        }
+      })
   }, [clientId, hasValidId, isDocLoaded, numericId])
 
   useEffect(() => {
@@ -302,7 +357,7 @@ export default function MeetingNoteDetailPage() {
     clearTimeout(saveTimer.current)
   }, [])
 
-  const updateDoc = useCallback(<K extends keyof MeetingDoc>(key: K, value: MeetingDoc[K]) => {
+  const updateDoc = useCallback(<K extends keyof MeetingDoc>(key: K, value: MeetingDoc[K], immediate = false) => {
     if (!hasValidId) {
       return
     }
@@ -310,15 +365,19 @@ export default function MeetingNoteDetailPage() {
     setDocById((prev) => {
       const baseDoc = prev[numericId] ?? loadedDoc
       const next = { ...baseDoc, [key]: value }
-      scheduleSave(next, { [key]: value } as Partial<MeetingDoc>)
+      if (immediate) {
+        persistNow(next, { [key]: value } as Partial<MeetingDoc>)
+      } else {
+        scheduleSave(next, { [key]: value } as Partial<MeetingDoc>)
+      }
       return {
         ...prev,
         [numericId]: next,
       }
     })
-  }, [hasValidId, loadedDoc, numericId, scheduleSave])
+  }, [hasValidId, loadedDoc, numericId, persistNow, scheduleSave])
 
-  const updateFacilitator = (nextFacilitatorId: number) => {
+  const updateFacilitator = useCallback((nextFacilitatorId: number) => {
     const facilitatorLabel = userOptions.find((option) => option.value === nextFacilitatorId)?.label
       ?? mapUserLabel(nextFacilitatorId, '미지정')
 
@@ -333,7 +392,7 @@ export default function MeetingNoteDetailPage() {
         facilitatorId: nextFacilitatorId,
         facilitator: facilitatorLabel,
       }
-      scheduleSave(next, {
+      persistNow(next, {
         facilitatorId: nextFacilitatorId,
         facilitator: facilitatorLabel,
       })
@@ -342,7 +401,7 @@ export default function MeetingNoteDetailPage() {
         [numericId]: next,
       }
     })
-  }
+  }, [hasValidId, loadedDoc, numericId, persistNow, userOptions])
 
   // ── 안건 ──────────────────────────────────────
   const [agendaInput, setAgendaInput] = useState('')
@@ -385,6 +444,13 @@ export default function MeetingNoteDetailPage() {
     ? actionInput.assigneeId
     : (userOptions[0]?.value ?? 0)
 
+  useEffect(() => {
+    if (actionInput.assigneeId > 0 || selectedAssigneeId <= 0) {
+      return
+    }
+    setActionInput((prev) => ({ ...prev, assigneeId: selectedAssigneeId }))
+  }, [actionInput.assigneeId, selectedAssigneeId])
+
   const addAction = () => {
     if (!actionInput.content.trim() || !actionInput.deadline || selectedAssigneeId <= 0) return
 
@@ -399,13 +465,13 @@ export default function MeetingNoteDetailPage() {
       deadline: actionInput.deadline,
       done: false,
     }
-    updateDoc('actionItems', [...doc.actionItems, newItem])
+    updateDoc('actionItems', [...doc.actionItems, newItem], true)
     setActionInput((prev) => ({ ...prev, content: '', deadline: '' }))
   }
   const toggleAction = (id: number) => {
-    updateDoc('actionItems', doc.actionItems.map((a) => (a.id === id ? { ...a, done: !a.done } : a)))
+    updateDoc('actionItems', doc.actionItems.map((a) => (a.id === id ? { ...a, done: !a.done } : a)), true)
   }
-  const removeAction = (id: number) => updateDoc('actionItems', doc.actionItems.filter((a) => a.id !== id))
+  const removeAction = (id: number) => updateDoc('actionItems', doc.actionItems.filter((a) => a.id !== id), true)
 
   const toggleAttendee = (userId: number) => {
     if (userId <= 0) {
@@ -413,11 +479,11 @@ export default function MeetingNoteDetailPage() {
     }
 
     if (doc.attendeeIds.includes(userId)) {
-      updateDoc('attendeeIds', doc.attendeeIds.filter((id) => id !== userId))
+      updateDoc('attendeeIds', doc.attendeeIds.filter((id) => id !== userId), true)
       return
     }
 
-    updateDoc('attendeeIds', [...doc.attendeeIds, userId])
+    updateDoc('attendeeIds', [...doc.attendeeIds, userId], true)
   }
 
   // ── 연관 문서 ─────────────────────────────────
@@ -433,11 +499,24 @@ export default function MeetingNoteDetailPage() {
   }, [])
   const searchKeyword = docSearch.trim()
   const normalizedSearchDocNo = searchKeyword.toUpperCase()
+  const relatedDocQuery = useDocumentIndexQuery({
+    q: searchKeyword,
+    types: [...ALLOWED_REF_TYPES],
+    teamId: meetingTeamId,
+    enabled: docDropOpen && Boolean(meetingTeamId),
+    size: 40,
+  })
+
+  const searchedDocs = relatedDocQuery.data?.map((item) => ({
+    docNo: item.docNo,
+    title: item.title,
+  })) ?? []
+
   const customSearchDoc = RELATED_DOC_PATTERN.test(normalizedSearchDocNo)
     ? { docNo: normalizedSearchDocNo, title: normalizedSearchDocNo }
     : null
 
-  const filteredDocs = [...ALL_DOCS, ...(customSearchDoc ? [customSearchDoc] : [])].filter(
+  const filteredDocs = [...searchedDocs, ...(customSearchDoc ? [customSearchDoc] : [])].filter(
     (candidate, index, source) =>
       source.findIndex((item) => item.docNo === candidate.docNo) === index
       && !doc.relatedDocs.find((linked) => linked.docNo === candidate.docNo)
@@ -447,13 +526,14 @@ export default function MeetingNoteDetailPage() {
         || candidate.title.includes(searchKeyword)
       )
   )
+  const visibleSearchDocs = useExpandableList(filteredDocs, 8)
   const addRelatedDoc = (d: { docNo: string; title: string }) => {
-    updateDoc('relatedDocs', [...doc.relatedDocs, d])
+    updateDoc('relatedDocs', [...doc.relatedDocs, d], true)
     setDocSearch('')
     setDocDropOpen(false)
   }
   const removeRelatedDoc = (docNo: string) => {
-    updateDoc('relatedDocs', doc.relatedDocs.filter((d) => d.docNo !== docNo))
+    updateDoc('relatedDocs', doc.relatedDocs.filter((d) => d.docNo !== docNo), true)
   }
 
   // ── 액션 아이템 진행률 ─────────────────────────
@@ -831,6 +911,14 @@ export default function MeetingNoteDetailPage() {
                   onChange={(e) => setActionInput((prev) => ({ ...prev, deadline: e.target.value }))}
                   className="text-[11px] text-gray-400 bg-transparent outline-none border border-gray-100 rounded-full px-2 py-0.5 cursor-pointer hover:border-gray-200 transition-colors"
                 />
+                <button
+                  type="button"
+                  onClick={addAction}
+                  disabled={!actionInput.content.trim() || !actionInput.deadline || selectedAssigneeId <= 0}
+                  className="h-6 px-2.5 rounded-full text-[11px] font-semibold text-white bg-brand hover:bg-brand-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  추가
+                </button>
               </div>
             </div>
           </DocSection>
@@ -838,7 +926,7 @@ export default function MeetingNoteDetailPage() {
           {/* ── 연관 문서 ──────────────────────────── */}
           <DocSection icon={<LinkIcon />} title="연관 문서">
             <div className="flex flex-wrap gap-2 mb-2">
-              {doc.relatedDocs.map((d) => {
+              {visibleRelatedDocs.visibleItems.map((d) => {
                 const prefix = d.docNo.split('-')[0]
                 return (
                   <div key={d.docNo} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 border border-gray-200 rounded-lg text-[12px] group">
@@ -856,6 +944,12 @@ export default function MeetingNoteDetailPage() {
                 )
               })}
             </div>
+            <ShowMoreButton
+              expanded={visibleRelatedDocs.expanded}
+              hiddenCount={visibleRelatedDocs.hiddenCount}
+              onToggle={visibleRelatedDocs.toggle}
+              className="mb-2"
+            />
             <div ref={docRef} className="relative">
               <input
                 value={docSearch}
@@ -864,19 +958,36 @@ export default function MeetingNoteDetailPage() {
                 placeholder="+ 문서 연결"
                 className="text-[13px] text-gray-400 bg-transparent outline-none placeholder-gray-300 border-b border-transparent focus:border-gray-200 transition-colors w-40"
               />
-              {docDropOpen && filteredDocs.length > 0 && (
+              {docDropOpen && (
                 <div className="absolute z-20 top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden w-80">
-                  {filteredDocs.map((d) => (
-                    <button
-                      key={d.docNo}
-                      type="button"
-                      onMouseDown={() => addRelatedDoc(d)}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-blue-50 text-left"
-                    >
-                      <span className="font-mono text-[11px] text-gray-400">{d.docNo}</span>
-                      <span className="text-[12px] text-gray-700 truncate">{d.title}</span>
-                    </button>
-                  ))}
+                  {relatedDocQuery.isPending ? (
+                    <p className="px-3 py-2 text-[12px] text-gray-400">문서를 불러오는 중...</p>
+                  ) : filteredDocs.length > 0 ? (
+                    <>
+                      <div className="max-h-72 overflow-y-auto">
+                        {visibleSearchDocs.visibleItems.map((d) => (
+                          <button
+                            key={d.docNo}
+                            type="button"
+                            onMouseDown={() => addRelatedDoc(d)}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-blue-50 text-left"
+                          >
+                            <span className="font-mono text-[11px] text-gray-400">{d.docNo}</span>
+                            <span className="text-[12px] text-gray-700 truncate">{d.title}</span>
+                          </button>
+                        ))}
+                      </div>
+                      <div className="px-2 py-1 border-t border-gray-100 bg-white">
+                        <ShowMoreButton
+                          expanded={visibleSearchDocs.expanded}
+                          hiddenCount={visibleSearchDocs.hiddenCount}
+                          onToggle={visibleSearchDocs.toggle}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <p className="px-3 py-2 text-[12px] text-gray-400">연결할 문서를 찾지 못했습니다.</p>
+                  )}
                 </div>
               )}
             </div>

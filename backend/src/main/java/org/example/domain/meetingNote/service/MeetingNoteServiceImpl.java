@@ -165,7 +165,9 @@ public class MeetingNoteServiceImpl implements MeetingNoteService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "요청 본문이 비어 있습니다.");
         }
 
-        MeetingNote entity = getMeetingNoteOrThrow(id);
+        MeetingNote entity = meetingNoteRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "회의록을 찾을 수 없습니다."));
+        TeamScopeUtil.ensureAccessible(entity.getTeamId());
 
         if (request.title() != null && request.title().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "title은 필수입니다.");
@@ -304,6 +306,7 @@ public class MeetingNoteServiceImpl implements MeetingNoteService {
 
     private void persistAttendees(Long meetingNoteId, List<Long> attendeeIds) {
         meetingAttendeeRepository.deleteByMeetingNoteId(meetingNoteId);
+        meetingAttendeeRepository.flush();
 
         if (attendeeIds == null || attendeeIds.isEmpty()) {
             return;
@@ -317,16 +320,9 @@ public class MeetingNoteServiceImpl implements MeetingNoteService {
             return;
         }
 
-        List<MeetingAttendee> rows = new ArrayList<>();
         for (Long userId : uniqueIds) {
-            MeetingAttendee row = new MeetingAttendee();
-            row.setMeetingNoteId(meetingNoteId);
-            row.setUserId(userId);
-            row.setAttended(true);
-            rows.add(row);
+            meetingAttendeeRepository.insertIgnore(meetingNoteId, userId);
         }
-
-        meetingAttendeeRepository.saveAll(rows);
     }
 
     private void persistRelatedRefs(Long meetingNoteId, List<MeetingNoteRelatedRefItemRequest> items) {

@@ -105,9 +105,6 @@ class MeetingNoteServiceImplTest {
     private ArgumentCaptor<List<MeetingActionItem>> actionItemRowsCaptor;
 
     @Captor
-    private ArgumentCaptor<List<MeetingAttendee>> attendeeRowsCaptor;
-
-    @Captor
     private ArgumentCaptor<List<MeetingNoteRelatedRef>> relatedRefRowsCaptor;
 
     @Test
@@ -188,12 +185,14 @@ class MeetingNoteServiceImplTest {
 
         verify(meetingNoteRepository).save(meetingNoteCaptor.capture());
         verify(meetingActionItemRepository).saveAll(actionItemRowsCaptor.capture());
-        verify(meetingAttendeeRepository).saveAll(attendeeRowsCaptor.capture());
+        verify(meetingAttendeeRepository).deleteByMeetingNoteId(100L);
+        verify(meetingAttendeeRepository).flush();
+        verify(meetingAttendeeRepository).insertIgnore(100L, 2L);
+        verify(meetingAttendeeRepository).insertIgnore(100L, 3L);
         verify(meetingNoteRelatedRefRepository).saveAll(relatedRefRowsCaptor.capture());
 
         MeetingNote saved = meetingNoteCaptor.getValue();
         List<MeetingActionItem> actionRows = actionItemRowsCaptor.getValue();
-        List<MeetingAttendee> attendeeRows = attendeeRowsCaptor.getValue();
         List<MeetingNoteRelatedRef> relatedRows = relatedRefRowsCaptor.getValue();
 
         assertThat(createdId).isEqualTo(100L);
@@ -207,10 +206,6 @@ class MeetingNoteServiceImplTest {
         assertThat(actionRows.get(0).getStatus()).isEqualTo("대기");
         assertThat(actionRows.get(0).getLinkedRefType()).isEqualTo("WORK_REQUEST");
 
-        assertThat(attendeeRows).hasSize(2);
-        assertThat(attendeeRows.get(0).getUserId()).isEqualTo(2L);
-        assertThat(attendeeRows.get(1).getUserId()).isEqualTo(3L);
-
         assertThat(relatedRows).hasSize(1);
         assertThat(relatedRows.get(0).getRefType()).isEqualTo("WORK_REQUEST");
         assertThat(relatedRows.get(0).getRefId()).isEqualTo(11L);
@@ -220,7 +215,7 @@ class MeetingNoteServiceImplTest {
     @DisplayName("수정 시 null이 아닌 필드만 반영하고 액션 아이템을 교체한다")
     void update() {
         MeetingNote entity = sampleMeetingNote(7L);
-        when(meetingNoteRepository.findById(7L)).thenReturn(Optional.of(entity));
+        when(meetingNoteRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(entity));
 
         MeetingNoteUpdateRequest request = new MeetingNoteUpdateRequest(
                 "수정 제목",
@@ -240,7 +235,9 @@ class MeetingNoteServiceImplTest {
         verify(meetingActionItemRepository).deleteByMeetingNoteId(7L);
         verify(meetingActionItemRepository).saveAll(actionItemRowsCaptor.capture());
         verify(meetingAttendeeRepository).deleteByMeetingNoteId(7L);
-        verify(meetingAttendeeRepository).saveAll(attendeeRowsCaptor.capture());
+        verify(meetingAttendeeRepository).flush();
+        verify(meetingAttendeeRepository).insertIgnore(7L, 4L);
+        verify(meetingAttendeeRepository).insertIgnore(7L, 5L);
         verify(meetingNoteRelatedRefRepository).deleteByMeetingNoteId(7L);
         verify(meetingNoteRelatedRefRepository).saveAll(relatedRefRowsCaptor.capture());
 
@@ -250,13 +247,9 @@ class MeetingNoteServiceImplTest {
         assertThat(entity.getAgenda()).isEqualTo("[\"업데이트 안건\"]");
 
         List<MeetingActionItem> actionRows = actionItemRowsCaptor.getValue();
-        List<MeetingAttendee> attendeeRows = attendeeRowsCaptor.getValue();
         List<MeetingNoteRelatedRef> relatedRows = relatedRefRowsCaptor.getValue();
         assertThat(actionRows).hasSize(1);
         assertThat(actionRows.get(0).getStatus()).isEqualTo("진행중");
-        assertThat(attendeeRows).hasSize(2);
-        assertThat(attendeeRows.get(0).getUserId()).isEqualTo(4L);
-        assertThat(attendeeRows.get(1).getUserId()).isEqualTo(5L);
         assertThat(relatedRows).hasSize(1);
         assertThat(relatedRows.get(0).getRefType()).isEqualTo("TECH_TASK");
         assertThat(relatedRows.get(0).getSortOrder()).isEqualTo(2);
