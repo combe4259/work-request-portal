@@ -4,6 +4,7 @@ public record AuthTeamResponse(
         Long id,
         String name,
         String description,
-        String teamRole
+        String teamRole,
+        String inviteCode
 ) {
 }

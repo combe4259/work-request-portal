@@ -141,7 +141,8 @@ public class AuthServiceImpl implements AuthService {
                         team.getId(),
                         team.getName(),
                         team.getDescription(),
-                        membership.getTeamRole()
+                        membership.getTeamRole(),
+                        team.getInviteCode()
                 ));
             }
         }

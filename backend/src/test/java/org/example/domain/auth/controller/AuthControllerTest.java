@@ -81,7 +81,7 @@ class AuthControllerTest {
         LoginResponse response = new LoginResponse(
                 "access-token",
                 new AuthUserResponse(1L, "홍길동", "hong@example.com", "DEVELOPER", "U12345"),
-                List.of(new AuthTeamResponse(10L, "개발팀", "업무 포털", "OWNER"))
+                List.of(new AuthTeamResponse(10L, "개발팀", "업무 포털", "OWNER", "ABCDEFGH"))
         );
         when(authService.login(eq(request))).thenReturn(response);
 
