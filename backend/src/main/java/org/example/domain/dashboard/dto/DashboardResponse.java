@@ -19,6 +19,7 @@ public record DashboardResponse(
 
     public record DashboardWorkItem(
             Long id,
+            String domain,
             String docNo,
             String title,
             String type,
@@ -32,6 +33,7 @@ public record DashboardResponse(
     public record DashboardCalendarEvent(
             String date,
             int day,
+            String domain,
             String docNo,
             String title,
             String priority

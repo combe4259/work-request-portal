@@ -4,23 +4,14 @@ import KpiCard from '@/components/dashboard/KpiCard'
 import { PriorityBadge } from '@/components/work-request/Badges'
 import { SortTh, type SortDir } from '@/components/common/TableControls'
 import { EmptyState } from '@/components/common/AsyncState'
+import ShowMoreButton from '@/components/common/ShowMoreButton'
+import { useDashboardSummaryQuery } from '@/features/dashboard/queries'
+import type { DashboardDomain, DashboardDomainFilter, DashboardScope } from '@/features/dashboard/service'
 import { useDashboardNotificationsQuery } from '@/features/notification/queries'
-import { useWorkRequestsQuery } from '@/features/work-request/queries'
-import type { WorkRequestListParams } from '@/features/work-request/service'
-import { useTechTasksQuery } from '@/features/tech-task/queries'
-import type { TechTaskListParams } from '@/features/tech-task/service'
-import { useTestScenariosQuery } from '@/features/test-scenario/queries'
-import type { TestScenarioListParams } from '@/features/test-scenario/service'
-import { useDefectsQuery } from '@/features/defect/queries'
-import type { DefectListParams } from '@/features/defect/service'
-import { useDeploymentsQuery } from '@/features/deployment/queries'
-import type { DeploymentListParams } from '@/features/deployment/service'
+import { getNotificationRoute } from '@/features/notification/routes'
+import { useExpandableList } from '@/hooks/useExpandableList'
 import { useAuthStore } from '@/stores/authStore'
-import type { Priority, WorkRequest } from '@/types/work-request'
-import type { TechTask } from '@/types/tech-task'
-import type { TestScenario } from '@/types/test-scenario'
-import type { Defect } from '@/types/defect'
-import type { Deployment } from '@/types/deployment'
+import type { Priority } from '@/types/work-request'
 
 type CalEvent = {
   date: string
@@ -30,14 +21,14 @@ type CalEvent = {
   domainLabel: string
 }
 
-type ActionScope = 'mine' | 'team'
+type ActionScope = DashboardScope
 type KpiKey = 'todo' | 'inProgress' | 'done' | 'urgent'
 type DashSortKey = 'domain' | 'priority' | 'deadline' | 'status'
-type DomainKey = 'WORK_REQUEST' | 'TECH_TASK' | 'TEST_SCENARIO' | 'DEFECT' | 'DEPLOYMENT'
-type DomainFilter = 'ALL' | DomainKey
+type DomainKey = DashboardDomain
+type DomainFilter = DashboardDomainFilter
 
 interface UnifiedBoardItem {
-  id: string
+  id: number
   docNo: string
   title: string
   domainKey: DomainKey
@@ -67,61 +58,6 @@ const DOMAIN_FILTER_OPTIONS: Array<{ key: DomainFilter; label: string }> = [
   { key: 'DEFECT', label: '결함' },
   { key: 'DEPLOYMENT', label: '배포' },
 ]
-
-const WORK_REQUEST_DASH_PARAMS: WorkRequestListParams = {
-  search: '',
-  filterType: '전체',
-  filterPriority: '전체',
-  filterStatus: '전체',
-  sortKey: 'deadline',
-  sortDir: 'asc',
-  page: 1,
-  pageSize: 500,
-}
-
-const TECH_TASK_DASH_PARAMS: TechTaskListParams = {
-  search: '',
-  filterType: '전체',
-  filterPriority: '전체',
-  filterStatus: '전체',
-  sortKey: 'deadline',
-  sortDir: 'asc',
-  page: 1,
-  pageSize: 500,
-}
-
-const TEST_SCENARIO_DASH_PARAMS: TestScenarioListParams = {
-  search: '',
-  filterType: '전체',
-  filterPriority: '전체',
-  filterStatus: '전체',
-  sortKey: 'deadline',
-  sortDir: 'asc',
-  page: 1,
-  pageSize: 500,
-}
-
-const DEFECT_DASH_PARAMS: DefectListParams = {
-  search: '',
-  filterType: '전체',
-  filterSeverity: '전체',
-  filterStatus: '전체',
-  sortKey: 'deadline',
-  sortDir: 'asc',
-  page: 1,
-  pageSize: 500,
-}
-
-const DEPLOYMENT_DASH_PARAMS: DeploymentListParams = {
-  search: '',
-  filterType: '전체',
-  filterEnv: '전체',
-  filterStatus: '전체',
-  sortKey: 'deployDate',
-  sortDir: 'asc',
-  page: 1,
-  pageSize: 500,
-}
 
 const IN_PROGRESS_STATUSES = new Set([
   '검토중',
@@ -175,142 +111,98 @@ function isUrgent(item: UnifiedBoardItem): boolean {
   return diff != null && diff >= 0 && diff <= 3 && !isClosed(item)
 }
 
-function mapWorkRequestItems(items: WorkRequest[]): UnifiedBoardItem[] {
+function toDomainLabel(domain: DomainKey): string {
+  if (domain === 'WORK_REQUEST') {
+    return '업무요청'
+  }
+  if (domain === 'TECH_TASK') {
+    return '기술과제'
+  }
+  if (domain === 'TEST_SCENARIO') {
+    return '테스트 시나리오'
+  }
+  if (domain === 'DEFECT') {
+    return '결함'
+  }
+  return '배포'
+}
+
+function toDetailRoute(domain: DomainKey, id: number): string {
+  if (domain === 'WORK_REQUEST') {
+    return `/work-requests/${id}`
+  }
+  if (domain === 'TECH_TASK') {
+    return `/tech-tasks/${id}`
+  }
+  if (domain === 'TEST_SCENARIO') {
+    return `/test-scenarios/${id}`
+  }
+  if (domain === 'DEFECT') {
+    return `/defects/${id}`
+  }
+  return `/deployments/${id}`
+}
+
+function mapDashboardItems(items: Array<{
+  id: number
+  domain: DomainKey
+  docNo: string
+  title: string
+  type: string
+  priority: Priority | '-'
+  status: string
+  assignee: string
+  deadline: string
+}>): UnifiedBoardItem[] {
   return items.map((item) => ({
     id: item.id,
     docNo: item.docNo,
     title: item.title,
-    domainKey: 'WORK_REQUEST',
-    domainLabel: '업무요청',
+    domainKey: item.domain,
+    domainLabel: toDomainLabel(item.domain),
     type: item.type,
     priority: item.priority,
     status: item.status,
     assignee: item.assignee,
     deadline: item.deadline,
-    route: `/work-requests/${item.id}`,
-  }))
-}
-
-function mapTechTaskItems(items: TechTask[]): UnifiedBoardItem[] {
-  return items.map((item) => ({
-    id: item.id,
-    docNo: item.docNo,
-    title: item.title,
-    domainKey: 'TECH_TASK',
-    domainLabel: '기술과제',
-    type: item.type,
-    priority: item.priority,
-    status: item.status,
-    assignee: item.assignee,
-    deadline: item.deadline,
-    route: `/tech-tasks/${item.id}`,
-  }))
-}
-
-function mapTestScenarioItems(items: TestScenario[]): UnifiedBoardItem[] {
-  return items.map((item) => ({
-    id: item.id,
-    docNo: item.docNo,
-    title: item.title,
-    domainKey: 'TEST_SCENARIO',
-    domainLabel: '테스트 시나리오',
-    type: item.type,
-    priority: item.priority,
-    status: item.status,
-    assignee: item.assignee,
-    deadline: item.deadline,
-    route: `/test-scenarios/${item.id}`,
-  }))
-}
-
-function mapDefectItems(items: Defect[]): UnifiedBoardItem[] {
-  return items.map((item) => ({
-    id: item.id,
-    docNo: item.docNo,
-    title: item.title,
-    domainKey: 'DEFECT',
-    domainLabel: '결함',
-    type: item.type,
-    priority: item.severity === '치명적' ? '긴급' : item.severity,
-    status: item.status,
-    assignee: item.assignee,
-    deadline: item.deadline,
-    route: `/defects/${item.id}`,
-  }))
-}
-
-function mapDeploymentItems(items: Deployment[]): UnifiedBoardItem[] {
-  return items.map((item) => ({
-    id: item.id,
-    docNo: item.docNo,
-    title: item.title,
-    domainKey: 'DEPLOYMENT',
-    domainLabel: '배포',
-    type: item.type,
-    priority: '-',
-    status: item.status,
-    assignee: item.manager,
-    deadline: item.deployDate,
-    route: `/deployments/${item.id}`,
+    route: toDetailRoute(item.domain, item.id),
   }))
 }
 
 export default function DashboardPage() {
   const navigate = useNavigate()
   const currentUserId = useAuthStore((state) => state.user?.id)
-  const currentUserName = useAuthStore((state) => state.user?.name ?? '')
-
-  const workRequestsQuery = useWorkRequestsQuery(WORK_REQUEST_DASH_PARAMS)
-  const techTasksQuery = useTechTasksQuery(TECH_TASK_DASH_PARAMS)
-  const testScenariosQuery = useTestScenariosQuery(TEST_SCENARIO_DASH_PARAMS)
-  const defectsQuery = useDefectsQuery(DEFECT_DASH_PARAMS)
-  const deploymentsQuery = useDeploymentsQuery(DEPLOYMENT_DASH_PARAMS)
-  const notificationsQuery = useDashboardNotificationsQuery(currentUserId)
-  const notifications = notificationsQuery.data ?? []
-
-  const boardItems = useMemo<UnifiedBoardItem[]>(() => {
-    const workItems = mapWorkRequestItems(workRequestsQuery.data?.items ?? [])
-    const techItems = mapTechTaskItems(techTasksQuery.data?.items ?? [])
-    const scenarioItems = mapTestScenarioItems(testScenariosQuery.data?.items ?? [])
-    const defectItems = mapDefectItems(defectsQuery.data?.items ?? [])
-    const deploymentItems = mapDeploymentItems(deploymentsQuery.data?.items ?? [])
-    return [...workItems, ...techItems, ...scenarioItems, ...defectItems, ...deploymentItems]
-  }, [
-    workRequestsQuery.data?.items,
-    techTasksQuery.data?.items,
-    testScenariosQuery.data?.items,
-    defectsQuery.data?.items,
-    deploymentsQuery.data?.items,
-  ])
-
+  const currentTeamId = useAuthStore((state) => state.currentTeam?.id)
   const [actionScope, setActionScope] = useState<ActionScope>('mine')
   const [domainFilter, setDomainFilter] = useState<DomainFilter>('ALL')
   const [activeKpi, setActiveKpi] = useState<KpiKey | null>(null)
   const [sort, setSort] = useState<{ key: DashSortKey; dir: SortDir }>({ key: 'deadline', dir: 'asc' })
 
-  const scopedItems = useMemo(() => {
-    if (actionScope === 'mine' && currentUserName) {
-      return boardItems.filter((item) => item.assignee === currentUserName && !isClosed(item))
-    }
-    return boardItems
-  }, [actionScope, boardItems, currentUserName])
+  const dashboardSummaryQuery = useDashboardSummaryQuery(currentTeamId, actionScope, domainFilter)
+  const notificationsQuery = useDashboardNotificationsQuery(currentUserId)
+  const notifications = notificationsQuery.data ?? []
+  const visibleNotifications = useExpandableList(notifications, 10)
 
-  const filteredItems = useMemo(() => {
-    if (domainFilter === 'ALL') {
-      return scopedItems
+  const boardItems = useMemo<UnifiedBoardItem[]>(() => {
+    return mapDashboardItems(dashboardSummaryQuery.data?.workRequests ?? [])
+  }, [dashboardSummaryQuery.data?.workRequests])
+
+  const handleNotificationNavigate = (refType: string | null, refId: number | null) => {
+    const route = getNotificationRoute(refType, refId)
+    if (route) {
+      navigate(route)
     }
-    return scopedItems.filter((item) => item.domainKey === domainFilter)
-  }, [domainFilter, scopedItems])
+  }
 
   const kpiItems: Record<KpiKey, UnifiedBoardItem[]> = useMemo(() => ({
-    todo: filteredItems.filter((item) => !isClosed(item) && item.assignee !== '미배정'),
-    inProgress: filteredItems.filter((item) => IN_PROGRESS_STATUSES.has(item.status)),
-    done: filteredItems.filter((item) => isClosed(item)),
-    urgent: filteredItems.filter((item) => isUrgent(item)),
-  }), [filteredItems])
+    todo: boardItems.filter((item) => !isClosed(item) && item.assignee !== '미배정'),
+    inProgress: boardItems.filter((item) => IN_PROGRESS_STATUSES.has(item.status)),
+    done: boardItems.filter((item) => isClosed(item)),
+    urgent: boardItems.filter((item) => isUrgent(item)),
+  }), [boardItems])
 
   const sortedItems = useMemo(() => {
-    return [...filteredItems].sort((a, b) => {
+    return [...boardItems].sort((a, b) => {
       const v = sort.dir === 'asc' ? 1 : -1
       if (sort.key === 'priority') {
         return ((PRIORITY_ORDER_DASH[a.priority] ?? 9) - (PRIORITY_ORDER_DASH[b.priority] ?? 9)) * v
@@ -325,47 +217,35 @@ export default function DashboardPage() {
       const bDeadline = parseDateOnly(b.deadline)?.getTime() ?? Number.MAX_SAFE_INTEGER
       return (aDeadline - bDeadline) * v
     })
-  }, [filteredItems, sort])
+  }, [boardItems, sort])
 
   const calendarEvents = useMemo<CalEvent[]>(() => {
-    return filteredItems
-      .filter((item) => item.deadline)
-      .map((item) => ({
-        date: item.deadline,
-        docNo: item.docNo,
-        title: item.title,
-        priority: item.priority,
-        domainLabel: item.domainLabel,
-      }))
-  }, [filteredItems])
+    return (dashboardSummaryQuery.data?.calendarEvents ?? []).map((item) => ({
+      date: item.date,
+      docNo: item.docNo,
+      title: item.title,
+      priority: item.priority,
+      domainLabel: toDomainLabel(item.domain),
+    }))
+  }, [dashboardSummaryQuery.data?.calendarEvents])
 
-  const isBoardPending =
-    workRequestsQuery.isPending
-    || techTasksQuery.isPending
-    || testScenariosQuery.isPending
-    || defectsQuery.isPending
-    || deploymentsQuery.isPending
-
-  const isBoardError =
-    workRequestsQuery.isError
-    || techTasksQuery.isError
-    || testScenariosQuery.isError
-    || defectsQuery.isError
-    || deploymentsQuery.isError
+  const isBoardPending = dashboardSummaryQuery.isPending
+  const isBoardError = dashboardSummaryQuery.isError
 
   const handleRefetchBoard = () => {
-    void Promise.all([
-      workRequestsQuery.refetch(),
-      techTasksQuery.refetch(),
-      testScenariosQuery.refetch(),
-      defectsQuery.refetch(),
-      deploymentsQuery.refetch(),
-    ])
+    void dashboardSummaryQuery.refetch()
   }
 
   const handleDashSort = (key: string) => {
     const k = key as DashSortKey
     setSort((prev) => prev.key === k ? { key: k, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key: k, dir: 'asc' })
+  }
+
+  const kpiSummary = dashboardSummaryQuery.data?.kpi ?? {
+    todoCount: kpiItems.todo.length,
+    inProgressCount: kpiItems.inProgress.length,
+    doneCount: kpiItems.done.length,
+    urgentCount: kpiItems.urgent.length,
   }
 
   return (
@@ -374,10 +254,10 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {([
-          { key: 'todo' as KpiKey, label: actionScope === 'mine' ? '내 액션' : '팀 액션', value: kpiItems.todo.length, sub: '진행 필요 항목', color: 'brand' as const, icon: <TodoIcon /> },
-          { key: 'inProgress' as KpiKey, label: '진행중', value: kpiItems.inProgress.length, sub: '처리 중 항목', color: 'blue' as const, icon: <ProgressIcon /> },
-          { key: 'done' as KpiKey, label: '완료/종결', value: kpiItems.done.length, sub: '종결된 항목', color: 'emerald' as const, icon: <CheckIcon /> },
-          { key: 'urgent' as KpiKey, label: '마감임박', value: kpiItems.urgent.length, sub: '3일 이내 마감', color: 'red' as const, icon: <DeadlineIcon /> },
+          { key: 'todo' as KpiKey, label: actionScope === 'mine' ? '내 액션' : '팀 액션', value: kpiSummary.todoCount, sub: '진행 필요 항목', color: 'brand' as const, icon: <TodoIcon /> },
+          { key: 'inProgress' as KpiKey, label: '진행중', value: kpiSummary.inProgressCount, sub: '처리 중 항목', color: 'blue' as const, icon: <ProgressIcon /> },
+          { key: 'done' as KpiKey, label: '완료/종결', value: kpiSummary.doneCount, sub: '종결된 항목', color: 'emerald' as const, icon: <CheckIcon /> },
+          { key: 'urgent' as KpiKey, label: '마감임박', value: kpiSummary.urgentCount, sub: '3일 이내 마감', color: 'red' as const, icon: <DeadlineIcon /> },
         ]).map((kpi, idx) => (
           <div key={kpi.key} className="relative">
             <div onClick={() => setActiveKpi((prev) => prev === kpi.key ? null : kpi.key)} className="cursor-pointer">
@@ -571,17 +451,33 @@ export default function DashboardPage() {
               <EmptyState title="새 알림이 없습니다" description="변경사항이 생기면 여기서 바로 확인할 수 있습니다." />
             ) : (
               <div className="space-y-2.5">
-                {notifications.map((n) => (
+                {visibleNotifications.visibleItems.map((n) => {
+                  const route = getNotificationRoute(n.refType, n.refId)
+                  return (
                   <div key={n.id} className="flex items-start gap-2.5">
                     <div className="w-6 h-6 rounded-full bg-brand/8 flex items-center justify-center flex-shrink-0 mt-0.5">
                       <NotifIcon type={n.type} />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[11px] text-gray-600 leading-relaxed">{n.text}</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleNotificationNavigate(n.refType, n.refId)
+                      }}
+                      disabled={!route}
+                      className={`flex-1 min-w-0 text-left ${route ? 'cursor-pointer' : 'cursor-default'} disabled:opacity-100`}
+                    >
+                      <p className={`text-[11px] leading-relaxed ${route ? 'text-gray-700 hover:text-brand transition-colors' : 'text-gray-600'}`}>{n.text}</p>
                       <p className="text-[10px] text-gray-400 mt-0.5">{n.time}</p>
-                    </div>
+                    </button>
                   </div>
-                ))}
+                  )
+                })}
+                <ShowMoreButton
+                  expanded={visibleNotifications.expanded}
+                  hiddenCount={visibleNotifications.hiddenCount}
+                  onToggle={visibleNotifications.toggle}
+                  className="mt-1"
+                />
               </div>
             )}
           </div>
@@ -794,6 +690,13 @@ function NotifIcon({ type }: { type: string }) {
     <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
       <circle cx="5.5" cy="5.5" r="4" stroke="#f59e0b" strokeWidth="1.1" />
       <path d="M5.5 3V5.5L7 7" stroke="#f59e0b" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+  if (type === 'status') return (
+    <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
+      <circle cx="5.5" cy="5.5" r="4" stroke="#0ea5e9" strokeWidth="1.1" />
+      <path d="M5.5 3.4V5.6" stroke="#0ea5e9" strokeWidth="1.1" strokeLinecap="round" />
+      <circle cx="5.5" cy="7.4" r="0.55" fill="#0ea5e9" />
     </svg>
   )
   return (

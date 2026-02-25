@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -29,12 +30,13 @@ class DashboardControllerTest {
     private DashboardService dashboardService;
 
     @Test
-    @DisplayName("대시보드 조회는 teamId 파라미터를 전달해 응답한다")
+    @DisplayName("대시보드 조회는 teamId/scope/domain 파라미터를 전달해 응답한다")
     void getDashboard() throws Exception {
         DashboardResponse response = new DashboardResponse(
                 new DashboardResponse.KpiSummary(3, 2, 1, 1),
                 List.of(new DashboardResponse.DashboardWorkItem(
                         1L,
+                        "WORK_REQUEST",
                         "WR-001",
                         "업무요청",
                         "기능개선",
@@ -46,20 +48,26 @@ class DashboardControllerTest {
                 List.of(new DashboardResponse.DashboardCalendarEvent(
                         "2026-03-03",
                         3,
+                        "WORK_REQUEST",
                         "WR-001",
                         "업무요청",
                         "높음"
                 ))
         );
 
-        when(dashboardService.getDashboard(10L)).thenReturn(response);
+        when(dashboardService.getDashboard(10L, "mine", "WORK_REQUEST", "Bearer test-token")).thenReturn(response);
 
-        mockMvc.perform(get("/api/dashboard").param("teamId", "10").accept(MediaType.APPLICATION_JSON))
+        mockMvc.perform(get("/api/dashboard")
+                        .param("teamId", "10")
+                        .param("scope", "mine")
+                        .param("domain", "WORK_REQUEST")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer test-token")
+                        .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.kpi.todoCount").value(3))
                 .andExpect(jsonPath("$.workRequests[0].docNo").value("WR-001"))
                 .andExpect(jsonPath("$.calendarEvents[0].day").value(3));
 
-        verify(dashboardService).getDashboard(10L);
+        verify(dashboardService).getDashboard(10L, "mine", "WORK_REQUEST", "Bearer test-token");
     }
 }
