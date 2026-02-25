@@ -7,6 +7,7 @@ import org.example.domain.resource.dto.SharedResourceUpdateRequest;
 import org.example.domain.resource.entity.SharedResource;
 import org.example.domain.resource.mapper.SharedResourceMapper;
 import org.example.domain.resource.repository.SharedResourceRepository;
+import org.example.global.team.TeamScopeUtil;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -28,7 +29,10 @@ public class SharedResourceServiceImpl implements SharedResourceService {
     @Override
     public Page<SharedResourceListResponse> findPage(int page, int size) {
         PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
-        return sharedResourceRepository.findAll(pageable)
+        Long teamId = TeamScopeUtil.currentTeamId();
+        return (teamId == null
+                ? sharedResourceRepository.findAll(pageable)
+                : sharedResourceRepository.findByTeamId(teamId, pageable))
                 .map(SharedResourceMapper::toListResponse);
     }
 
@@ -44,6 +48,7 @@ public class SharedResourceServiceImpl implements SharedResourceService {
         validateCreateRequest(request);
 
         SharedResource entity = SharedResourceMapper.fromCreateRequest(request);
+        entity.setTeamId(TeamScopeUtil.requireTeamId(request.teamId()));
         entity.setTitle(request.title().trim());
         entity.setUrl(request.url().trim());
         entity.setDescription(request.description().trim());
@@ -95,17 +100,17 @@ public class SharedResourceServiceImpl implements SharedResourceService {
     }
 
     private SharedResource getResourceOrThrow(Long id) {
-        return sharedResourceRepository.findById(id)
+        SharedResource resource = sharedResourceRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "공유 리소스를 찾을 수 없습니다."));
+        TeamScopeUtil.ensureAccessible(resource.getTeamId());
+        return resource;
     }
 
     private void validateCreateRequest(SharedResourceCreateRequest request) {
         if (request == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "요청 본문이 비어 있습니다.");
         }
-        if (request.teamId() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "teamId는 필수입니다.");
-        }
+        TeamScopeUtil.requireTeamId(request.teamId());
         if (request.registeredBy() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "registeredBy는 필수입니다.");
         }
