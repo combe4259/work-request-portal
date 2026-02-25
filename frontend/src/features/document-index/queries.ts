@@ -20,7 +20,6 @@ export function useDocumentIndexQuery(params: UseDocumentIndexQueryParams) {
     queryKey: documentIndexQueryKeys.search(normalizedQuery, typesKey, teamId, size),
     queryFn: () => searchDocumentIndex({ q: normalizedQuery, types: params.types, teamId: teamId ?? undefined, size }),
     enabled: (params.enabled ?? true) && teamId != null,
-    placeholderData: (prev) => prev,
     staleTime: 30_000,
   })
 }
