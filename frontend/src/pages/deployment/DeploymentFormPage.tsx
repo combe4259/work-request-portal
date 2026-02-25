@@ -10,6 +10,7 @@ import { useTeamMembersQuery } from '@/features/auth/queries'
 import { useDocumentIndexQuery } from '@/features/document-index/queries'
 import { useCreateDeploymentMutation, useUpdateDeploymentMutation } from '@/features/deployment/mutations'
 import { useDeploymentDetailQuery, useDeploymentRelatedRefsQuery, useDeploymentStepsQuery } from '@/features/deployment/queries'
+import { createAttachmentsFromFiles } from '@/features/attachment/service'
 import { useAuthStore } from '@/stores/authStore'
 
 // ── 스키마 ──────────────────────────────────────────
@@ -200,11 +201,18 @@ export default function DeploymentFormPage() {
         includedDocs: includedDocs.map((doc) => doc.docNo),
         steps: steps.map((step) => step.text.trim()).filter((step) => step.length > 0),
       })
+      if (fileList.length > 0) {
+        await createAttachmentsFromFiles({
+          refType: 'DEPLOYMENT',
+          refId: validEditId,
+          files: fileList,
+        })
+      }
       navigate(`/deployments/${validEditId}`)
       return
     }
 
-    await createDeployment.mutateAsync({
+    const created = await createDeployment.mutateAsync({
       title: data.title,
       version: data.version,
       type: data.type,
@@ -216,7 +224,14 @@ export default function DeploymentFormPage() {
       includedDocs: includedDocs.map((doc) => doc.docNo),
       steps: steps.map((step) => step.text.trim()).filter((step) => step.length > 0),
     })
-    navigate('/deployments')
+    if (fileList.length > 0) {
+      await createAttachmentsFromFiles({
+        refType: 'DEPLOYMENT',
+        refId: created.id,
+        files: fileList,
+      })
+    }
+    navigate(`/deployments/${created.id}`)
   }
 
   if (isEdit && validEditId == null) {

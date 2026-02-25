@@ -72,6 +72,7 @@ export interface DeploymentDetail {
   deployDate: string
   overview: string
   rollbackPlan: string
+  createdAt: string
 }
 
 export interface UpdateDeploymentInput {
@@ -117,6 +118,7 @@ interface ApiDeploymentDetailResponse {
   scheduledAt: string | null
   overview: string | null
   rollbackPlan: string | null
+  createdAt: string | null
 }
 
 interface ApiCreateDeploymentRequest {
@@ -226,6 +228,10 @@ function mapUserLabel(userId: number | null | undefined, fallbackText: string): 
 
 function toDateOnly(value: string | null | undefined): string {
   return value?.slice(0, 10) ?? ''
+}
+
+function toDateTime(value: string | null | undefined): string {
+  return value?.replace('T', ' ').slice(0, 16) ?? ''
 }
 
 function startOfDay(date: Date): Date {
@@ -383,6 +389,7 @@ export async function getDeployment(id: string | number): Promise<DeploymentDeta
     deployDate: toDateOnly(data.scheduledAt),
     overview: data.overview ?? '',
     rollbackPlan: data.rollbackPlan ?? '',
+    createdAt: toDateTime(data.createdAt),
   }
 }
 
@@ -426,6 +433,14 @@ export async function updateDeployment(input: UpdateDeploymentInput): Promise<vo
 export async function updateDeploymentStatus(id: string | number, status: DeployStatus, statusNote?: string): Promise<void> {
   const payload: ApiUpdateDeploymentStatusRequest = { status, statusNote }
   await api.patch(`/deployments/${id}/status`, payload)
+}
+
+export async function updateDeploymentStep(
+  id: string | number,
+  stepId: string | number,
+  isDone: boolean,
+): Promise<void> {
+  await api.patch(`/deployments/${id}/steps/${stepId}`, { isDone })
 }
 
 export async function deleteDeployment(id: string | number): Promise<void> {
