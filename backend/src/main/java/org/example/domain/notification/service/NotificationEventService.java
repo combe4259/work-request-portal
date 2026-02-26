@@ -3,6 +3,7 @@ package org.example.domain.notification.service;
 import org.example.domain.notification.dto.NotificationCreateRequest;
 import org.example.domain.user.entity.UserPreference;
 import org.example.domain.user.repository.UserPreferenceRepository;
+import org.example.global.slack.SlackNotificationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -16,13 +17,16 @@ public class NotificationEventService {
 
     private final NotificationService notificationService;
     private final UserPreferenceRepository userPreferenceRepository;
+    private final SlackNotificationService slackNotificationService;
 
     public NotificationEventService(
             NotificationService notificationService,
-            UserPreferenceRepository userPreferenceRepository
+            UserPreferenceRepository userPreferenceRepository,
+            SlackNotificationService slackNotificationService
     ) {
         this.notificationService = notificationService;
         this.userPreferenceRepository = userPreferenceRepository;
+        this.slackNotificationService = slackNotificationService;
     }
 
     public void create(
@@ -50,6 +54,7 @@ public class NotificationEventService {
                     refId,
                     false
             ));
+            slackNotificationService.send(type, title, message);
         } catch (RuntimeException ex) {
             log.warn("알림 생성에 실패했습니다. userId={}, type={}, refType={}, refId={}", userId, type, refType, refId, ex);
         }

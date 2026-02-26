@@ -3,6 +3,7 @@ package org.example.domain.notification.service;
 import org.example.domain.notification.dto.NotificationCreateRequest;
 import org.example.domain.user.entity.UserPreference;
 import org.example.domain.user.repository.UserPreferenceRepository;
+import org.example.global.slack.SlackNotificationService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -26,6 +27,9 @@ class NotificationEventServiceTest {
 
     @Mock
     private UserPreferenceRepository userPreferenceRepository;
+
+    @Mock
+    private SlackNotificationService slackNotificationService;
 
     @InjectMocks
     private NotificationEventService notificationEventService;

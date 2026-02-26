@@ -25,3 +25,6 @@ app:
   jwt:
     secret: ${JWT_SECRET:change-this-to-a-long-local-dev-secret-key-2026-work-request-portal}
     access-token-expire-seconds: ${JWT_ACCESS_TOKEN_EXPIRE_SECONDS:3600}
+  slack:
+    bot-token: ${SLACK_BOT_TOKEN:}
+    channel: ${SLACK_CHANNEL:}
