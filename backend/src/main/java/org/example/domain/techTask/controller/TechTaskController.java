@@ -2,6 +2,7 @@ package org.example.domain.techTask.controller;
 
 import org.example.domain.techTask.dto.TechTaskCreateRequest;
 import org.example.domain.techTask.dto.TechTaskDetailResponse;
+import org.example.domain.techTask.dto.TechTaskListQuery;
 import org.example.domain.techTask.dto.TechTaskListResponse;
 import org.example.domain.techTask.dto.TechTaskPrLinkCreateRequest;
 import org.example.domain.techTask.dto.TechTaskPrLinkResponse;
@@ -12,6 +13,7 @@ import org.example.domain.techTask.dto.TechTaskUpdateRequest;
 import org.example.domain.techTask.service.TechTaskService;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -23,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -38,10 +41,30 @@ public class TechTaskController {
 
     @GetMapping
     public Page<TechTaskListResponse> getTechTasks(
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String priority,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) Long assigneeId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate deadlineFrom,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate deadlineTo,
+            @RequestParam(defaultValue = "id") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDir,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        return techTaskService.findPage(page, size);
+        TechTaskListQuery query = new TechTaskListQuery(
+                q,
+                type,
+                priority,
+                status,
+                assigneeId,
+                deadlineFrom,
+                deadlineTo,
+                sortBy,
+                sortDir
+        );
+        return techTaskService.findPage(page, size, query);
     }
 
     @GetMapping("/{id}")

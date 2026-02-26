@@ -7,6 +7,7 @@ import org.example.domain.documentIndex.service.DocumentIndexSyncService;
 import org.example.domain.notification.service.NotificationEventService;
 import org.example.domain.techTask.dto.TechTaskCreateRequest;
 import org.example.domain.techTask.dto.TechTaskDetailResponse;
+import org.example.domain.techTask.dto.TechTaskListQuery;
 import org.example.domain.techTask.dto.TechTaskListResponse;
 import org.example.domain.techTask.dto.TechTaskPrLinkCreateRequest;
 import org.example.domain.techTask.dto.TechTaskPrLinkResponse;
@@ -30,12 +31,14 @@ import org.example.global.util.DocumentNoGenerator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -79,13 +82,20 @@ public class TechTaskServiceImpl implements TechTaskService {
     }
 
     @Override
-    public Page<TechTaskListResponse> findPage(int page, int size) {
-        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
+    public Page<TechTaskListResponse> findPage(int page, int size, TechTaskListQuery query) {
+        PageRequest pageable = PageRequest.of(page, size, resolveSort(query));
         Long teamId = TeamScopeUtil.currentTeamId();
-        return (teamId == null
-                ? techTaskRepository.findAll(pageable)
-                : techTaskRepository.findByTeamId(teamId, pageable))
-                .map(TechTaskMapper::toListResponse);
+
+        Specification<TechTask> spec = Specification.where(byTeamId(teamId))
+                .and(byKeyword(query == null ? null : query.q()))
+                .and(byExact("type", query == null ? null : query.type()))
+                .and(byExact("priority", query == null ? null : query.priority()))
+                .and(byExact("status", query == null ? null : query.status()))
+                .and(byAssigneeId(query == null ? null : query.assigneeId()))
+                .and(byDeadlineFrom(query == null ? null : query.deadlineFrom()))
+                .and(byDeadlineTo(query == null ? null : query.deadlineTo()));
+
+        return techTaskRepository.findAll(spec, pageable).map(TechTaskMapper::toListResponse);
     }
 
     @Override
@@ -283,6 +293,78 @@ public class TechTaskServiceImpl implements TechTaskService {
         TechTask entity = techTaskRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException(TECH_TASK_NOT_FOUND_PREFIX + id));
         TeamScopeUtil.ensureAccessible(entity.getTeamId());
+    }
+
+    private Specification<TechTask> byTeamId(Long teamId) {
+        if (teamId == null) {
+            return null;
+        }
+        return (root, query, builder) -> builder.equal(root.get("teamId"), teamId);
+    }
+
+    private Specification<TechTask> byKeyword(String rawKeyword) {
+        String keyword = normalizeNullable(rawKeyword);
+        if (keyword == null) {
+            return null;
+        }
+
+        return (root, query, builder) -> {
+            String likeKeyword = "%" + keyword.toLowerCase(Locale.ROOT) + "%";
+            return builder.or(
+                    builder.like(builder.lower(root.get("title")), likeKeyword),
+                    builder.like(builder.lower(root.get("taskNo")), likeKeyword)
+            );
+        };
+    }
+
+    private Specification<TechTask> byExact(String column, String rawValue) {
+        String value = normalizeNullable(rawValue);
+        if (value == null) {
+            return null;
+        }
+        return (root, query, builder) -> builder.equal(root.get(column), value);
+    }
+
+    private Specification<TechTask> byAssigneeId(Long assigneeId) {
+        if (assigneeId == null) {
+            return null;
+        }
+        return (root, query, builder) -> builder.equal(root.get("assigneeId"), assigneeId);
+    }
+
+    private Specification<TechTask> byDeadlineFrom(LocalDate deadlineFrom) {
+        if (deadlineFrom == null) {
+            return null;
+        }
+        return (root, query, builder) -> builder.greaterThanOrEqualTo(root.get("deadline"), deadlineFrom);
+    }
+
+    private Specification<TechTask> byDeadlineTo(LocalDate deadlineTo) {
+        if (deadlineTo == null) {
+            return null;
+        }
+        return (root, query, builder) -> builder.lessThanOrEqualTo(root.get("deadline"), deadlineTo);
+    }
+
+    private Sort resolveSort(TechTaskListQuery query) {
+        String requestedSortBy = normalizeNullable(query == null ? null : query.sortBy());
+        String requestedSortDir = normalizeNullable(query == null ? null : query.sortDir());
+
+        String sortBy = switch (requestedSortBy == null ? "" : requestedSortBy.toLowerCase(Locale.ROOT)) {
+            case "docno", "taskno" -> "taskNo";
+            case "title" -> "title";
+            case "type" -> "type";
+            case "priority" -> "priority";
+            case "status" -> "status";
+            case "assignee", "assigneeid" -> "assigneeId";
+            case "deadline" -> "deadline";
+            case "createdat" -> "createdAt";
+            case "updatedat" -> "updatedAt";
+            default -> "id";
+        };
+
+        Sort.Direction direction = "asc".equalsIgnoreCase(requestedSortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        return Sort.by(direction, sortBy);
     }
 
     private String normalizeRefType(String rawRefType) {

@@ -2,28 +2,31 @@ package org.example.domain.defect.service;
 
 import org.example.domain.activityLog.service.ActivityLogCreateCommand;
 import org.example.domain.activityLog.service.ActivityLogService;
-import org.example.domain.documentIndex.service.DocumentIndexSyncService;
-import org.example.domain.notification.service.NotificationEventService;
 import org.example.domain.defect.dto.DefectCreateRequest;
 import org.example.domain.defect.dto.DefectDetailResponse;
+import org.example.domain.defect.dto.DefectListQuery;
 import org.example.domain.defect.dto.DefectListResponse;
 import org.example.domain.defect.dto.DefectStatusUpdateRequest;
 import org.example.domain.defect.dto.DefectUpdateRequest;
 import org.example.domain.defect.entity.Defect;
 import org.example.domain.defect.mapper.DefectMapper;
 import org.example.domain.defect.repository.DefectRepository;
+import org.example.domain.documentIndex.service.DocumentIndexSyncService;
+import org.example.domain.notification.service.NotificationEventService;
 import org.example.global.team.TeamRequestContext;
 import org.example.global.team.TeamScopeUtil;
 import org.example.global.util.DocumentNoGenerator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDate;
 import java.util.Locale;
 
 @Service
@@ -54,13 +57,20 @@ public class DefectServiceImpl implements DefectService {
     }
 
     @Override
-    public Page<DefectListResponse> findPage(int page, int size) {
-        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
+    public Page<DefectListResponse> findPage(int page, int size, DefectListQuery query) {
+        PageRequest pageable = PageRequest.of(page, size, resolveSort(query));
         Long teamId = TeamScopeUtil.currentTeamId();
-        return (teamId == null
-                ? defectRepository.findAll(pageable)
-                : defectRepository.findByTeamId(teamId, pageable))
-                .map(DefectMapper::toListResponse);
+
+        Specification<Defect> spec = Specification.where(byTeamId(teamId))
+                .and(byKeyword(query == null ? null : query.q()))
+                .and(byExact("type", query == null ? null : query.type()))
+                .and(byExact("severity", query == null ? null : query.severity()))
+                .and(byExact("status", query == null ? null : query.status()))
+                .and(byAssigneeId(query == null ? null : query.assigneeId()))
+                .and(byDeadlineFrom(query == null ? null : query.deadlineFrom()))
+                .and(byDeadlineTo(query == null ? null : query.deadlineTo()));
+
+        return defectRepository.findAll(spec, pageable).map(DefectMapper::toListResponse);
     }
 
     @Override
@@ -230,6 +240,79 @@ public class DefectServiceImpl implements DefectService {
             return null;
         }
         return value.trim();
+    }
+
+    private Specification<Defect> byTeamId(Long teamId) {
+        if (teamId == null) {
+            return null;
+        }
+        return (root, query, builder) -> builder.equal(root.get("teamId"), teamId);
+    }
+
+    private Specification<Defect> byKeyword(String rawKeyword) {
+        String keyword = normalizeNullable(rawKeyword);
+        if (keyword == null) {
+            return null;
+        }
+
+        return (root, query, builder) -> {
+            String likeKeyword = "%" + keyword.toLowerCase(Locale.ROOT) + "%";
+            return builder.or(
+                    builder.like(builder.lower(root.get("title")), likeKeyword),
+                    builder.like(builder.lower(root.get("defectNo")), likeKeyword)
+            );
+        };
+    }
+
+    private Specification<Defect> byExact(String column, String rawValue) {
+        String value = normalizeNullable(rawValue);
+        if (value == null) {
+            return null;
+        }
+        return (root, query, builder) -> builder.equal(root.get(column), value);
+    }
+
+    private Specification<Defect> byAssigneeId(Long assigneeId) {
+        if (assigneeId == null) {
+            return null;
+        }
+        return (root, query, builder) -> builder.equal(root.get("assigneeId"), assigneeId);
+    }
+
+    private Specification<Defect> byDeadlineFrom(LocalDate deadlineFrom) {
+        if (deadlineFrom == null) {
+            return null;
+        }
+        return (root, query, builder) -> builder.greaterThanOrEqualTo(root.get("deadline"), deadlineFrom);
+    }
+
+    private Specification<Defect> byDeadlineTo(LocalDate deadlineTo) {
+        if (deadlineTo == null) {
+            return null;
+        }
+        return (root, query, builder) -> builder.lessThanOrEqualTo(root.get("deadline"), deadlineTo);
+    }
+
+    private Sort resolveSort(DefectListQuery query) {
+        String requestedSortBy = normalizeNullable(query == null ? null : query.sortBy());
+        String requestedSortDir = normalizeNullable(query == null ? null : query.sortDir());
+
+        String sortBy = switch (requestedSortBy == null ? "" : requestedSortBy.toLowerCase(Locale.ROOT)) {
+            case "docno", "defectno" -> "defectNo";
+            case "title" -> "title";
+            case "type" -> "type";
+            case "severity" -> "severity";
+            case "status" -> "status";
+            case "reporter", "reporterid" -> "reporterId";
+            case "assignee", "assigneeid" -> "assigneeId";
+            case "deadline" -> "deadline";
+            case "createdat" -> "createdAt";
+            case "updatedat" -> "updatedAt";
+            default -> "id";
+        };
+
+        Sort.Direction direction = "asc".equalsIgnoreCase(requestedSortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        return Sort.by(direction, sortBy);
     }
 
     private void notifyAssigneeAssigned(Defect entity) {

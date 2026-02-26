@@ -4,6 +4,7 @@ import jakarta.persistence.EntityNotFoundException;
 import org.example.domain.notification.service.NotificationEventService;
 import org.example.domain.techTask.dto.TechTaskCreateRequest;
 import org.example.domain.techTask.dto.TechTaskDetailResponse;
+import org.example.domain.techTask.dto.TechTaskListQuery;
 import org.example.domain.techTask.dto.TechTaskListResponse;
 import org.example.domain.techTask.dto.TechTaskPrLinkCreateRequest;
 import org.example.domain.techTask.dto.TechTaskPrLinkResponse;
@@ -33,6 +34,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -86,12 +88,22 @@ class TechTaskServiceImplTest {
     @DisplayName("목록 조회 시 페이징/정렬을 적용하고 리스트 응답으로 매핑한다")
     void findPage() {
         TechTask entity = sampleEntity(1L);
-        when(techTaskRepository.findAll(any(Pageable.class)))
+        when(techTaskRepository.findAll(any(Specification.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(entity)));
 
-        Page<TechTaskListResponse> page = techTaskService.findPage(1, 10);
+        Page<TechTaskListResponse> page = techTaskService.findPage(1, 10, new TechTaskListQuery(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "id",
+                "desc"
+        ));
 
-        verify(techTaskRepository).findAll(pageableCaptor.capture());
+        verify(techTaskRepository).findAll(any(Specification.class), pageableCaptor.capture());
         Pageable pageable = pageableCaptor.getValue();
         Sort.Order idOrder = pageable.getSort().getOrderFor("id");
 

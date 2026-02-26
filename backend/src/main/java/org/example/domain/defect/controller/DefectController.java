@@ -2,11 +2,13 @@ package org.example.domain.defect.controller;
 
 import org.example.domain.defect.dto.DefectCreateRequest;
 import org.example.domain.defect.dto.DefectDetailResponse;
+import org.example.domain.defect.dto.DefectListQuery;
 import org.example.domain.defect.dto.DefectListResponse;
 import org.example.domain.defect.dto.DefectStatusUpdateRequest;
 import org.example.domain.defect.dto.DefectUpdateRequest;
 import org.example.domain.defect.service.DefectService;
 import org.springframework.data.domain.Page;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.util.Map;
 
 @RestController
@@ -33,10 +36,30 @@ public class DefectController {
 
     @GetMapping
     public Page<DefectListResponse> getDefects(
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String severity,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) Long assigneeId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate deadlineFrom,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate deadlineTo,
+            @RequestParam(defaultValue = "id") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDir,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        return defectService.findPage(page, size);
+        DefectListQuery query = new DefectListQuery(
+                q,
+                type,
+                severity,
+                status,
+                assigneeId,
+                deadlineFrom,
+                deadlineTo,
+                sortBy,
+                sortDir
+        );
+        return defectService.findPage(page, size, query);
     }
 
     @GetMapping("/{id}")

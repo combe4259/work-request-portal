@@ -3,6 +3,8 @@ package org.example.domain.testScenario.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.domain.testScenario.dto.TestScenarioCreateRequest;
 import org.example.domain.testScenario.dto.TestScenarioDetailResponse;
+import org.example.domain.testScenario.dto.TestScenarioExecutionUpdateRequest;
+import org.example.domain.testScenario.dto.TestScenarioListQuery;
 import org.example.domain.testScenario.dto.TestScenarioListResponse;
 import org.example.domain.testScenario.dto.TestScenarioStatusUpdateRequest;
 import org.example.domain.testScenario.dto.TestScenarioUpdateRequest;
@@ -23,6 +25,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -48,7 +51,7 @@ class TestScenarioControllerTest {
     @Test
     @DisplayName("테스트 시나리오 목록 조회는 기본 페이지 파라미터를 사용한다")
     void getTestScenariosWithDefaultPaging() throws Exception {
-        when(testScenarioService.findPage(0, 20)).thenReturn(new PageImpl<>(
+        when(testScenarioService.findPage(eq(0), eq(20), any(TestScenarioListQuery.class))).thenReturn(new PageImpl<>(
                 List.of(listResponse(1L, "TS-0001")),
                 PageRequest.of(0, 20),
                 1
@@ -61,25 +64,45 @@ class TestScenarioControllerTest {
                 .andExpect(jsonPath("$.number").value(0))
                 .andExpect(jsonPath("$.size").value(20));
 
-        verify(testScenarioService).findPage(0, 20);
+        verify(testScenarioService).findPage(eq(0), eq(20), eq(new TestScenarioListQuery(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "id",
+                "desc"
+        )));
     }
 
     @Test
     @DisplayName("테스트 시나리오 목록 조회는 전달된 페이지 파라미터를 사용한다")
     void getTestScenariosWithCustomPaging() throws Exception {
-        when(testScenarioService.findPage(2, 5)).thenReturn(new PageImpl<>(
+        when(testScenarioService.findPage(eq(2), eq(5), any(TestScenarioListQuery.class))).thenReturn(new PageImpl<>(
                 List.of(listResponse(10L, "TS-0010")),
                 PageRequest.of(2, 5),
                 11
         ));
 
-        mockMvc.perform(get("/api/test-scenarios?page=2&size=5"))
+        mockMvc.perform(get("/api/test-scenarios?page=2&size=5&q=가입&type=E2E&priority=높음&status=실행중&assigneeId=7&deadlineFrom=2026-03-01&deadlineTo=2026-03-10&sortBy=deadline&sortDir=asc"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].id").value(10L))
                 .andExpect(jsonPath("$.number").value(2))
                 .andExpect(jsonPath("$.size").value(5));
 
-        verify(testScenarioService).findPage(2, 5);
+        verify(testScenarioService).findPage(eq(2), eq(5), eq(new TestScenarioListQuery(
+                "가입",
+                "E2E",
+                "높음",
+                "실행중",
+                7L,
+                LocalDate.of(2026, 3, 1),
+                LocalDate.of(2026, 3, 10),
+                "deadline",
+                "asc"
+        )));
     }
 
     @Test
@@ -175,6 +198,23 @@ class TestScenarioControllerTest {
                 .andExpect(status().isNoContent());
 
         verify(testScenarioService).updateStatus(eq(50L), eq(request));
+    }
+
+    @Test
+    @DisplayName("테스트 시나리오 실행 결과 변경 성공 시 204를 반환한다")
+    void updateTestScenarioExecutionSuccess() throws Exception {
+        TestScenarioExecutionUpdateRequest request = new TestScenarioExecutionUpdateRequest(
+                List.of("PASS", "FAIL", "SKIP"),
+                "1단계 성공, 2단계 실패",
+                LocalDateTime.of(2026, 2, 26, 9, 30)
+        );
+
+        mockMvc.perform(patch("/api/test-scenarios/{id}/execution", 50L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isNoContent());
+
+        verify(testScenarioService).updateExecution(eq(50L), eq(request));
     }
 
     private TestScenarioListResponse listResponse(Long id, String scenarioNo) {

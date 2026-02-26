@@ -3,6 +3,7 @@ package org.example.domain.deployment.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.domain.deployment.dto.DeploymentCreateRequest;
 import org.example.domain.deployment.dto.DeploymentDetailResponse;
+import org.example.domain.deployment.dto.DeploymentListQuery;
 import org.example.domain.deployment.dto.DeploymentListResponse;
 import org.example.domain.deployment.dto.DeploymentRelatedRefItemRequest;
 import org.example.domain.deployment.dto.DeploymentRelatedRefResponse;
@@ -29,6 +30,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -54,7 +56,7 @@ class DeploymentControllerTest {
     @Test
     @DisplayName("배포 목록 조회는 기본 페이지 파라미터를 사용한다")
     void getDeploymentsWithDefaultPaging() throws Exception {
-        when(deploymentService.findPage(0, 20)).thenReturn(new PageImpl<>(
+        when(deploymentService.findPage(eq(0), eq(20), any(DeploymentListQuery.class))).thenReturn(new PageImpl<>(
                 List.of(listResponse(1L, "DP-0001")),
                 PageRequest.of(0, 20),
                 1
@@ -67,7 +69,45 @@ class DeploymentControllerTest {
                 .andExpect(jsonPath("$.number").value(0))
                 .andExpect(jsonPath("$.size").value(20));
 
-        verify(deploymentService).findPage(0, 20);
+        verify(deploymentService).findPage(eq(0), eq(20), eq(new DeploymentListQuery(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "id",
+                "desc"
+        )));
+    }
+
+    @Test
+    @DisplayName("배포 목록 조회는 전달된 쿼리 파라미터를 사용한다")
+    void getDeploymentsWithCustomQuery() throws Exception {
+        when(deploymentService.findPage(eq(2), eq(5), any(DeploymentListQuery.class))).thenReturn(new PageImpl<>(
+                List.of(listResponse(10L, "DP-0010")),
+                PageRequest.of(2, 5),
+                11
+        ));
+
+        mockMvc.perform(get("/api/deployments?page=2&size=5&q=정기&type=정기배포&environment=운영&status=대기&managerId=7&scheduledFrom=2026-03-01&scheduledTo=2026-03-10&sortBy=deployDate&sortDir=asc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value(10L))
+                .andExpect(jsonPath("$.number").value(2))
+                .andExpect(jsonPath("$.size").value(5));
+
+        verify(deploymentService).findPage(eq(2), eq(5), eq(new DeploymentListQuery(
+                "정기",
+                "정기배포",
+                "운영",
+                "대기",
+                7L,
+                LocalDate.of(2026, 3, 1),
+                LocalDate.of(2026, 3, 10),
+                "deployDate",
+                "asc"
+        )));
     }
 
     @Test

@@ -3,6 +3,7 @@ package org.example.domain.defect.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.domain.defect.dto.DefectCreateRequest;
 import org.example.domain.defect.dto.DefectDetailResponse;
+import org.example.domain.defect.dto.DefectListQuery;
 import org.example.domain.defect.dto.DefectListResponse;
 import org.example.domain.defect.dto.DefectStatusUpdateRequest;
 import org.example.domain.defect.dto.DefectUpdateRequest;
@@ -23,6 +24,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -48,7 +50,7 @@ class DefectControllerTest {
     @Test
     @DisplayName("결함 목록 조회는 기본 페이지 파라미터를 사용한다")
     void getDefectsWithDefaultPaging() throws Exception {
-        when(defectService.findPage(0, 20)).thenReturn(new PageImpl<>(
+        when(defectService.findPage(eq(0), eq(20), any(DefectListQuery.class))).thenReturn(new PageImpl<>(
                 List.of(listResponse(1L, "DF-0001")),
                 PageRequest.of(0, 20),
                 1
@@ -61,25 +63,45 @@ class DefectControllerTest {
                 .andExpect(jsonPath("$.number").value(0))
                 .andExpect(jsonPath("$.size").value(20));
 
-        verify(defectService).findPage(0, 20);
+        verify(defectService).findPage(eq(0), eq(20), eq(new DefectListQuery(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "id",
+                "desc"
+        )));
     }
 
     @Test
     @DisplayName("결함 목록 조회는 전달된 페이지 파라미터를 사용한다")
     void getDefectsWithCustomPaging() throws Exception {
-        when(defectService.findPage(2, 5)).thenReturn(new PageImpl<>(
+        when(defectService.findPage(eq(2), eq(5), any(DefectListQuery.class))).thenReturn(new PageImpl<>(
                 List.of(listResponse(10L, "DF-0010")),
                 PageRequest.of(2, 5),
                 11
         ));
 
-        mockMvc.perform(get("/api/defects?page=2&size=5"))
+        mockMvc.perform(get("/api/defects?page=2&size=5&q=로그인&type=기능&severity=높음&status=분석중&assigneeId=7&deadlineFrom=2026-03-01&deadlineTo=2026-03-10&sortBy=deadline&sortDir=asc"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].id").value(10L))
                 .andExpect(jsonPath("$.number").value(2))
                 .andExpect(jsonPath("$.size").value(5));
 
-        verify(defectService).findPage(2, 5);
+        verify(defectService).findPage(eq(2), eq(5), eq(new DefectListQuery(
+                "로그인",
+                "기능",
+                "높음",
+                "분석중",
+                7L,
+                LocalDate.of(2026, 3, 1),
+                LocalDate.of(2026, 3, 10),
+                "deadline",
+                "asc"
+        )));
     }
 
     @Test

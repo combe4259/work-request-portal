@@ -3,6 +3,7 @@ package org.example.domain.techTask.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.domain.techTask.dto.TechTaskCreateRequest;
 import org.example.domain.techTask.dto.TechTaskDetailResponse;
+import org.example.domain.techTask.dto.TechTaskListQuery;
 import org.example.domain.techTask.dto.TechTaskListResponse;
 import org.example.domain.techTask.dto.TechTaskPrLinkCreateRequest;
 import org.example.domain.techTask.dto.TechTaskPrLinkResponse;
@@ -28,6 +29,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -54,7 +56,7 @@ class TechTaskControllerTest {
     @Test
     @DisplayName("기술과제 목록 조회는 기본 페이지 파라미터를 사용한다")
     void getTechTasksWithDefaultPaging() throws Exception {
-        when(techTaskService.findPage(0, 20)).thenReturn(new PageImpl<>(
+        when(techTaskService.findPage(eq(0), eq(20), any(TechTaskListQuery.class))).thenReturn(new PageImpl<>(
                 List.of(listResponse(1L, "TK-0001")),
                 PageRequest.of(0, 20),
                 1
@@ -67,25 +69,45 @@ class TechTaskControllerTest {
                 .andExpect(jsonPath("$.number").value(0))
                 .andExpect(jsonPath("$.size").value(20));
 
-        verify(techTaskService).findPage(0, 20);
+        verify(techTaskService).findPage(eq(0), eq(20), eq(new TechTaskListQuery(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "id",
+                "desc"
+        )));
     }
 
     @Test
     @DisplayName("기술과제 목록 조회는 전달된 페이지 파라미터를 사용한다")
     void getTechTasksWithCustomPaging() throws Exception {
-        when(techTaskService.findPage(2, 5)).thenReturn(new PageImpl<>(
+        when(techTaskService.findPage(eq(2), eq(5), any(TechTaskListQuery.class))).thenReturn(new PageImpl<>(
                 List.of(listResponse(10L, "TK-0010")),
                 PageRequest.of(2, 5),
                 11
         ));
 
-        mockMvc.perform(get("/api/tech-tasks?page=2&size=5"))
+        mockMvc.perform(get("/api/tech-tasks?page=2&size=5&q=리팩토링&type=리팩토링&priority=높음&status=검토중&assigneeId=7&deadlineFrom=2026-03-01&deadlineTo=2026-03-10&sortBy=deadline&sortDir=asc"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].id").value(10L))
                 .andExpect(jsonPath("$.number").value(2))
                 .andExpect(jsonPath("$.size").value(5));
 
-        verify(techTaskService).findPage(2, 5);
+        verify(techTaskService).findPage(eq(2), eq(5), eq(new TechTaskListQuery(
+                "리팩토링",
+                "리팩토링",
+                "높음",
+                "검토중",
+                7L,
+                LocalDate.of(2026, 3, 1),
+                LocalDate.of(2026, 3, 10),
+                "deadline",
+                "asc"
+        )));
     }
 
     @Test

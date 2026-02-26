@@ -1,11 +1,16 @@
 package org.example.domain.testScenario.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.domain.activityLog.service.ActivityLogCreateCommand;
 import org.example.domain.activityLog.service.ActivityLogService;
 import org.example.domain.documentIndex.service.DocumentIndexSyncService;
 import org.example.domain.notification.service.NotificationEventService;
 import org.example.domain.testScenario.dto.TestScenarioCreateRequest;
 import org.example.domain.testScenario.dto.TestScenarioDetailResponse;
+import org.example.domain.testScenario.dto.TestScenarioExecutionUpdateRequest;
+import org.example.domain.testScenario.dto.TestScenarioListQuery;
 import org.example.domain.testScenario.dto.TestScenarioListResponse;
 import org.example.domain.testScenario.dto.TestScenarioRelatedRefItemRequest;
 import org.example.domain.testScenario.dto.TestScenarioRelatedRefResponse;
@@ -23,16 +28,22 @@ import org.example.global.util.DocumentNoGenerator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 
 @Service
 @Transactional(readOnly = true)
@@ -47,6 +58,7 @@ public class TestScenarioServiceImpl implements TestScenarioService {
     private final NotificationEventService notificationEventService;
     private final DocumentIndexSyncService documentIndexSyncService;
     private final ActivityLogService activityLogService;
+    private final ObjectMapper objectMapper;
 
     public TestScenarioServiceImpl(
             TestScenarioRepository testScenarioRepository,
@@ -54,7 +66,8 @@ public class TestScenarioServiceImpl implements TestScenarioService {
             DocumentNoGenerator documentNoGenerator,
             NotificationEventService notificationEventService,
             DocumentIndexSyncService documentIndexSyncService,
-            @Nullable ActivityLogService activityLogService
+            @Nullable ActivityLogService activityLogService,
+            ObjectMapper objectMapper
     ) {
         this.testScenarioRepository = testScenarioRepository;
         this.testScenarioRelatedRefRepository = testScenarioRelatedRefRepository;
@@ -62,16 +75,24 @@ public class TestScenarioServiceImpl implements TestScenarioService {
         this.notificationEventService = notificationEventService;
         this.documentIndexSyncService = documentIndexSyncService;
         this.activityLogService = activityLogService;
+        this.objectMapper = objectMapper;
     }
 
     @Override
-    public Page<TestScenarioListResponse> findPage(int page, int size) {
-        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
+    public Page<TestScenarioListResponse> findPage(int page, int size, TestScenarioListQuery query) {
+        PageRequest pageable = PageRequest.of(page, size, resolveSort(query));
         Long teamId = TeamScopeUtil.currentTeamId();
-        return (teamId == null
-                ? testScenarioRepository.findAll(pageable)
-                : testScenarioRepository.findByTeamId(teamId, pageable))
-                .map(TestScenarioMapper::toListResponse);
+
+        Specification<TestScenario> spec = Specification.where(byTeamId(teamId))
+                .and(byKeyword(query == null ? null : query.q()))
+                .and(byExact("type", query == null ? null : query.type()))
+                .and(byExact("priority", query == null ? null : query.priority()))
+                .and(byExact("status", query == null ? null : query.status()))
+                .and(byAssigneeId(query == null ? null : query.assigneeId()))
+                .and(byDeadlineFrom(query == null ? null : query.deadlineFrom()))
+                .and(byDeadlineTo(query == null ? null : query.deadlineTo()));
+
+        return testScenarioRepository.findAll(spec, pageable).map(TestScenarioMapper::toListResponse);
     }
 
     @Override
@@ -179,6 +200,43 @@ public class TestScenarioServiceImpl implements TestScenarioService {
     }
 
     @Override
+    @Transactional
+    public void updateExecution(Long id, TestScenarioExecutionUpdateRequest request) {
+        if (request == null || request.stepResults() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "stepResults는 필수입니다.");
+        }
+
+        TestScenario entity = testScenarioRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, TEST_SCENARIO_NOT_FOUND_MESSAGE));
+        TeamScopeUtil.ensureAccessible(entity.getTeamId());
+
+        String previousSteps = entity.getSteps();
+        String previousActualResult = entity.getActualResult();
+        var previousExecutedAt = entity.getExecutedAt();
+
+        List<LinkedHashMap<String, Object>> steps = parseStepsForExecution(entity.getSteps());
+        if (request.stepResults().size() != steps.size()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "stepResults 개수와 steps 개수가 일치하지 않습니다.");
+        }
+
+        for (int index = 0; index < steps.size(); index++) {
+            String normalized = normalizeExecutionStepResult(request.stepResults().get(index));
+            steps.get(index).put("result", toStoredStepResult(normalized));
+        }
+
+        entity.setSteps(writeSteps(steps));
+        if (request.actualResult() != null) {
+            entity.setActualResult(normalizeNullable(request.actualResult()));
+        }
+        if (request.executedAt() != null) {
+            entity.setExecutedAt(request.executedAt());
+        }
+
+        syncDocumentIndex(entity);
+        recordExecutionUpdated(entity, previousSteps, previousActualResult, previousExecutedAt);
+    }
+
+    @Override
     public List<TestScenarioRelatedRefResponse> getRelatedRefs(Long id) {
         ensureAccessibleTestScenario(id);
 
@@ -258,6 +316,79 @@ public class TestScenarioServiceImpl implements TestScenarioService {
         TeamScopeUtil.ensureAccessible(entity.getTeamId());
     }
 
+    private Specification<TestScenario> byTeamId(Long teamId) {
+        if (teamId == null) {
+            return null;
+        }
+        return (root, query, builder) -> builder.equal(root.get("teamId"), teamId);
+    }
+
+    private Specification<TestScenario> byKeyword(String rawKeyword) {
+        String keyword = normalizeNullable(rawKeyword);
+        if (keyword == null) {
+            return null;
+        }
+
+        return (root, query, builder) -> {
+            String likeKeyword = "%" + keyword.toLowerCase(Locale.ROOT) + "%";
+            return builder.or(
+                    builder.like(builder.lower(root.get("title")), likeKeyword),
+                    builder.like(builder.lower(root.get("scenarioNo")), likeKeyword)
+            );
+        };
+    }
+
+    private Specification<TestScenario> byExact(String column, String rawValue) {
+        String value = normalizeNullable(rawValue);
+        if (value == null) {
+            return null;
+        }
+        return (root, query, builder) -> builder.equal(root.get(column), value);
+    }
+
+    private Specification<TestScenario> byAssigneeId(Long assigneeId) {
+        if (assigneeId == null) {
+            return null;
+        }
+        return (root, query, builder) -> builder.equal(root.get("assigneeId"), assigneeId);
+    }
+
+    private Specification<TestScenario> byDeadlineFrom(LocalDate deadlineFrom) {
+        if (deadlineFrom == null) {
+            return null;
+        }
+        return (root, query, builder) -> builder.greaterThanOrEqualTo(root.get("deadline"), deadlineFrom);
+    }
+
+    private Specification<TestScenario> byDeadlineTo(LocalDate deadlineTo) {
+        if (deadlineTo == null) {
+            return null;
+        }
+        return (root, query, builder) -> builder.lessThanOrEqualTo(root.get("deadline"), deadlineTo);
+    }
+
+    private Sort resolveSort(TestScenarioListQuery query) {
+        String requestedSortBy = normalizeNullable(query == null ? null : query.sortBy());
+        String requestedSortDir = normalizeNullable(query == null ? null : query.sortDir());
+
+        String sortBy = switch (requestedSortBy == null ? "" : requestedSortBy.toLowerCase(Locale.ROOT)) {
+            case "docno", "scenariono" -> "scenarioNo";
+            case "title" -> "title";
+            case "type" -> "type";
+            case "priority" -> "priority";
+            case "status" -> "status";
+            case "assignee", "assigneeid" -> "assigneeId";
+            case "deadline" -> "deadline";
+            case "executedat" -> "executedAt";
+            case "createdat" -> "createdAt";
+            case "updatedat" -> "updatedAt";
+            default -> "id";
+        };
+
+        Sort.Direction direction = "asc".equalsIgnoreCase(requestedSortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        return Sort.by(direction, sortBy);
+    }
+
     private String normalizeRefType(String rawRefType) {
         String value = rawRefType.trim().toUpperCase(Locale.ROOT);
         return switch (value) {
@@ -295,6 +426,91 @@ public class TestScenarioServiceImpl implements TestScenarioService {
             return null;
         }
         return value.trim();
+    }
+
+    private List<LinkedHashMap<String, Object>> parseStepsForExecution(String rawSteps) {
+        String source = defaultIfBlank(rawSteps, "[]");
+        try {
+            List<Object> parsed = objectMapper.readValue(source, new TypeReference<>() {
+            });
+            List<LinkedHashMap<String, Object>> normalized = new ArrayList<>();
+
+            for (Object node : parsed) {
+                LinkedHashMap<String, Object> step = new LinkedHashMap<>();
+                if (node instanceof String text) {
+                    step.put("action", text.trim());
+                    step.put("expected", "");
+                    step.put("result", null);
+                    normalized.add(step);
+                    continue;
+                }
+
+                if (node instanceof Map<?, ?> rawMap) {
+                    for (Map.Entry<?, ?> entry : rawMap.entrySet()) {
+                        if (entry.getKey() instanceof String key) {
+                            step.put(key, entry.getValue());
+                        }
+                    }
+                    Object actionValue = step.get("action");
+                    Object expectedValue = step.get("expected");
+                    step.put("action", actionValue == null ? "" : String.valueOf(actionValue).trim());
+                    step.put("expected", expectedValue == null ? "" : String.valueOf(expectedValue).trim());
+                    step.put("result", normalizeStoredStepResult(step.get("result")));
+                    normalized.add(step);
+                    continue;
+                }
+
+                step.put("action", "");
+                step.put("expected", "");
+                step.put("result", null);
+                normalized.add(step);
+            }
+            return normalized;
+        } catch (JsonProcessingException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "steps 형식이 올바르지 않습니다.");
+        }
+    }
+
+    private String normalizeExecutionStepResult(String value) {
+        if (value == null || value.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "stepResults 값은 PASS, FAIL, SKIP 중 하나여야 합니다.");
+        }
+
+        String normalized = value.trim().toUpperCase(Locale.ROOT);
+        return switch (normalized) {
+            case "PASS", "FAIL", "SKIP" -> normalized;
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "stepResults 값은 PASS, FAIL, SKIP 중 하나여야 합니다.");
+        };
+    }
+
+    private String toStoredStepResult(String value) {
+        return switch (value) {
+            case "PASS" -> "pass";
+            case "FAIL" -> "fail";
+            case "SKIP" -> null;
+            default -> null;
+        };
+    }
+
+    private String normalizeStoredStepResult(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = String.valueOf(value).trim().toLowerCase(Locale.ROOT);
+        return switch (normalized) {
+            case "pass" -> "pass";
+            case "fail" -> "fail";
+            case "skip" -> null;
+            default -> null;
+        };
+    }
+
+    private String writeSteps(List<LinkedHashMap<String, Object>> steps) {
+        try {
+            return objectMapper.writeValueAsString(steps);
+        } catch (JsonProcessingException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "steps 형식이 올바르지 않습니다.");
+        }
     }
 
     private void notifyAssigneeAssigned(TestScenario entity) {
@@ -384,6 +600,29 @@ public class TestScenarioServiceImpl implements TestScenarioService {
 
     private void recordDeleted(TestScenario entity) {
         recordActivity(entity, "DELETED", null, null, null, entity.getScenarioNo() + " 테스트 시나리오가 삭제되었습니다.");
+    }
+
+    private void recordExecutionUpdated(
+            TestScenario entity,
+            String previousSteps,
+            String previousActualResult,
+            LocalDateTime previousExecutedAt
+    ) {
+        boolean changed = !Objects.equals(previousSteps, entity.getSteps())
+                || !Objects.equals(previousActualResult, entity.getActualResult())
+                || !Objects.equals(previousExecutedAt, entity.getExecutedAt());
+        if (!changed) {
+            return;
+        }
+
+        recordActivity(
+                entity,
+                "EXECUTION_UPDATED",
+                "execution",
+                null,
+                null,
+                entity.getScenarioNo() + " 테스트 실행 결과가 업데이트되었습니다."
+        );
     }
 
     private void recordActivity(

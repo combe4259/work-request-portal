@@ -2,6 +2,8 @@ package org.example.domain.testScenario.controller;
 
 import org.example.domain.testScenario.dto.TestScenarioCreateRequest;
 import org.example.domain.testScenario.dto.TestScenarioDetailResponse;
+import org.example.domain.testScenario.dto.TestScenarioExecutionUpdateRequest;
+import org.example.domain.testScenario.dto.TestScenarioListQuery;
 import org.example.domain.testScenario.dto.TestScenarioListResponse;
 import org.example.domain.testScenario.dto.TestScenarioRelatedRefResponse;
 import org.example.domain.testScenario.dto.TestScenarioRelatedRefsUpdateRequest;
@@ -9,6 +11,7 @@ import org.example.domain.testScenario.dto.TestScenarioStatusUpdateRequest;
 import org.example.domain.testScenario.dto.TestScenarioUpdateRequest;
 import org.example.domain.testScenario.service.TestScenarioService;
 import org.springframework.data.domain.Page;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -36,10 +40,30 @@ public class TestScenarioController {
 
     @GetMapping
     public Page<TestScenarioListResponse> getTestScenarios(
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String priority,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) Long assigneeId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate deadlineFrom,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate deadlineTo,
+            @RequestParam(defaultValue = "id") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDir,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        return testScenarioService.findPage(page, size);
+        TestScenarioListQuery query = new TestScenarioListQuery(
+                q,
+                type,
+                priority,
+                status,
+                assigneeId,
+                deadlineFrom,
+                deadlineTo,
+                sortBy,
+                sortDir
+        );
+        return testScenarioService.findPage(page, size, query);
     }
 
     @GetMapping("/{id}")
@@ -74,6 +98,15 @@ public class TestScenarioController {
             @RequestBody TestScenarioStatusUpdateRequest request
     ) {
         testScenarioService.updateStatus(id, request);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{id}/execution")
+    public ResponseEntity<Void> updateTestScenarioExecution(
+            @PathVariable Long id,
+            @RequestBody TestScenarioExecutionUpdateRequest request
+    ) {
+        testScenarioService.updateExecution(id, request);
         return ResponseEntity.noContent().build();
     }
 

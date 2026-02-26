@@ -2,6 +2,7 @@ package org.example.domain.techTask.service;
 
 import org.example.domain.techTask.dto.TechTaskCreateRequest;
 import org.example.domain.techTask.dto.TechTaskDetailResponse;
+import org.example.domain.techTask.dto.TechTaskListQuery;
 import org.example.domain.techTask.dto.TechTaskListResponse;
 import org.example.domain.techTask.dto.TechTaskPrLinkCreateRequest;
 import org.example.domain.techTask.dto.TechTaskPrLinkResponse;
@@ -14,7 +15,7 @@ import org.springframework.data.domain.Page;
 import java.util.List;
 
 public interface TechTaskService {
-    Page<TechTaskListResponse> findPage(int page, int size);
+    Page<TechTaskListResponse> findPage(int page, int size, TechTaskListQuery query);
 
     TechTaskDetailResponse findById(Long id);
 

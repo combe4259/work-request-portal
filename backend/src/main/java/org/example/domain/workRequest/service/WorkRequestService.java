@@ -2,6 +2,7 @@ package org.example.domain.workRequest.service;
 
 import org.example.domain.workRequest.dto.WorkRequestCreateRequest;
 import org.example.domain.workRequest.dto.WorkRequestDetailResponse;
+import org.example.domain.workRequest.dto.WorkRequestListQuery;
 import org.example.domain.workRequest.dto.WorkRequestListResponse;
 import org.example.domain.workRequest.dto.WorkRequestRelatedRefResponse;
 import org.example.domain.workRequest.dto.WorkRequestRelatedRefsUpdateRequest;
@@ -12,7 +13,7 @@ import org.springframework.data.domain.Page;
 import java.util.List;
 
 public interface WorkRequestService {
-    Page<WorkRequestListResponse> findPage(int page, int size);
+    Page<WorkRequestListResponse> findPage(int page, int size, WorkRequestListQuery query);
 
     WorkRequestDetailResponse findById(Long id);
 

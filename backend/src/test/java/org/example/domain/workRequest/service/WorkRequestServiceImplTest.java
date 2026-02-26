@@ -4,6 +4,7 @@ import jakarta.persistence.EntityNotFoundException;
 import org.example.domain.notification.service.NotificationEventService;
 import org.example.domain.workRequest.dto.WorkRequestCreateRequest;
 import org.example.domain.workRequest.dto.WorkRequestDetailResponse;
+import org.example.domain.workRequest.dto.WorkRequestListQuery;
 import org.example.domain.workRequest.dto.WorkRequestListResponse;
 import org.example.domain.workRequest.dto.WorkRequestStatusUpdateRequest;
 import org.example.domain.workRequest.dto.WorkRequestUpdateRequest;
@@ -26,6 +27,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -78,12 +80,22 @@ class WorkRequestServiceImplTest {
     @DisplayName("목록 조회 시 페이징/정렬을 적용하고 리스트 응답으로 매핑한다")
     void findPage() {
         WorkRequest entity = sampleEntity(1L);
-        when(workRequestRepository.findByTeamId(eq(10L), any(Pageable.class)))
+        when(workRequestRepository.findAll(any(Specification.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(entity)));
 
-        Page<WorkRequestListResponse> page = workRequestService.findPage(2, 5);
+        Page<WorkRequestListResponse> page = workRequestService.findPage(2, 5, new WorkRequestListQuery(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "id",
+                "desc"
+        ));
 
-        verify(workRequestRepository).findByTeamId(eq(10L), pageableCaptor.capture());
+        verify(workRequestRepository).findAll(any(Specification.class), pageableCaptor.capture());
         Pageable pageable = pageableCaptor.getValue();
         Sort.Order idOrder = pageable.getSort().getOrderFor("id");
 

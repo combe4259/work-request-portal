@@ -2,6 +2,7 @@ package org.example.domain.deployment.service;
 
 import org.example.domain.deployment.dto.DeploymentCreateRequest;
 import org.example.domain.deployment.dto.DeploymentDetailResponse;
+import org.example.domain.deployment.dto.DeploymentListQuery;
 import org.example.domain.deployment.dto.DeploymentListResponse;
 import org.example.domain.deployment.dto.DeploymentRelatedRefResponse;
 import org.example.domain.deployment.dto.DeploymentRelatedRefsUpdateRequest;
@@ -15,7 +16,7 @@ import org.springframework.data.domain.Page;
 import java.util.List;
 
 public interface DeploymentService {
-    Page<DeploymentListResponse> findPage(int page, int size);
+    Page<DeploymentListResponse> findPage(int page, int size, DeploymentListQuery query);
 
     DeploymentDetailResponse findById(Long id);
 

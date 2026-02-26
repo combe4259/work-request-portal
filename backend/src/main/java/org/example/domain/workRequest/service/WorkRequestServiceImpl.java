@@ -7,6 +7,7 @@ import org.example.domain.documentIndex.service.DocumentIndexSyncService;
 import org.example.domain.notification.service.NotificationEventService;
 import org.example.domain.workRequest.dto.WorkRequestCreateRequest;
 import org.example.domain.workRequest.dto.WorkRequestDetailResponse;
+import org.example.domain.workRequest.dto.WorkRequestListQuery;
 import org.example.domain.workRequest.dto.WorkRequestListResponse;
 import org.example.domain.workRequest.dto.WorkRequestRelatedRefItemRequest;
 import org.example.domain.workRequest.dto.WorkRequestRelatedRefResponse;
@@ -26,11 +27,13 @@ import org.springframework.http.HttpStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -71,10 +74,20 @@ public class WorkRequestServiceImpl implements WorkRequestService {
     }
 
     @Override
-    public Page<WorkRequestListResponse> findPage(int page, int size) {
-        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
+    public Page<WorkRequestListResponse> findPage(int page, int size, WorkRequestListQuery query) {
+        PageRequest pageable = PageRequest.of(page, size, resolveSort(query));
         Long teamId = requireCurrentTeamId();
-        return workRequestRepository.findByTeamId(teamId, pageable).map(WorkRequestMapper::toListResponse);
+
+        Specification<WorkRequest> spec = byTeamId(teamId)
+                .and(byKeyword(query == null ? null : query.q()))
+                .and(byExact("type", query == null ? null : query.type()))
+                .and(byExact("priority", query == null ? null : query.priority()))
+                .and(byExact("status", query == null ? null : query.status()))
+                .and(byAssigneeId(query == null ? null : query.assigneeId()))
+                .and(byDeadlineFrom(query == null ? null : query.deadlineFrom()))
+                .and(byDeadlineTo(query == null ? null : query.deadlineTo()));
+
+        return workRequestRepository.findAll(spec, pageable).map(WorkRequestMapper::toListResponse);
     }
 
     @Override
@@ -253,6 +266,75 @@ public class WorkRequestServiceImpl implements WorkRequestService {
         }
     }
 
+    private Specification<WorkRequest> byTeamId(Long teamId) {
+        return (root, query, builder) -> builder.equal(root.get("teamId"), teamId);
+    }
+
+    private Specification<WorkRequest> byKeyword(String rawKeyword) {
+        String keyword = normalizeNullable(rawKeyword);
+        if (keyword == null) {
+            return null;
+        }
+
+        return (root, query, builder) -> {
+            String likeKeyword = "%" + keyword.toLowerCase(Locale.ROOT) + "%";
+            return builder.or(
+                    builder.like(builder.lower(root.get("title")), likeKeyword),
+                    builder.like(builder.lower(root.get("requestNo")), likeKeyword)
+            );
+        };
+    }
+
+    private Specification<WorkRequest> byExact(String column, String rawValue) {
+        String value = normalizeNullable(rawValue);
+        if (value == null) {
+            return null;
+        }
+        return (root, query, builder) -> builder.equal(root.get(column), value);
+    }
+
+    private Specification<WorkRequest> byAssigneeId(Long assigneeId) {
+        if (assigneeId == null) {
+            return null;
+        }
+        return (root, query, builder) -> builder.equal(root.get("assigneeId"), assigneeId);
+    }
+
+    private Specification<WorkRequest> byDeadlineFrom(LocalDate deadlineFrom) {
+        if (deadlineFrom == null) {
+            return null;
+        }
+        return (root, query, builder) -> builder.greaterThanOrEqualTo(root.get("deadline"), deadlineFrom);
+    }
+
+    private Specification<WorkRequest> byDeadlineTo(LocalDate deadlineTo) {
+        if (deadlineTo == null) {
+            return null;
+        }
+        return (root, query, builder) -> builder.lessThanOrEqualTo(root.get("deadline"), deadlineTo);
+    }
+
+    private Sort resolveSort(WorkRequestListQuery query) {
+        String requestedSortBy = normalizeNullable(query == null ? null : query.sortBy());
+        String requestedSortDir = normalizeNullable(query == null ? null : query.sortDir());
+
+        String sortBy = switch (requestedSortBy == null ? "" : requestedSortBy.toLowerCase(Locale.ROOT)) {
+            case "docno", "requestno" -> "requestNo";
+            case "title" -> "title";
+            case "type" -> "type";
+            case "priority" -> "priority";
+            case "status" -> "status";
+            case "assignee", "assigneeid" -> "assigneeId";
+            case "deadline" -> "deadline";
+            case "createdat" -> "createdAt";
+            case "updatedat" -> "updatedAt";
+            default -> "id";
+        };
+
+        Sort.Direction direction = "asc".equalsIgnoreCase(requestedSortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        return Sort.by(direction, sortBy);
+    }
+
     private String normalizeRefType(String rawRefType) {
         String value = rawRefType.trim().toUpperCase(Locale.ROOT);
         return switch (value) {
@@ -286,6 +368,13 @@ public class WorkRequestServiceImpl implements WorkRequestService {
             return defaultValue;
         }
         return value;
+    }
+
+    private String normalizeNullable(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 
     private void notifyAssigneeAssigned(WorkRequest entity) {

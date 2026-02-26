@@ -8,6 +8,7 @@ import org.example.domain.defect.repository.DefectRepository;
 import org.example.domain.notification.service.NotificationEventService;
 import org.example.domain.deployment.dto.DeploymentCreateRequest;
 import org.example.domain.deployment.dto.DeploymentDetailResponse;
+import org.example.domain.deployment.dto.DeploymentListQuery;
 import org.example.domain.deployment.dto.DeploymentListResponse;
 import org.example.domain.deployment.dto.DeploymentRelatedRefItemRequest;
 import org.example.domain.deployment.dto.DeploymentRelatedRefResponse;
@@ -36,12 +37,14 @@ import org.example.global.util.DocumentNoGenerator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -98,13 +101,20 @@ public class DeploymentServiceImpl implements DeploymentService {
     }
 
     @Override
-    public Page<DeploymentListResponse> findPage(int page, int size) {
-        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
+    public Page<DeploymentListResponse> findPage(int page, int size, DeploymentListQuery query) {
+        PageRequest pageable = PageRequest.of(page, size, resolveSort(query));
         Long teamId = TeamScopeUtil.currentTeamId();
-        return (teamId == null
-                ? deploymentRepository.findAll(pageable)
-                : deploymentRepository.findByTeamId(teamId, pageable))
-                .map(DeploymentMapper::toListResponse);
+
+        Specification<Deployment> spec = Specification.where(byTeamId(teamId))
+                .and(byKeyword(query == null ? null : query.q()))
+                .and(byExact("type", query == null ? null : query.type()))
+                .and(byExact("environment", query == null ? null : query.environment()))
+                .and(byExact("status", query == null ? null : query.status()))
+                .and(byManagerId(query == null ? null : query.managerId()))
+                .and(byScheduledFrom(query == null ? null : query.scheduledFrom()))
+                .and(byScheduledTo(query == null ? null : query.scheduledTo()));
+
+        return deploymentRepository.findAll(spec, pageable).map(DeploymentMapper::toListResponse);
     }
 
     @Override
@@ -396,6 +406,80 @@ public class DeploymentServiceImpl implements DeploymentService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "id는 필수입니다.");
         }
         getDeploymentOrThrow(id);
+    }
+
+    private Specification<Deployment> byTeamId(Long teamId) {
+        if (teamId == null) {
+            return null;
+        }
+        return (root, query, builder) -> builder.equal(root.get("teamId"), teamId);
+    }
+
+    private Specification<Deployment> byKeyword(String rawKeyword) {
+        String keyword = normalizeNullable(rawKeyword);
+        if (keyword == null) {
+            return null;
+        }
+
+        return (root, query, builder) -> {
+            String likeKeyword = "%" + keyword.toLowerCase(Locale.ROOT) + "%";
+            return builder.or(
+                    builder.like(builder.lower(root.get("title")), likeKeyword),
+                    builder.like(builder.lower(root.get("deployNo")), likeKeyword),
+                    builder.like(builder.lower(root.get("version")), likeKeyword)
+            );
+        };
+    }
+
+    private Specification<Deployment> byExact(String column, String rawValue) {
+        String value = normalizeNullable(rawValue);
+        if (value == null) {
+            return null;
+        }
+        return (root, query, builder) -> builder.equal(root.get(column), value);
+    }
+
+    private Specification<Deployment> byManagerId(Long managerId) {
+        if (managerId == null) {
+            return null;
+        }
+        return (root, query, builder) -> builder.equal(root.get("managerId"), managerId);
+    }
+
+    private Specification<Deployment> byScheduledFrom(LocalDate scheduledFrom) {
+        if (scheduledFrom == null) {
+            return null;
+        }
+        return (root, query, builder) -> builder.greaterThanOrEqualTo(root.get("scheduledAt"), scheduledFrom);
+    }
+
+    private Specification<Deployment> byScheduledTo(LocalDate scheduledTo) {
+        if (scheduledTo == null) {
+            return null;
+        }
+        return (root, query, builder) -> builder.lessThanOrEqualTo(root.get("scheduledAt"), scheduledTo);
+    }
+
+    private Sort resolveSort(DeploymentListQuery query) {
+        String requestedSortBy = normalizeNullable(query == null ? null : query.sortBy());
+        String requestedSortDir = normalizeNullable(query == null ? null : query.sortDir());
+
+        String sortBy = switch (requestedSortBy == null ? "" : requestedSortBy.toLowerCase(Locale.ROOT)) {
+            case "docno", "deployno" -> "deployNo";
+            case "title" -> "title";
+            case "version" -> "version";
+            case "type" -> "type";
+            case "environment", "env" -> "environment";
+            case "status" -> "status";
+            case "manager", "managerid" -> "managerId";
+            case "deploydate", "scheduledat" -> "scheduledAt";
+            case "createdat" -> "createdAt";
+            case "updatedat" -> "updatedAt";
+            default -> "id";
+        };
+
+        Sort.Direction direction = "asc".equalsIgnoreCase(requestedSortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        return Sort.by(direction, sortBy);
     }
 
     private String normalizeType(String type) {

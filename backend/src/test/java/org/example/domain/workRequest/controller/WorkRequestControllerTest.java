@@ -3,6 +3,7 @@ package org.example.domain.workRequest.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.domain.workRequest.dto.WorkRequestCreateRequest;
 import org.example.domain.workRequest.dto.WorkRequestDetailResponse;
+import org.example.domain.workRequest.dto.WorkRequestListQuery;
 import org.example.domain.workRequest.dto.WorkRequestListResponse;
 import org.example.domain.workRequest.dto.WorkRequestStatusUpdateRequest;
 import org.example.domain.workRequest.dto.WorkRequestUpdateRequest;
@@ -23,6 +24,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -48,7 +50,7 @@ class WorkRequestControllerTest {
     @Test
     @DisplayName("업무요청 목록 조회는 기본 페이지 파라미터를 사용한다")
     void getWorkRequestsWithDefaultPaging() throws Exception {
-        when(workRequestService.findPage(0, 20)).thenReturn(new PageImpl<>(
+        when(workRequestService.findPage(eq(0), eq(20), any(WorkRequestListQuery.class))).thenReturn(new PageImpl<>(
                 List.of(listResponse(1L, "WR-0001")),
                 PageRequest.of(0, 20),
                 1
@@ -61,25 +63,45 @@ class WorkRequestControllerTest {
                 .andExpect(jsonPath("$.number").value(0))
                 .andExpect(jsonPath("$.size").value(20));
 
-        verify(workRequestService).findPage(0, 20);
+        verify(workRequestService).findPage(eq(0), eq(20), eq(new WorkRequestListQuery(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "id",
+                "desc"
+        )));
     }
 
     @Test
     @DisplayName("업무요청 목록 조회는 전달된 페이지 파라미터를 사용한다")
     void getWorkRequestsWithCustomPaging() throws Exception {
-        when(workRequestService.findPage(2, 5)).thenReturn(new PageImpl<>(
+        when(workRequestService.findPage(eq(2), eq(5), any(WorkRequestListQuery.class))).thenReturn(new PageImpl<>(
                 List.of(listResponse(10L, "WR-0010")),
                 PageRequest.of(2, 5),
                 11
         ));
 
-        mockMvc.perform(get("/api/work-requests?page=2&size=5"))
+        mockMvc.perform(get("/api/work-requests?page=2&size=5&q=로그인&type=기능개선&priority=높음&status=검토중&assigneeId=7&deadlineFrom=2026-03-01&deadlineTo=2026-03-10&sortBy=deadline&sortDir=asc"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].id").value(10L))
                 .andExpect(jsonPath("$.number").value(2))
                 .andExpect(jsonPath("$.size").value(5));
 
-        verify(workRequestService).findPage(2, 5);
+        verify(workRequestService).findPage(eq(2), eq(5), eq(new WorkRequestListQuery(
+                "로그인",
+                "기능개선",
+                "높음",
+                "검토중",
+                7L,
+                LocalDate.of(2026, 3, 1),
+                LocalDate.of(2026, 3, 10),
+                "deadline",
+                "asc"
+        )));
     }
 
     @Test

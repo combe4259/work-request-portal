@@ -2,6 +2,7 @@ package org.example.domain.deployment.controller;
 
 import org.example.domain.deployment.dto.DeploymentCreateRequest;
 import org.example.domain.deployment.dto.DeploymentDetailResponse;
+import org.example.domain.deployment.dto.DeploymentListQuery;
 import org.example.domain.deployment.dto.DeploymentListResponse;
 import org.example.domain.deployment.dto.DeploymentRelatedRefResponse;
 import org.example.domain.deployment.dto.DeploymentRelatedRefsUpdateRequest;
@@ -12,6 +13,7 @@ import org.example.domain.deployment.dto.DeploymentStepUpdateRequest;
 import org.example.domain.deployment.dto.DeploymentUpdateRequest;
 import org.example.domain.deployment.service.DeploymentService;
 import org.springframework.data.domain.Page;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,6 +26,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -39,10 +42,30 @@ public class DeploymentController {
 
     @GetMapping
     public Page<DeploymentListResponse> getDeployments(
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String environment,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) Long managerId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate scheduledFrom,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate scheduledTo,
+            @RequestParam(defaultValue = "id") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDir,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        return deploymentService.findPage(page, size);
+        DeploymentListQuery query = new DeploymentListQuery(
+                q,
+                type,
+                environment,
+                status,
+                managerId,
+                scheduledFrom,
+                scheduledTo,
+                sortBy,
+                sortDir
+        );
+        return deploymentService.findPage(page, size, query);
     }
 
     @GetMapping("/{id}")

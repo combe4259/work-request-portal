@@ -4,8 +4,9 @@ import org.example.domain.techTask.entity.TechTask;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
-public interface TechTaskRepository extends JpaRepository<TechTask, Long> {
+public interface TechTaskRepository extends JpaRepository<TechTask, Long>, JpaSpecificationExecutor<TechTask> {
 
     Page<TechTask> findByTeamId(Long teamId, Pageable pageable);
 }
