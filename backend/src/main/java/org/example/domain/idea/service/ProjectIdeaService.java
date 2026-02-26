@@ -2,6 +2,7 @@ package org.example.domain.idea.service;
 
 import org.example.domain.idea.dto.ProjectIdeaCreateRequest;
 import org.example.domain.idea.dto.ProjectIdeaDetailResponse;
+import org.example.domain.idea.dto.ProjectIdeaListQuery;
 import org.example.domain.idea.dto.ProjectIdeaListResponse;
 import org.example.domain.idea.dto.ProjectIdeaRelatedRefResponse;
 import org.example.domain.idea.dto.ProjectIdeaRelatedRefsUpdateRequest;
@@ -13,7 +14,7 @@ import org.springframework.data.domain.Page;
 import java.util.List;
 
 public interface ProjectIdeaService {
-    Page<ProjectIdeaListResponse> findPage(int page, int size);
+    Page<ProjectIdeaListResponse> findPage(int page, int size, ProjectIdeaListQuery query);
 
     ProjectIdeaDetailResponse findById(Long id);
 

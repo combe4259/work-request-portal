@@ -2,6 +2,7 @@ package org.example.domain.idea.controller;
 
 import org.example.domain.idea.dto.ProjectIdeaCreateRequest;
 import org.example.domain.idea.dto.ProjectIdeaDetailResponse;
+import org.example.domain.idea.dto.ProjectIdeaListQuery;
 import org.example.domain.idea.dto.ProjectIdeaListResponse;
 import org.example.domain.idea.dto.ProjectIdeaRelatedRefResponse;
 import org.example.domain.idea.dto.ProjectIdeaRelatedRefsUpdateRequest;
@@ -39,10 +40,22 @@ public class ProjectIdeaController {
 
     @GetMapping
     public Page<ProjectIdeaListResponse> getProjectIdeas(
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDir,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        return projectIdeaService.findPage(page, size);
+        ProjectIdeaListQuery query = new ProjectIdeaListQuery(
+                q,
+                category,
+                status,
+                sortBy,
+                sortDir
+        );
+        return projectIdeaService.findPage(page, size, query);
     }
 
     @GetMapping("/{id}")

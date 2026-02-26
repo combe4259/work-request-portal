@@ -15,6 +15,7 @@ public record ProjectIdeaDetailResponse(
         String statusNote,
         Long proposedBy,
         long likeCount,
+        boolean likedByMe,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {
