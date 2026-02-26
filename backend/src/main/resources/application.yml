@@ -28,3 +28,4 @@ app:
   slack:
     bot-token: ${SLACK_BOT_TOKEN:}
     channel: ${SLACK_CHANNEL:}
+    portal-url: ${PORTAL_URL:}
