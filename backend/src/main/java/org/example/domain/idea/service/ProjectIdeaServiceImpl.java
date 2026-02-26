@@ -3,10 +3,12 @@ package org.example.domain.idea.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.example.domain.comment.repository.CommentRepository;
 import org.example.domain.documentIndex.service.DocumentIndexSyncService;
 import org.example.domain.notification.service.NotificationEventService;
 import org.example.domain.idea.dto.ProjectIdeaCreateRequest;
 import org.example.domain.idea.dto.ProjectIdeaDetailResponse;
+import org.example.domain.idea.dto.ProjectIdeaListQuery;
 import org.example.domain.idea.dto.ProjectIdeaListResponse;
 import org.example.domain.idea.dto.ProjectIdeaRelatedRefItemRequest;
 import org.example.domain.idea.dto.ProjectIdeaRelatedRefResponse;
@@ -24,6 +26,7 @@ import org.example.domain.idea.repository.ProjectIdeaRepository;
 import org.example.domain.user.entity.PortalUser;
 import org.example.domain.user.repository.PortalUserRepository;
 import org.example.global.security.JwtTokenProvider;
+import org.example.global.team.TeamRequestContext;
 import org.example.global.team.TeamScopeUtil;
 import org.example.global.util.DocumentNoGenerator;
 import org.springframework.data.domain.Page;
@@ -38,6 +41,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional(readOnly = true)
@@ -47,6 +52,7 @@ public class ProjectIdeaServiceImpl implements ProjectIdeaService {
 
     private final ProjectIdeaRepository projectIdeaRepository;
     private final ProjectIdeaRelatedRefRepository projectIdeaRelatedRefRepository;
+    private final CommentRepository commentRepository;
     private final IdeaVoteRepository ideaVoteRepository;
     private final PortalUserRepository portalUserRepository;
     private final JwtTokenProvider jwtTokenProvider;
@@ -58,6 +64,7 @@ public class ProjectIdeaServiceImpl implements ProjectIdeaService {
     public ProjectIdeaServiceImpl(
             ProjectIdeaRepository projectIdeaRepository,
             ProjectIdeaRelatedRefRepository projectIdeaRelatedRefRepository,
+            CommentRepository commentRepository,
             IdeaVoteRepository ideaVoteRepository,
             PortalUserRepository portalUserRepository,
             JwtTokenProvider jwtTokenProvider,
@@ -68,6 +75,7 @@ public class ProjectIdeaServiceImpl implements ProjectIdeaService {
     ) {
         this.projectIdeaRepository = projectIdeaRepository;
         this.projectIdeaRelatedRefRepository = projectIdeaRelatedRefRepository;
+        this.commentRepository = commentRepository;
         this.ideaVoteRepository = ideaVoteRepository;
         this.portalUserRepository = portalUserRepository;
         this.jwtTokenProvider = jwtTokenProvider;
@@ -78,20 +86,52 @@ public class ProjectIdeaServiceImpl implements ProjectIdeaService {
     }
 
     @Override
-    public Page<ProjectIdeaListResponse> findPage(int page, int size) {
-        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
+    public Page<ProjectIdeaListResponse> findPage(int page, int size, ProjectIdeaListQuery query) {
         Long teamId = TeamScopeUtil.currentTeamId();
-        return (teamId == null
-                ? projectIdeaRepository.findAll(pageable)
-                : projectIdeaRepository.findByTeamId(teamId, pageable))
-                .map(entity -> ProjectIdeaMapper.toListResponse(entity, ideaVoteRepository.countByIdeaId(entity.getId())));
+        Long currentUserId = TeamRequestContext.getCurrentUserId();
+        String keyword = normalizeNullable(query == null ? null : query.q());
+        String category = normalizeNullable(query == null ? null : query.category());
+        String status = normalizeNullable(query == null ? null : query.status());
+        String requestedSortBy = normalizeNullable(query == null ? null : query.sortBy());
+        String requestedSortDir = normalizeNullable(query == null ? null : query.sortDir());
+        Sort.Direction direction = "asc".equalsIgnoreCase(requestedSortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
+
+        Page<ProjectIdea> pageResult = switch (requestedSortBy == null ? "" : requestedSortBy.toLowerCase(Locale.ROOT)) {
+            case "likes", "likecount" -> {
+                PageRequest pageable = PageRequest.of(page, size);
+                if (direction == Sort.Direction.ASC) {
+                    yield projectIdeaRepository.searchOrderByLikeCountAsc(teamId, keyword, category, status, pageable);
+                }
+                yield projectIdeaRepository.searchOrderByLikeCountDesc(teamId, keyword, category, status, pageable);
+            }
+            default -> {
+                String sortBy = resolveSortBy(requestedSortBy);
+                Sort sort = Sort.by(direction, sortBy).and(Sort.by(Sort.Direction.DESC, "id"));
+                PageRequest pageable = PageRequest.of(page, size, sort);
+                yield projectIdeaRepository.search(teamId, keyword, category, status, pageable);
+            }
+        };
+
+        Map<Long, Long> commentCountByIdeaId = loadCommentCounts(
+                pageResult.getContent().stream().map(ProjectIdea::getId).toList()
+        );
+
+        return pageResult
+                .map(entity -> {
+                    long likeCount = ideaVoteRepository.countByIdeaId(entity.getId());
+                    boolean likedByMe = isLikedByMe(entity.getId(), currentUserId);
+                    long commentCount = commentCountByIdeaId.getOrDefault(entity.getId(), 0L);
+                    return ProjectIdeaMapper.toListResponse(entity, likeCount, likedByMe, commentCount);
+                });
     }
 
     @Override
     public ProjectIdeaDetailResponse findById(Long id) {
         ProjectIdea entity = getIdeaOrThrow(id);
+        Long currentUserId = TeamRequestContext.getCurrentUserId();
         long likeCount = ideaVoteRepository.countByIdeaId(id);
-        return ProjectIdeaMapper.toDetailResponse(entity, fromJsonList(entity.getBenefits()), likeCount);
+        boolean likedByMe = isLikedByMe(entity.getId(), currentUserId);
+        return ProjectIdeaMapper.toDetailResponse(entity, fromJsonList(entity.getBenefits()), likeCount, likedByMe);
     }
 
     @Override
@@ -293,6 +333,19 @@ public class ProjectIdeaServiceImpl implements ProjectIdeaService {
         return idea;
     }
 
+    private String resolveSortBy(String rawSortBy) {
+        String sortBy = rawSortBy == null ? "" : rawSortBy.toLowerCase(Locale.ROOT);
+        return switch (sortBy) {
+            case "docno", "ideano" -> "ideaNo";
+            case "title" -> "title";
+            case "category" -> "category";
+            case "status" -> "status";
+            case "id" -> "id";
+            case "createdat", "latest", "" -> "createdAt";
+            default -> "createdAt";
+        };
+    }
+
     private String normalizeCategory(String rawCategory) {
         if (isBlank(rawCategory)) {
             return "기타";
@@ -333,6 +386,25 @@ public class ProjectIdeaServiceImpl implements ProjectIdeaService {
             default -> "REF";
         };
         return prefix + "-" + refId;
+    }
+
+    private boolean isLikedByMe(Long ideaId, Long currentUserId) {
+        if (currentUserId == null) {
+            return false;
+        }
+        return ideaVoteRepository.existsByIdeaIdAndUserId(ideaId, currentUserId);
+    }
+
+    private Map<Long, Long> loadCommentCounts(List<Long> ideaIds) {
+        if (commentRepository == null || ideaIds == null || ideaIds.isEmpty()) {
+            return Map.of();
+        }
+
+        return commentRepository.countByRefTypeAndRefIds(REF_TYPE_PROJECT_IDEA, ideaIds).stream()
+                .collect(Collectors.toMap(
+                        CommentRepository.CommentCountProjection::getRefId,
+                        CommentRepository.CommentCountProjection::getCommentCount
+                ));
     }
 
     private String toJsonList(List<String> values) {

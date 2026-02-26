@@ -26,9 +26,7 @@
 ## 3. 구현 상태 요약 (2026-02-25)
 - 구현됨: `Auth`, `Team(핵심)`, `WorkRequest`, `TechTask`, `TestScenario`, `Defect`, `Deployment`, `MeetingNote`, `Idea`, `KnowledgeBase`, `Resource`, `Comment`, `Attachment`, `Notification`, `Dashboard`, `Statistics`, `DocumentIndex`, `ActivityLog`
 - 부분 구현:
-  - 다수 목록 API는 서버에서 `page/size` 중심으로 동작하며, 상세 검색/정렬/필터는 프론트 보정 포함
-- 미구현(계획):
-  - 팀 초대 API (`/teams/{teamId}/invitations*`)
+  - 일부 목록 API는 서버에서 `page/size` 중심으로 동작하며, 상세 검색/정렬/필터는 프론트 보정 포함
 
 ## 4. 도메인별 API 명세
 
@@ -45,9 +43,6 @@
 | GET | `/teams/{teamId}/members` | Header: Bearer | `TeamMemberResponse[]` | [x] |
 | PATCH | `/teams/{teamId}/members/{userId}/role` | Header: Bearer + `TeamMemberRoleUpdateRequest` | `204` | [x] |
 | DELETE | `/teams/{teamId}/members/{userId}` | Header: Bearer | `204` | [x] |
-| POST | `/teams/{teamId}/invitations` | `{email,expiresAt?}` | `{id,token,status}` | [ ] |
-| GET | `/teams/{teamId}/invitations` | `status?` | `[{id,email,status,expiresAt}]` | [ ] |
-| POST | `/teams/invitations/{token}/accept` | - | `{teamId,teamName}` | [ ] |
 
 Auth/Team 응답 필드:
 - `LoginResponse.teams[*]`: `id`, `name`, `description`, `teamRole`, `inviteCode`
@@ -56,7 +51,7 @@ Auth/Team 응답 필드:
 ### 4.2 Work Requests (P0)
 | Method | Path | 핵심 Query/Body | Response | 구현 |
 |---|---|---|---|---|
-| GET | `/work-requests` | `page,size` | `Page<WorkRequestListResponse>` | [x] |
+| GET | `/work-requests` | `q,type,priority,status,assigneeId,deadlineFrom,deadlineTo,sortBy,sortDir,page,size` | `Page<WorkRequestListResponse>` | [x] |
 | GET | `/work-requests/{id}` | - | `WorkRequestDetailResponse` | [x] |
 | POST | `/work-requests` | `WorkRequestCreateRequest` | `{id}` | [x] |
 | PUT | `/work-requests/{id}` | `WorkRequestUpdateRequest` | `204` | [x] |
@@ -68,7 +63,7 @@ Auth/Team 응답 필드:
 ### 4.3 TechTask (P0)
 | Method | Path | 핵심 Query/Body | Response | 구현 |
 |---|---|---|---|---|
-| GET | `/tech-tasks` | `page,size` | `Page<TechTaskListResponse>` | [x] |
+| GET | `/tech-tasks` | `q,type,priority,status,assigneeId,deadlineFrom,deadlineTo,sortBy,sortDir,page,size` | `Page<TechTaskListResponse>` | [x] |
 | GET | `/tech-tasks/{id}` | - | `TechTaskDetailResponse` | [x] |
 | POST | `/tech-tasks` | `TechTaskCreateRequest` | `{id}` | [x] |
 | PUT | `/tech-tasks/{id}` | `TechTaskUpdateRequest` | `204` | [x] |
@@ -83,7 +78,7 @@ Auth/Team 응답 필드:
 ### 4.4 TestScenario (P0)
 | Method | Path | 핵심 Query/Body | Response | 구현 |
 |---|---|---|---|---|
-| GET | `/test-scenarios` | `page,size` | `Page<TestScenarioListResponse>` | [x] |
+| GET | `/test-scenarios` | `q,type,priority,status,assigneeId,deadlineFrom,deadlineTo,sortBy,sortDir,page,size` | `Page<TestScenarioListResponse>` | [x] |
 | GET | `/test-scenarios/{id}` | - | `TestScenarioDetailResponse` | [x] |
 | POST | `/test-scenarios` | `TestScenarioCreateRequest` | `{id}` | [x] |
 | PUT | `/test-scenarios/{id}` | `TestScenarioUpdateRequest` | `204` | [x] |
@@ -91,12 +86,12 @@ Auth/Team 응답 필드:
 | PATCH | `/test-scenarios/{id}/status` | `TestScenarioStatusUpdateRequest` | `204` | [x] |
 | GET | `/test-scenarios/{id}/related-refs` | - | `TestScenarioRelatedRefResponse[]` | [x] |
 | PUT | `/test-scenarios/{id}/related-refs` | `TestScenarioRelatedRefsUpdateRequest` | `204` | [x] |
-| PATCH | `/test-scenarios/{id}/execution` | `{stepResults:[PASS/FAIL/SKIP],actualResult?,executedAt?}` | `204` | [ ] |
+| PATCH | `/test-scenarios/{id}/execution` | `{stepResults:[PASS/FAIL/SKIP],actualResult?,executedAt?}` | `204` | [x] |
 
 ### 4.5 Defect (P0)
 | Method | Path | 핵심 Query/Body | Response | 구현 |
 |---|---|---|---|---|
-| GET | `/defects` | `page,size` | `Page<DefectListResponse>` | [x] |
+| GET | `/defects` | `q,type,severity,status,assigneeId,deadlineFrom,deadlineTo,sortBy,sortDir,page,size` | `Page<DefectListResponse>` | [x] |
 | GET | `/defects/{id}` | - | `DefectDetailResponse` | [x] |
 | POST | `/defects` | `DefectCreateRequest` | `{id}` | [x] |
 | PUT | `/defects/{id}` | `DefectUpdateRequest` | `204` | [x] |
@@ -106,7 +101,7 @@ Auth/Team 응답 필드:
 ### 4.6 Deployment (P1)
 | Method | Path | 핵심 Query/Body | Response | 구현 |
 |---|---|---|---|---|
-| GET | `/deployments` | `page,size` | `Page<DeploymentListResponse>` | [x] |
+| GET | `/deployments` | `q,type,environment,status,managerId,scheduledFrom,scheduledTo,sortBy,sortDir,page,size` | `Page<DeploymentListResponse>` | [x] |
 | GET | `/deployments/{id}` | - | `DeploymentDetailResponse` | [x] |
 | POST | `/deployments` | `DeploymentCreateRequest` | `{id}` | [x] |
 | PUT | `/deployments/{id}` | `DeploymentUpdateRequest` | `204` | [x] |
@@ -138,7 +133,7 @@ Auth/Team 응답 필드:
 ### 4.8 Idea (P1)
 | Method | Path | 핵심 Query/Body | Response | 구현 |
 |---|---|---|---|---|
-| GET | `/ideas` | `page,size` | `Page<ProjectIdeaListResponse>` | [x] |
+| GET | `/ideas` | `q,category,status,sortBy,sortDir,page,size` | `Page<ProjectIdeaListResponse>` | [x] |
 | GET | `/ideas/{id}` | - | `ProjectIdeaDetailResponse` | [x] |
 | POST | `/ideas` | `ProjectIdeaCreateRequest` | `{id}` | [x] |
 | PUT | `/ideas/{id}` | `ProjectIdeaUpdateRequest` | `204` | [x] |
@@ -148,6 +143,8 @@ Auth/Team 응답 필드:
 | PUT | `/ideas/{id}/related-refs` | `ProjectIdeaRelatedRefsUpdateRequest` | `204` | [x] |
 | POST | `/ideas/{id}/votes` | Header: Bearer | `ProjectIdeaVoteResponse` | [x] |
 | DELETE | `/ideas/{id}/votes/me` | Header: Bearer | `ProjectIdeaVoteResponse` | [x] |
+
+`ProjectIdeaListResponse`에는 카드 집계를 위해 `likeCount`, `likedByMe`, `commentCount`를 포함한다.
 
 ### 4.9 KnowledgeBase + Resource (P1)
 | Method | Path | 핵심 Query/Body | Response | 구현 |
@@ -206,7 +203,6 @@ Auth/Team 응답 필드:
 
 ## 5. 스키마-프론트 갭 및 보완 필요
 - 서버 목록 API의 검색/정렬/필터 기능이 도메인별로 완전 일치하지 않음(현재 프론트 보정 포함)
-- 팀 초대 플로우 API 부재 (`/teams/{teamId}/invitations*`)
 - 첨부파일은 현재 메타데이터 JSON 기반이며, 파일 스토리지 업로드 정책(`multipart/S3/local`) 표준화 필요
 
 ## 6. 체크리스트 운영 규칙

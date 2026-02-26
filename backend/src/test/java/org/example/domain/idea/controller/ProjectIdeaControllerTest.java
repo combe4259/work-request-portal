@@ -3,6 +3,7 @@ package org.example.domain.idea.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.domain.idea.dto.ProjectIdeaCreateRequest;
 import org.example.domain.idea.dto.ProjectIdeaDetailResponse;
+import org.example.domain.idea.dto.ProjectIdeaListQuery;
 import org.example.domain.idea.dto.ProjectIdeaListResponse;
 import org.example.domain.idea.dto.ProjectIdeaStatusUpdateRequest;
 import org.example.domain.idea.dto.ProjectIdeaUpdateRequest;
@@ -47,7 +48,8 @@ class ProjectIdeaControllerTest {
     @Test
     @DisplayName("아이디어 목록 조회는 기본 페이지 파라미터를 사용한다")
     void getProjectIdeasWithDefaultPaging() throws Exception {
-        when(projectIdeaService.findPage(0, 20)).thenReturn(new PageImpl<>(
+        ProjectIdeaListQuery query = new ProjectIdeaListQuery(null, null, null, "createdAt", "desc");
+        when(projectIdeaService.findPage(0, 20, query)).thenReturn(new PageImpl<>(
                 List.of(listResponse(1L, "ID-0001")),
                 PageRequest.of(0, 20),
                 1
@@ -60,7 +62,31 @@ class ProjectIdeaControllerTest {
                 .andExpect(jsonPath("$.number").value(0))
                 .andExpect(jsonPath("$.size").value(20));
 
-        verify(projectIdeaService).findPage(0, 20);
+        verify(projectIdeaService).findPage(0, 20, query);
+    }
+
+    @Test
+    @DisplayName("아이디어 목록 조회는 검색/필터/정렬 파라미터를 전달한다")
+    void getProjectIdeasWithQueryParams() throws Exception {
+        ProjectIdeaListQuery query = new ProjectIdeaListQuery("자동화", "기능", "검토중", "likes", "asc");
+        when(projectIdeaService.findPage(2, 15, query)).thenReturn(new PageImpl<>(
+                List.of(listResponse(3L, "ID-0003")),
+                PageRequest.of(2, 15),
+                1
+        ));
+
+        mockMvc.perform(get("/api/ideas")
+                        .param("q", "자동화")
+                        .param("category", "기능")
+                        .param("status", "검토중")
+                        .param("sortBy", "likes")
+                        .param("sortDir", "asc")
+                        .param("page", "2")
+                        .param("size", "15"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value(3L));
+
+        verify(projectIdeaService).findPage(2, 15, query);
     }
 
     @Test
@@ -170,6 +196,8 @@ class ProjectIdeaControllerTest {
                 "제안됨",
                 2L,
                 5L,
+                false,
+                2L,
                 LocalDateTime.of(2026, 2, 24, 11, 0)
         );
     }
@@ -187,6 +215,7 @@ class ProjectIdeaControllerTest {
                 null,
                 2L,
                 5L,
+                false,
                 LocalDateTime.of(2026, 2, 24, 11, 0),
                 LocalDateTime.of(2026, 2, 24, 11, 0)
         );

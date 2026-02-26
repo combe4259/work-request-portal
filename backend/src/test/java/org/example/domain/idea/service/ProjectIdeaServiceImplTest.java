@@ -1,9 +1,11 @@
 package org.example.domain.idea.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.example.domain.comment.repository.CommentRepository;
 import org.example.domain.notification.service.NotificationEventService;
 import org.example.domain.idea.dto.ProjectIdeaCreateRequest;
 import org.example.domain.idea.dto.ProjectIdeaDetailResponse;
+import org.example.domain.idea.dto.ProjectIdeaListQuery;
 import org.example.domain.idea.dto.ProjectIdeaListResponse;
 import org.example.domain.idea.dto.ProjectIdeaStatusUpdateRequest;
 import org.example.domain.idea.dto.ProjectIdeaUpdateRequest;
@@ -39,8 +41,10 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -52,6 +56,9 @@ class ProjectIdeaServiceImplTest {
 
     @Mock
     private IdeaVoteRepository ideaVoteRepository;
+
+    @Mock
+    private CommentRepository commentRepository;
 
     @Mock
     private PortalUserRepository portalUserRepository;
@@ -84,26 +91,56 @@ class ProjectIdeaServiceImplTest {
     @DisplayName("목록 조회 시 페이징/정렬을 적용하고 좋아요 수를 함께 반환한다")
     void findPage() {
         ProjectIdea entity = sampleIdea(1L);
-        when(projectIdeaRepository.findAll(any(Pageable.class)))
+        when(projectIdeaRepository.search(isNull(), isNull(), isNull(), isNull(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(entity)));
         when(ideaVoteRepository.countByIdeaId(1L)).thenReturn(3L);
+        when(commentRepository.countByRefTypeAndRefIds(eq("PROJECT_IDEA"), anyList())).thenReturn(List.of());
 
-        Page<ProjectIdeaListResponse> page = projectIdeaService.findPage(1, 10);
+        Page<ProjectIdeaListResponse> page = projectIdeaService.findPage(
+                1,
+                10,
+                new ProjectIdeaListQuery(null, null, null, "createdAt", "desc")
+        );
 
-        verify(projectIdeaRepository).findAll(pageableCaptor.capture());
+        verify(projectIdeaRepository).search(isNull(), isNull(), isNull(), isNull(), pageableCaptor.capture());
         Pageable pageable = pageableCaptor.getValue();
-        Sort.Order idOrder = pageable.getSort().getOrderFor("id");
+        Sort.Order createdAtOrder = pageable.getSort().getOrderFor("createdAt");
 
         assertThat(pageable.getPageNumber()).isEqualTo(1);
         assertThat(pageable.getPageSize()).isEqualTo(10);
-        assertThat(idOrder).isNotNull();
-        assertThat(idOrder.getDirection()).isEqualTo(Sort.Direction.DESC);
+        assertThat(createdAtOrder).isNotNull();
+        assertThat(createdAtOrder.getDirection()).isEqualTo(Sort.Direction.DESC);
 
         assertThat(page.getContent()).hasSize(1);
         ProjectIdeaListResponse response = page.getContent().get(0);
         assertThat(response.ideaNo()).isEqualTo("ID-001");
         assertThat(response.content()).isEqualTo("아이디어 내용");
         assertThat(response.likeCount()).isEqualTo(3L);
+        assertThat(response.commentCount()).isEqualTo(0L);
+    }
+
+    @Test
+    @DisplayName("목록 조회에서 좋아요순 정렬을 요청하면 좋아요 기준 쿼리를 사용한다")
+    void findPageSortedByLikes() {
+        ProjectIdea entity = sampleIdea(1L);
+        when(projectIdeaRepository.searchOrderByLikeCountDesc(isNull(), isNull(), isNull(), isNull(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(entity)));
+        when(ideaVoteRepository.countByIdeaId(1L)).thenReturn(3L);
+        when(commentRepository.countByRefTypeAndRefIds(eq("PROJECT_IDEA"), anyList())).thenReturn(List.of());
+
+        projectIdeaService.findPage(0, 20, new ProjectIdeaListQuery(null, null, null, "likes", "desc"));
+
+        verify(projectIdeaRepository).searchOrderByLikeCountDesc(
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                pageableCaptor.capture()
+        );
+        Pageable pageable = pageableCaptor.getValue();
+        assertThat(pageable.getSort().isUnsorted()).isTrue();
+        assertThat(pageable.getPageNumber()).isEqualTo(0);
+        assertThat(pageable.getPageSize()).isEqualTo(20);
     }
 
     @Test

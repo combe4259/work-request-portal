@@ -11,6 +11,8 @@ public record ProjectIdeaListResponse(
         String status,
         Long proposedBy,
         long likeCount,
+        boolean likedByMe,
+        long commentCount,
         LocalDateTime createdAt
 ) {
 }

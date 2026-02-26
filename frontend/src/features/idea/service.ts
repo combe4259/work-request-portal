@@ -34,6 +34,7 @@ export interface IdeaDetail {
   statusNote?: string
   proposer: string
   likes: number
+  likedByMe: boolean
   createdAt: string
 }
 
@@ -62,6 +63,9 @@ export interface UpdateIdeaInput {
 
 interface ApiPageResponse<T> {
   content: T[]
+  totalElements: number
+  totalPages: number
+  number: number
 }
 
 interface ApiIdeaListItem {
@@ -73,6 +77,8 @@ interface ApiIdeaListItem {
   status: IdeaStatus
   proposedBy: number
   likeCount: number
+  likedByMe: boolean
+  commentCount: number
   createdAt: string | null
 }
 
@@ -88,6 +94,7 @@ interface ApiIdeaDetailResponse {
   statusNote: string | null
   proposedBy: number
   likeCount: number
+  likedByMe: boolean
   createdAt: string | null
   updatedAt: string | null
 }
@@ -133,8 +140,6 @@ interface ApiIdeaRelatedRefResponse {
   title: string | null
 }
 
-const LIST_FETCH_SIZE = 500
-
 function mapUserLabel(userId: number | null | undefined, fallbackText: string): string {
   if (userId == null) {
     return fallbackText
@@ -162,46 +167,33 @@ function mapListItem(item: ApiIdeaListItem): Idea {
     content: item.content,
     proposer: mapUserLabel(item.proposedBy, '미지정'),
     likes: item.likeCount,
-    commentCount: 0,
+    likedByMe: item.likedByMe,
+    commentCount: item.commentCount ?? 0,
     createdAt: toDateOnly(item.createdAt),
   }
 }
 
 export async function listIdeas(params: IdeaListParams): Promise<IdeaListResult> {
   const { data } = await api.get<ApiPageResponse<ApiIdeaListItem>>('/ideas', {
-    params: { page: 0, size: LIST_FETCH_SIZE },
+    params: {
+      q: params.search.trim() || undefined,
+      category: params.filterCategory === '전체' ? undefined : params.filterCategory,
+      status: params.filterStatus === '전체' ? undefined : params.filterStatus,
+      sortBy: params.sortKey,
+      sortDir: params.sortDir,
+      page: Math.max(0, params.page - 1),
+      size: params.pageSize,
+    },
   })
 
-  const filtered = data.content
-    .map(mapListItem)
-    .filter((item) => {
-      const keyword = params.search.trim().toLowerCase()
-      const matchSearch = keyword.length === 0
-        || item.title.toLowerCase().includes(keyword)
-        || item.content.toLowerCase().includes(keyword)
-      const matchCategory = params.filterCategory === '전체' || item.category === params.filterCategory
-      const matchStatus = params.filterStatus === '전체' || item.status === params.filterStatus
-      return matchSearch && matchCategory && matchStatus
-    })
-
-  const sorted = [...filtered].sort((a, b) => {
-    const sortFactor = params.sortDir === 'asc' ? 1 : -1
-    if (params.sortKey === 'likes') {
-      return (a.likes - b.likes) * sortFactor
-    }
-    return a.createdAt.localeCompare(b.createdAt) * sortFactor
-  })
-
-  const totalPages = Math.max(1, Math.ceil(sorted.length / params.pageSize))
-  const safePage = Math.min(Math.max(1, params.page), totalPages)
-  const start = (safePage - 1) * params.pageSize
-  const items = sorted.slice(start, start + params.pageSize)
+  const items = data.content.map(mapListItem)
+  const totalPages = Math.max(1, data.totalPages || 1)
 
   return {
     items,
-    total: sorted.length,
+    total: data.totalElements ?? items.length,
     totalPages,
-    page: safePage,
+    page: (data.number ?? 0) + 1,
   }
 }
 
@@ -218,6 +210,7 @@ export async function getIdea(id: string | number): Promise<IdeaDetail> {
     statusNote: data.statusNote ?? undefined,
     proposer: mapUserLabel(data.proposedBy, '미지정'),
     likes: data.likeCount,
+    likedByMe: data.likedByMe,
     createdAt: toDateOnly(data.createdAt),
   }
 }

@@ -47,7 +47,12 @@ public final class ProjectIdeaMapper {
         }
     }
 
-    public static ProjectIdeaListResponse toListResponse(ProjectIdea entity, long likeCount) {
+    public static ProjectIdeaListResponse toListResponse(
+            ProjectIdea entity,
+            long likeCount,
+            boolean likedByMe,
+            long commentCount
+    ) {
         return new ProjectIdeaListResponse(
                 entity.getId(),
                 entity.getIdeaNo(),
@@ -57,11 +62,18 @@ public final class ProjectIdeaMapper {
                 entity.getStatus(),
                 entity.getProposedBy(),
                 likeCount,
+                likedByMe,
+                commentCount,
                 entity.getCreatedAt()
         );
     }
 
-    public static ProjectIdeaDetailResponse toDetailResponse(ProjectIdea entity, List<String> benefits, long likeCount) {
+    public static ProjectIdeaDetailResponse toDetailResponse(
+            ProjectIdea entity,
+            List<String> benefits,
+            long likeCount,
+            boolean likedByMe
+    ) {
         return new ProjectIdeaDetailResponse(
                 entity.getId(),
                 entity.getIdeaNo(),
@@ -74,6 +86,7 @@ public final class ProjectIdeaMapper {
                 entity.getStatusNote(),
                 entity.getProposedBy(),
                 likeCount,
+                likedByMe,
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
         );
