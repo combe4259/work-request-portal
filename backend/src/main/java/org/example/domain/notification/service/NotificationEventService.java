@@ -4,6 +4,7 @@ import org.example.domain.notification.dto.NotificationCreateRequest;
 import org.example.domain.user.entity.UserPreference;
 import org.example.domain.user.repository.UserPreferenceRepository;
 import org.example.global.slack.SlackNotificationService;
+import org.example.global.team.TeamRequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -54,7 +55,7 @@ public class NotificationEventService {
                     refId,
                     false
             ));
-            slackNotificationService.send(type, title, message);
+            slackNotificationService.send(type, title, message, refType, refId);
         } catch (RuntimeException ex) {
             log.warn("알림 생성에 실패했습니다. userId={}, type={}, refType={}, refId={}", userId, type, refType, refId, ex);
         }
