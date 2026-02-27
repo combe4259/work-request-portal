@@ -4,6 +4,7 @@ import org.example.domain.meetingNote.dto.MeetingActionItemResponse;
 import org.example.domain.meetingNote.dto.MeetingActionItemStatusUpdateRequest;
 import org.example.domain.meetingNote.dto.MeetingNoteCreateRequest;
 import org.example.domain.meetingNote.dto.MeetingNoteDetailResponse;
+import org.example.domain.meetingNote.dto.MeetingNoteListQuery;
 import org.example.domain.meetingNote.dto.MeetingNoteListResponse;
 import org.example.domain.meetingNote.dto.MeetingNoteRelatedRefResponse;
 import org.example.domain.meetingNote.dto.MeetingNoteUpdateRequest;
@@ -36,10 +37,14 @@ public class MeetingNoteController {
 
     @GetMapping
     public Page<MeetingNoteListResponse> getMeetingNotes(
+            @RequestParam(required = false) String q,
+            @RequestParam(defaultValue = "id") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDir,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        return meetingNoteService.findPage(page, size);
+        MeetingNoteListQuery query = new MeetingNoteListQuery(q, sortBy, sortDir);
+        return meetingNoteService.findPage(page, size, query);
     }
 
     @GetMapping("/{id}")

@@ -1,16 +1,16 @@
 import { useQuery } from '@tanstack/react-query'
-import { getResource, listResources } from './service'
+import { getResource, listResources, type ResourceListParams } from './service'
 
 export const resourceQueryKeys = {
   all: ['resources'] as const,
-  list: () => [...resourceQueryKeys.all, 'list'] as const,
+  list: (params: ResourceListParams) => [...resourceQueryKeys.all, 'list', params] as const,
   detail: (id: string | number) => [...resourceQueryKeys.all, 'detail', id] as const,
 }
 
-export function useResourcesQuery() {
+export function useResourcesQuery(params: ResourceListParams) {
   return useQuery({
-    queryKey: resourceQueryKeys.list(),
-    queryFn: listResources,
+    queryKey: resourceQueryKeys.list(params),
+    queryFn: () => listResources(params),
     placeholderData: (prev) => prev,
   })
 }

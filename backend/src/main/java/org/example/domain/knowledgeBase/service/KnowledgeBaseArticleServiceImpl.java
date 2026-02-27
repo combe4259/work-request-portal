@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.domain.documentIndex.service.DocumentIndexSyncService;
 import org.example.domain.knowledgeBase.dto.KnowledgeBaseArticleCreateRequest;
 import org.example.domain.knowledgeBase.dto.KnowledgeBaseArticleDetailResponse;
+import org.example.domain.knowledgeBase.dto.KnowledgeBaseArticleListQuery;
 import org.example.domain.knowledgeBase.dto.KnowledgeBaseArticleListResponse;
 import org.example.domain.knowledgeBase.dto.KnowledgeBaseArticleUpdateRequest;
 import org.example.domain.knowledgeBase.entity.KnowledgeBaseArticle;
@@ -21,6 +22,7 @@ import org.example.global.util.DocumentNoGenerator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -56,12 +58,16 @@ public class KnowledgeBaseArticleServiceImpl implements KnowledgeBaseArticleServ
     }
 
     @Override
-    public Page<KnowledgeBaseArticleListResponse> findPage(int page, int size) {
-        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
+    public Page<KnowledgeBaseArticleListResponse> findPage(int page, int size, KnowledgeBaseArticleListQuery query) {
+        PageRequest pageable = PageRequest.of(page, size, resolveSort(query));
         Long teamId = TeamScopeUtil.currentTeamId();
-        return (teamId == null
-                ? knowledgeBaseArticleRepository.findAll(pageable)
-                : knowledgeBaseArticleRepository.findByTeamId(teamId, pageable))
+
+        Specification<KnowledgeBaseArticle> spec = Specification.where(byTeamId(teamId))
+                .and(byKeyword(query == null ? null : query.q()))
+                .and(byCategory(query == null ? null : query.category()))
+                .and(byTags(query == null ? null : query.tags()));
+
+        return knowledgeBaseArticleRepository.findAll(spec, pageable)
                 .map(entity -> KnowledgeBaseArticleMapper.toListResponse(entity, fromJsonList(entity.getTags())));
     }
 
@@ -233,6 +239,78 @@ public class KnowledgeBaseArticleServiceImpl implements KnowledgeBaseArticleServ
         }
     }
 
+    private Specification<KnowledgeBaseArticle> byTeamId(Long teamId) {
+        if (teamId == null) {
+            return null;
+        }
+        return (root, query, builder) -> builder.equal(root.get("teamId"), teamId);
+    }
+
+    private Specification<KnowledgeBaseArticle> byKeyword(String rawKeyword) {
+        String keyword = normalizeNullable(rawKeyword);
+        if (keyword == null) {
+            return null;
+        }
+        String likeKeyword = "%" + keyword.toLowerCase(Locale.ROOT) + "%";
+        return (root, query, builder) -> builder.or(
+                builder.like(builder.lower(root.get("title")), likeKeyword),
+                builder.like(builder.lower(root.get("summary")), likeKeyword),
+                builder.like(builder.lower(root.get("articleNo")), likeKeyword),
+                builder.like(builder.lower(root.get("tags")), likeKeyword)
+        );
+    }
+
+    private Specification<KnowledgeBaseArticle> byCategory(String rawCategory) {
+        String category = normalizeNullable(rawCategory);
+        if (category == null) {
+            return null;
+        }
+        return (root, query, builder) -> builder.equal(root.get("category"), category);
+    }
+
+    private Specification<KnowledgeBaseArticle> byTags(List<String> rawTags) {
+        if (rawTags == null || rawTags.isEmpty()) {
+            return null;
+        }
+
+        List<String> tags = rawTags.stream()
+                .filter(tag -> tag != null && !tag.isBlank())
+                .map(String::trim)
+                .distinct()
+                .toList();
+        if (tags.isEmpty()) {
+            return null;
+        }
+
+        return (root, query, builder) -> builder.and(
+                tags.stream()
+                        .map(tag -> builder.like(
+                                builder.lower(root.get("tags")),
+                                "%\"" + tag.toLowerCase(Locale.ROOT) + "\"%"
+                        ))
+                        .toArray(jakarta.persistence.criteria.Predicate[]::new)
+        );
+    }
+
+    private Sort resolveSort(KnowledgeBaseArticleListQuery query) {
+        String requestedSortBy = normalizeNullable(query == null ? null : query.sortBy());
+        String requestedSortDir = normalizeNullable(query == null ? null : query.sortDir());
+
+        String sortBy = switch (requestedSortBy == null ? "" : requestedSortBy.toLowerCase(Locale.ROOT)) {
+            case "docno", "articleno" -> "articleNo";
+            case "title" -> "title";
+            case "category" -> "category";
+            case "author", "authorid" -> "authorId";
+            case "views", "viewcount" -> "viewCount";
+            case "createdat" -> "createdAt";
+            case "updatedat" -> "updatedAt";
+            default -> "id";
+        };
+
+        Sort.Direction direction = "asc".equalsIgnoreCase(requestedSortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        return Sort.by(direction, sortBy);
+    }
+
     private String normalizeCategory(String rawCategory) {
         String category = rawCategory == null ? "" : rawCategory.trim();
         if (category.isEmpty()) {
@@ -292,6 +370,13 @@ public class KnowledgeBaseArticleServiceImpl implements KnowledgeBaseArticleServ
         } catch (JsonProcessingException ex) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "저장된 JSON 데이터 파싱에 실패했습니다.");
         }
+    }
+
+    private String normalizeNullable(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 
     private void syncDocumentIndex(KnowledgeBaseArticle entity) {

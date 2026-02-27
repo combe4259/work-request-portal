@@ -4,8 +4,9 @@ import org.example.domain.resource.entity.SharedResource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
-public interface SharedResourceRepository extends JpaRepository<SharedResource, Long> {
+public interface SharedResourceRepository extends JpaRepository<SharedResource, Long>, JpaSpecificationExecutor<SharedResource> {
 
     Page<SharedResource> findByTeamId(Long teamId, Pageable pageable);
 }

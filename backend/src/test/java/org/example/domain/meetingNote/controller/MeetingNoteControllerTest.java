@@ -6,6 +6,7 @@ import org.example.domain.meetingNote.dto.MeetingActionItemResponse;
 import org.example.domain.meetingNote.dto.MeetingActionItemStatusUpdateRequest;
 import org.example.domain.meetingNote.dto.MeetingNoteCreateRequest;
 import org.example.domain.meetingNote.dto.MeetingNoteDetailResponse;
+import org.example.domain.meetingNote.dto.MeetingNoteListQuery;
 import org.example.domain.meetingNote.dto.MeetingNoteListResponse;
 import org.example.domain.meetingNote.dto.MeetingNoteRelatedRefItemRequest;
 import org.example.domain.meetingNote.dto.MeetingNoteRelatedRefResponse;
@@ -50,7 +51,8 @@ class MeetingNoteControllerTest {
     @Test
     @DisplayName("회의록 목록 조회는 기본 페이지 파라미터를 사용한다")
     void getMeetingNotesWithDefaultPaging() throws Exception {
-        when(meetingNoteService.findPage(0, 20)).thenReturn(new PageImpl<>(
+        MeetingNoteListQuery expectedQuery = new MeetingNoteListQuery(null, "id", "desc");
+        when(meetingNoteService.findPage(0, 20, expectedQuery)).thenReturn(new PageImpl<>(
                 List.of(listResponse(1L, "MN-0001")),
                 PageRequest.of(0, 20),
                 1
@@ -63,7 +65,7 @@ class MeetingNoteControllerTest {
                 .andExpect(jsonPath("$.number").value(0))
                 .andExpect(jsonPath("$.size").value(20));
 
-        verify(meetingNoteService).findPage(0, 20);
+        verify(meetingNoteService).findPage(0, 20, expectedQuery);
     }
 
     @Test

@@ -2,6 +2,7 @@ package org.example.domain.resource.controller;
 
 import org.example.domain.resource.dto.SharedResourceCreateRequest;
 import org.example.domain.resource.dto.SharedResourceDetailResponse;
+import org.example.domain.resource.dto.SharedResourceListQuery;
 import org.example.domain.resource.dto.SharedResourceListResponse;
 import org.example.domain.resource.dto.SharedResourceUpdateRequest;
 import org.example.domain.resource.service.SharedResourceService;
@@ -31,10 +32,20 @@ public class SharedResourceController {
 
     @GetMapping
     public Page<SharedResourceListResponse> getResources(
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) String category,
+            @RequestParam(defaultValue = "id") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDir,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        return sharedResourceService.findPage(page, size);
+        SharedResourceListQuery query = new SharedResourceListQuery(
+                q,
+                category,
+                sortBy,
+                sortDir
+        );
+        return sharedResourceService.findPage(page, size, query);
     }
 
     @GetMapping("/{id}")

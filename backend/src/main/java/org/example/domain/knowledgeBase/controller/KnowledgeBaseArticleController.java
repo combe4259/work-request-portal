@@ -2,6 +2,7 @@ package org.example.domain.knowledgeBase.controller;
 
 import org.example.domain.knowledgeBase.dto.KnowledgeBaseArticleCreateRequest;
 import org.example.domain.knowledgeBase.dto.KnowledgeBaseArticleDetailResponse;
+import org.example.domain.knowledgeBase.dto.KnowledgeBaseArticleListQuery;
 import org.example.domain.knowledgeBase.dto.KnowledgeBaseArticleListResponse;
 import org.example.domain.knowledgeBase.dto.KnowledgeBaseArticleUpdateRequest;
 import org.example.domain.knowledgeBase.dto.KnowledgeBaseRelatedRefResponse;
@@ -34,10 +35,22 @@ public class KnowledgeBaseArticleController {
 
     @GetMapping
     public Page<KnowledgeBaseArticleListResponse> getArticles(
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) List<String> tags,
+            @RequestParam(defaultValue = "id") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDir,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        return knowledgeBaseArticleService.findPage(page, size);
+        KnowledgeBaseArticleListQuery query = new KnowledgeBaseArticleListQuery(
+                q,
+                category,
+                tags,
+                sortBy,
+                sortDir
+        );
+        return knowledgeBaseArticleService.findPage(page, size, query);
     }
 
     @GetMapping("/{id}")

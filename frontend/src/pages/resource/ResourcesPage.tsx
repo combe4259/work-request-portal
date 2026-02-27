@@ -30,31 +30,31 @@ function hostname(url: string) {
 
 export default function ResourcesPage() {
   const navigate = useNavigate()
-  const { data, isPending, isError, refetch } = useResourcesQuery()
-  const deleteResource = useDeleteResourceMutation()
-
   const [search, setSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState('전체')
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null)
 
-  const resources = data ?? []
+  const listParams = useMemo(
+    () => ({
+      search,
+      category: filterCategory,
+      sortBy: 'createdAt',
+      sortDir: 'desc' as const,
+      page: 0,
+      size: 500,
+    }),
+    [filterCategory, search]
+  )
+  const { data, isPending, isError, refetch } = useResourcesQuery(listParams)
+  const deleteResource = useDeleteResourceMutation()
 
-  const filtered = useMemo(() => {
-    return resources.filter((resource) => {
-      const keyword = search.trim().toLowerCase()
-      const matchSearch = keyword.length === 0
-        || resource.title.toLowerCase().includes(keyword)
-        || resource.description.toLowerCase().includes(keyword)
-      const matchCategory = filterCategory === '전체' || resource.category === filterCategory
-      return matchSearch && matchCategory
-    })
-  }, [filterCategory, resources, search])
+  const resources = data ?? []
 
   return (
     <div className="p-4 sm:p-6 space-y-4">
       <PageHeader
         title="공유 리소스"
-        count={filtered.length}
+        count={resources.length}
         unit="개"
         action={{ label: '리소스 등록', onClick: () => navigate('/resources/new'), icon: <PlusIcon /> }}
       />
@@ -85,11 +85,11 @@ export default function ResourcesPage() {
             void refetch()
           }}
         />
-      ) : filtered.length === 0 ? (
+      ) : resources.length === 0 ? (
         <EmptyState title="검색 결과가 없습니다" description="검색어나 필터 조건을 변경해보세요." />
       ) : (
         <div className="grid grid-cols-3 gap-4">
-          {filtered.map((resource) => {
+          {resources.map((resource) => {
             const style = CATEGORY_STYLE[resource.category]
             return (
               <div

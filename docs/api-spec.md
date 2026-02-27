@@ -133,7 +133,7 @@ Workflow 동시편집 규약(낙관적 락):
 ### 4.7 MeetingNote (P1)
 | Method | Path | 핵심 Query/Body | Response | 구현 |
 |---|---|---|---|---|
-| GET | `/meeting-notes` | `page,size` | `Page<MeetingNoteListResponse>` | [x] |
+| GET | `/meeting-notes` | `q,sortBy,sortDir,page,size` | `Page<MeetingNoteListResponse>` | [x] |
 | GET | `/meeting-notes/{id}` | - | `MeetingNoteDetailResponse` | [x] |
 | POST | `/meeting-notes` | `MeetingNoteCreateRequest` | `{id}` | [x] |
 | PUT | `/meeting-notes/{id}` | `MeetingNoteUpdateRequest` | `204` | [x] |
@@ -166,7 +166,7 @@ Workflow 동시편집 규약(낙관적 락):
 ### 4.9 KnowledgeBase + Resource (P1)
 | Method | Path | 핵심 Query/Body | Response | 구현 |
 |---|---|---|---|---|
-| GET | `/knowledge-base` | `page,size` | `Page<KnowledgeBaseArticleListResponse>` | [x] |
+| GET | `/knowledge-base` | `q,category,tags,sortBy,sortDir,page,size` | `Page<KnowledgeBaseArticleListResponse>` | [x] |
 | GET | `/knowledge-base/{id}` | - | `KnowledgeBaseArticleDetailResponse` | [x] |
 | POST | `/knowledge-base` | `KnowledgeBaseArticleCreateRequest` | `{id}` | [x] |
 | PUT | `/knowledge-base/{id}` | `KnowledgeBaseArticleUpdateRequest` | `204` | [x] |
@@ -174,7 +174,7 @@ Workflow 동시편집 규약(낙관적 락):
 | POST | `/knowledge-base/{id}/view` | - | `204` | [x] |
 | GET | `/knowledge-base/{id}/related-refs` | - | `KnowledgeBaseRelatedRefResponse[]` | [x] |
 | PUT | `/knowledge-base/{id}/related-refs` | `KnowledgeBaseRelatedRefsUpdateRequest` | `204` | [x] |
-| GET | `/resources` | `page,size` | `Page<SharedResourceListResponse>` | [x] |
+| GET | `/resources` | `q,category,sortBy,sortDir,page,size` | `Page<SharedResourceListResponse>` | [x] |
 | GET | `/resources/{id}` | - | `SharedResourceDetailResponse` | [x] |
 | POST | `/resources` | `SharedResourceCreateRequest` | `{id}` | [x] |
 | PUT | `/resources/{id}` | `SharedResourceUpdateRequest` | `204` | [x] |

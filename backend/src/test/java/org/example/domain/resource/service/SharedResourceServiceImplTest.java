@@ -1,6 +1,7 @@
 package org.example.domain.resource.service;
 
 import org.example.domain.resource.dto.SharedResourceCreateRequest;
+import org.example.domain.resource.dto.SharedResourceListQuery;
 import org.example.domain.resource.dto.SharedResourceListResponse;
 import org.example.domain.resource.dto.SharedResourceUpdateRequest;
 import org.example.domain.resource.entity.SharedResource;
@@ -17,6 +18,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -49,12 +51,16 @@ class SharedResourceServiceImplTest {
     @DisplayName("목록 조회 시 페이징/정렬을 적용하고 리스트 응답으로 매핑한다")
     void findPage() {
         SharedResource entity = sampleEntity(1L);
-        when(sharedResourceRepository.findAll(any(Pageable.class)))
+        when(sharedResourceRepository.findAll(any(Specification.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(entity)));
 
-        Page<SharedResourceListResponse> page = sharedResourceService.findPage(2, 5);
+        Page<SharedResourceListResponse> page = sharedResourceService.findPage(
+                2,
+                5,
+                new SharedResourceListQuery(null, null, "id", "desc")
+        );
 
-        verify(sharedResourceRepository).findAll(pageableCaptor.capture());
+        verify(sharedResourceRepository).findAll(any(Specification.class), pageableCaptor.capture());
         Pageable pageable = pageableCaptor.getValue();
         Sort.Order idOrder = pageable.getSort().getOrderFor("id");
 

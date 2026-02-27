@@ -47,6 +47,10 @@ export interface UpdateMeetingNoteInput {
 
 interface ApiPageResponse<T> {
   content: T[]
+  totalElements: number
+  totalPages: number
+  number: number
+  size: number
 }
 
 interface ApiMeetingNoteListItem {
@@ -140,8 +144,6 @@ interface ApiMeetingNoteUpdateRequest {
   actionItems: ApiMeetingNoteActionItemPayload[]
   relatedRefs: ApiMeetingNoteRelatedRefPayload[]
 }
-
-const LIST_FETCH_SIZE = 500
 
 function mapUserLabel(
   userId: number | null | undefined,
@@ -315,37 +317,26 @@ export async function listMeetingNotes(params: MeetingNoteListParams): Promise<M
 
   const teamMemberNameByIdPromise = buildTeamMemberNameMap(teamId)
   const { data } = await api.get<ApiPageResponse<ApiMeetingNoteListItem>>('/meeting-notes', {
-    params: { page: 0, size: LIST_FETCH_SIZE },
+    params: {
+      q: params.search.trim() || undefined,
+      sortBy: params.sortKey === 'docNo' ? 'docNo' : 'date',
+      sortDir: params.sortDir,
+      page: Math.max(0, params.page - 1),
+      size: params.pageSize,
+    },
   })
   const teamMemberNameById = await teamMemberNameByIdPromise
 
-  const filtered = data.content
-    .map((item) => mapListItem(item, teamMemberNameById))
-    .filter((item) => {
-      const keyword = params.search.trim()
-      return keyword.length === 0
-        || item.title.includes(keyword)
-        || item.docNo.includes(keyword)
-    })
-
-  const sorted = [...filtered].sort((a, b) => {
-    const sortFactor = params.sortDir === 'asc' ? 1 : -1
-    if (params.sortKey === 'docNo') {
-      return a.docNo.localeCompare(b.docNo, 'ko-KR', { numeric: true }) * sortFactor
-    }
-    return a.date.localeCompare(b.date) * sortFactor
-  })
-
-  const totalPages = Math.max(1, Math.ceil(sorted.length / params.pageSize))
-  const safePage = Math.min(Math.max(1, params.page), totalPages)
-  const start = (safePage - 1) * params.pageSize
-  const items = sorted.slice(start, start + params.pageSize)
+  const items = data.content.map((item) => mapListItem(item, teamMemberNameById))
+  const totalPages = Math.max(1, data.totalPages ?? 1)
+  const currentPage = Math.min(Math.max(1, (data.number ?? 0) + 1), totalPages)
+  const total = data.totalElements ?? items.length
 
   return {
     items,
-    total: sorted.length,
+    total,
     totalPages,
-    page: safePage,
+    page: currentPage,
   }
 }
 

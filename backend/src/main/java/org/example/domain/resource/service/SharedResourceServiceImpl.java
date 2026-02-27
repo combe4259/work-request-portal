@@ -2,6 +2,7 @@ package org.example.domain.resource.service;
 
 import org.example.domain.resource.dto.SharedResourceCreateRequest;
 import org.example.domain.resource.dto.SharedResourceDetailResponse;
+import org.example.domain.resource.dto.SharedResourceListQuery;
 import org.example.domain.resource.dto.SharedResourceListResponse;
 import org.example.domain.resource.dto.SharedResourceUpdateRequest;
 import org.example.domain.resource.entity.SharedResource;
@@ -11,10 +12,13 @@ import org.example.global.team.TeamScopeUtil;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+
+import java.util.Locale;
 
 @Service
 @Transactional(readOnly = true)
@@ -27,12 +31,14 @@ public class SharedResourceServiceImpl implements SharedResourceService {
     }
 
     @Override
-    public Page<SharedResourceListResponse> findPage(int page, int size) {
-        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
+    public Page<SharedResourceListResponse> findPage(int page, int size, SharedResourceListQuery query) {
+        PageRequest pageable = PageRequest.of(page, size, resolveSort(query));
         Long teamId = TeamScopeUtil.currentTeamId();
-        return (teamId == null
-                ? sharedResourceRepository.findAll(pageable)
-                : sharedResourceRepository.findByTeamId(teamId, pageable))
+        Specification<SharedResource> spec = Specification.where(byTeamId(teamId))
+                .and(byKeyword(query == null ? null : query.q()))
+                .and(byCategory(query == null ? null : query.category()));
+
+        return sharedResourceRepository.findAll(spec, pageable)
                 .map(SharedResourceMapper::toListResponse);
     }
 
@@ -125,6 +131,51 @@ public class SharedResourceServiceImpl implements SharedResourceService {
         }
     }
 
+    private Specification<SharedResource> byTeamId(Long teamId) {
+        if (teamId == null) {
+            return null;
+        }
+        return (root, query, builder) -> builder.equal(root.get("teamId"), teamId);
+    }
+
+    private Specification<SharedResource> byKeyword(String rawKeyword) {
+        String keyword = normalizeNullable(rawKeyword);
+        if (keyword == null) {
+            return null;
+        }
+        String likeKeyword = "%" + keyword.toLowerCase(Locale.ROOT) + "%";
+        return (root, query, builder) -> builder.or(
+                builder.like(builder.lower(root.get("title")), likeKeyword),
+                builder.like(builder.lower(root.get("description")), likeKeyword),
+                builder.like(builder.lower(root.get("url")), likeKeyword)
+        );
+    }
+
+    private Specification<SharedResource> byCategory(String rawCategory) {
+        String category = normalizeNullable(rawCategory);
+        if (category == null) {
+            return null;
+        }
+        return (root, query, builder) -> builder.equal(root.get("category"), category);
+    }
+
+    private Sort resolveSort(SharedResourceListQuery query) {
+        String requestedSortBy = normalizeNullable(query == null ? null : query.sortBy());
+        String requestedSortDir = normalizeNullable(query == null ? null : query.sortDir());
+
+        String sortBy = switch (requestedSortBy == null ? "" : requestedSortBy.toLowerCase(Locale.ROOT)) {
+            case "title" -> "title";
+            case "category" -> "category";
+            case "registeredby" -> "registeredBy";
+            case "createdat" -> "createdAt";
+            case "updatedat" -> "updatedAt";
+            default -> "id";
+        };
+
+        Sort.Direction direction = "asc".equalsIgnoreCase(requestedSortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        return Sort.by(direction, sortBy);
+    }
+
     private String normalizeCategory(String rawCategory) {
         String category = rawCategory == null ? "" : rawCategory.trim();
         if (category.isEmpty()) {
@@ -135,5 +186,12 @@ public class SharedResourceServiceImpl implements SharedResourceService {
             case "Figma", "Notion", "GitHub", "Confluence", "문서", "기타" -> category;
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "유효하지 않은 category입니다.");
         };
+    }
+
+    private String normalizeNullable(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 }

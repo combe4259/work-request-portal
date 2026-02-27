@@ -1,16 +1,16 @@
 import { useQuery } from '@tanstack/react-query'
-import { getKnowledgeBaseArticle, listKnowledgeBaseArticles } from './service'
+import { getKnowledgeBaseArticle, listKnowledgeBaseArticles, type KnowledgeBaseArticleListParams } from './service'
 
 export const knowledgeBaseQueryKeys = {
   all: ['knowledge-base'] as const,
-  list: () => [...knowledgeBaseQueryKeys.all, 'list'] as const,
+  list: (params: KnowledgeBaseArticleListParams) => [...knowledgeBaseQueryKeys.all, 'list', params] as const,
   detail: (id: string | number) => [...knowledgeBaseQueryKeys.all, 'detail', id] as const,
 }
 
-export function useKnowledgeBaseArticlesQuery() {
+export function useKnowledgeBaseArticlesQuery(params: KnowledgeBaseArticleListParams) {
   return useQuery({
-    queryKey: knowledgeBaseQueryKeys.list(),
-    queryFn: listKnowledgeBaseArticles,
+    queryKey: knowledgeBaseQueryKeys.list(params),
+    queryFn: () => listKnowledgeBaseArticles(params),
     placeholderData: (prev) => prev,
   })
 }

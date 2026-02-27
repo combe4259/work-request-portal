@@ -2,6 +2,7 @@ package org.example.domain.knowledgeBase.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.domain.knowledgeBase.dto.KnowledgeBaseArticleCreateRequest;
+import org.example.domain.knowledgeBase.dto.KnowledgeBaseArticleListQuery;
 import org.example.domain.knowledgeBase.dto.KnowledgeBaseArticleListResponse;
 import org.example.domain.knowledgeBase.dto.KnowledgeBaseArticleUpdateRequest;
 import org.example.domain.knowledgeBase.entity.KnowledgeBaseArticle;
@@ -20,6 +21,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -59,12 +61,16 @@ class KnowledgeBaseArticleServiceImplTest {
     void findPage() {
         KnowledgeBaseArticle entity = sampleEntity(1L);
         entity.setTags("[\"가이드\",\"트러블슈팅\"]");
-        when(knowledgeBaseArticleRepository.findAll(any(Pageable.class)))
+        when(knowledgeBaseArticleRepository.findAll(any(Specification.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(entity)));
 
-        Page<KnowledgeBaseArticleListResponse> page = knowledgeBaseArticleService.findPage(1, 10);
+        Page<KnowledgeBaseArticleListResponse> page = knowledgeBaseArticleService.findPage(
+                1,
+                10,
+                new KnowledgeBaseArticleListQuery(null, null, null, "id", "desc")
+        );
 
-        verify(knowledgeBaseArticleRepository).findAll(pageableCaptor.capture());
+        verify(knowledgeBaseArticleRepository).findAll(any(Specification.class), pageableCaptor.capture());
         Pageable pageable = pageableCaptor.getValue();
         Sort.Order idOrder = pageable.getSort().getOrderFor("id");
 

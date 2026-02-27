@@ -14,6 +14,7 @@ import org.example.domain.meetingNote.dto.MeetingActionItemResponse;
 import org.example.domain.meetingNote.dto.MeetingActionItemStatusUpdateRequest;
 import org.example.domain.meetingNote.dto.MeetingNoteCreateRequest;
 import org.example.domain.meetingNote.dto.MeetingNoteDetailResponse;
+import org.example.domain.meetingNote.dto.MeetingNoteListQuery;
 import org.example.domain.meetingNote.dto.MeetingNoteListResponse;
 import org.example.domain.meetingNote.dto.MeetingNoteRelatedRefItemRequest;
 import org.example.domain.meetingNote.dto.MeetingNoteRelatedRefResponse;
@@ -38,6 +39,7 @@ import org.example.global.util.DocumentNoGenerator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -105,12 +107,13 @@ public class MeetingNoteServiceImpl implements MeetingNoteService {
     }
 
     @Override
-    public Page<MeetingNoteListResponse> findPage(int page, int size) {
-        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
+    public Page<MeetingNoteListResponse> findPage(int page, int size, MeetingNoteListQuery query) {
+        PageRequest pageable = PageRequest.of(page, size, resolveSort(query));
         Long teamId = TeamScopeUtil.currentTeamId();
-        return (teamId == null
-                ? meetingNoteRepository.findAll(pageable)
-                : meetingNoteRepository.findByTeamId(teamId, pageable))
+        Specification<MeetingNote> spec = Specification.where(byTeamId(teamId))
+                .and(byKeyword(query == null ? null : query.q()));
+
+        return meetingNoteRepository.findAll(spec, pageable)
                 .map(entity -> {
                     long actionTotal = meetingActionItemRepository.countByMeetingNoteId(entity.getId());
                     long actionDone = meetingActionItemRepository.countByMeetingNoteIdAndStatus(entity.getId(), "완료");
@@ -390,6 +393,43 @@ public class MeetingNoteServiceImpl implements MeetingNoteService {
             return;
         }
         getMeetingNoteOrThrow(id);
+    }
+
+    private Specification<MeetingNote> byTeamId(Long teamId) {
+        if (teamId == null) {
+            return null;
+        }
+        return (root, query, builder) -> builder.equal(root.get("teamId"), teamId);
+    }
+
+    private Specification<MeetingNote> byKeyword(String rawKeyword) {
+        String keyword = normalizeNullable(rawKeyword);
+        if (keyword == null) {
+            return null;
+        }
+        String likeKeyword = "%" + keyword.toLowerCase(Locale.ROOT) + "%";
+        return (root, query, builder) -> builder.or(
+                builder.like(builder.lower(root.get("title")), likeKeyword),
+                builder.like(builder.lower(root.get("noteNo")), likeKeyword)
+        );
+    }
+
+    private Sort resolveSort(MeetingNoteListQuery query) {
+        String requestedSortBy = normalizeNullable(query == null ? null : query.sortBy());
+        String requestedSortDir = normalizeNullable(query == null ? null : query.sortDir());
+
+        String sortBy = switch (requestedSortBy == null ? "" : requestedSortBy.toLowerCase(Locale.ROOT)) {
+            case "docno", "noteno" -> "noteNo";
+            case "date", "meetingdate" -> "meetingDate";
+            case "title" -> "title";
+            case "facilitator", "facilitatorid" -> "facilitatorId";
+            case "createdat" -> "createdAt";
+            case "updatedat" -> "updatedAt";
+            default -> "id";
+        };
+
+        Sort.Direction direction = "asc".equalsIgnoreCase(requestedSortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        return Sort.by(direction, sortBy);
     }
 
     private String normalizeActionStatus(String rawStatus) {

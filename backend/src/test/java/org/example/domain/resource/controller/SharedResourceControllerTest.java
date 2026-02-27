@@ -3,6 +3,7 @@ package org.example.domain.resource.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.domain.resource.dto.SharedResourceCreateRequest;
 import org.example.domain.resource.dto.SharedResourceDetailResponse;
+import org.example.domain.resource.dto.SharedResourceListQuery;
 import org.example.domain.resource.dto.SharedResourceListResponse;
 import org.example.domain.resource.dto.SharedResourceUpdateRequest;
 import org.example.domain.resource.service.SharedResourceService;
@@ -44,7 +45,13 @@ class SharedResourceControllerTest {
     @Test
     @DisplayName("리소스 목록 조회는 페이지 파라미터를 전달한다")
     void getResources() throws Exception {
-        when(sharedResourceService.findPage(1, 5)).thenReturn(new PageImpl<>(
+        SharedResourceListQuery expectedQuery = new SharedResourceListQuery(
+                null,
+                null,
+                "id",
+                "desc"
+        );
+        when(sharedResourceService.findPage(1, 5, expectedQuery)).thenReturn(new PageImpl<>(
                 List.of(listResponse(1L)),
                 PageRequest.of(1, 5),
                 6
@@ -59,7 +66,7 @@ class SharedResourceControllerTest {
                 .andExpect(jsonPath("$.number").value(1))
                 .andExpect(jsonPath("$.size").value(5));
 
-        verify(sharedResourceService).findPage(1, 5);
+        verify(sharedResourceService).findPage(1, 5, expectedQuery);
     }
 
     @Test

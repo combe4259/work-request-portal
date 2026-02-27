@@ -18,11 +18,23 @@ const CATEGORY_STYLES: Record<KBCategory, string> = {
 
 export default function KnowledgeBasePage() {
   const navigate = useNavigate()
-  const { data, isPending, isError, refetch } = useKnowledgeBaseArticlesQuery()
-
   const [search, setSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState<KBCategory | '전체'>('전체')
   const [activeTags, setActiveTags] = useState<string[]>([])
+
+  const listParams = useMemo(
+    () => ({
+      search,
+      category: activeCategory,
+      tags: [...activeTags].sort((a, b) => a.localeCompare(b, 'ko-KR')),
+      sortBy: 'updatedAt',
+      sortDir: 'desc' as const,
+      page: 0,
+      size: 500,
+    }),
+    [activeCategory, activeTags, search]
+  )
+  const { data, isPending, isError, refetch } = useKnowledgeBaseArticlesQuery(listParams)
 
   const articles = data ?? []
 
@@ -30,21 +42,6 @@ export default function KnowledgeBasePage() {
     () => Array.from(new Set(articles.flatMap((article) => article.tags))).sort((a, b) => a.localeCompare(b, 'ko-KR')),
     [articles]
   )
-
-  const filtered = useMemo(() => {
-    const keyword = search.trim().toLowerCase()
-    return articles.filter((article) => {
-      const matchSearch = keyword.length === 0
-        || article.title.toLowerCase().includes(keyword)
-        || article.summary.toLowerCase().includes(keyword)
-        || article.tags.some((tag) => tag.toLowerCase().includes(keyword))
-        || article.docNo.toLowerCase().includes(keyword)
-
-      const matchCategory = activeCategory === '전체' || article.category === activeCategory
-      const matchTags = activeTags.length === 0 || activeTags.every((tag) => article.tags.includes(tag))
-      return matchSearch && matchCategory && matchTags
-    })
-  }, [activeCategory, activeTags, articles, search])
 
   const toggleTag = (tag: string) => {
     setActiveTags((prev) => prev.includes(tag) ? prev.filter((item) => item !== tag) : [...prev, tag])
@@ -56,7 +53,7 @@ export default function KnowledgeBasePage() {
     <div className="p-4 sm:p-6 space-y-4">
       <PageHeader
         title="지식 베이스"
-        subtitle={`업무와 연결된 기술 문서 ${filtered.length}건`}
+        subtitle={`업무와 연결된 기술 문서 ${articles.length}건`}
         action={{ label: '문서 등록', onClick: () => navigate('/knowledge-base/new'), icon: <PlusIcon /> }}
       />
 
@@ -126,7 +123,7 @@ export default function KnowledgeBasePage() {
           actionLabel="다시 시도"
           onAction={() => { void refetch() }}
         />
-      ) : filtered.length === 0 ? (
+      ) : articles.length === 0 ? (
         <EmptyState
           title="검색 결과가 없습니다"
           description="검색어나 필터 조건을 조정해보세요."
@@ -139,7 +136,7 @@ export default function KnowledgeBasePage() {
         />
       ) : (
         <div className="grid grid-cols-3 gap-4">
-          {filtered.map((article) => (
+          {articles.map((article) => (
             <KBCard
               key={article.id}
               article={article}

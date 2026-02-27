@@ -68,7 +68,14 @@ export interface UpdateResourceInput {
   description: string
 }
 
-const LIST_FETCH_SIZE = 500
+export interface ResourceListParams {
+  search?: string
+  category?: ResourceCategory | '전체'
+  sortBy?: string
+  sortDir?: 'asc' | 'desc'
+  page?: number
+  size?: number
+}
 
 function normalizeCategory(value: string | null | undefined): ResourceCategory {
   if (value === 'Figma' || value === 'Notion' || value === 'GitHub' || value === 'Confluence' || value === '문서' || value === '기타') {
@@ -106,9 +113,16 @@ function mapListItem(item: ApiResourceListItem): Resource {
   }
 }
 
-export async function listResources(): Promise<Resource[]> {
+export async function listResources(params: ResourceListParams): Promise<Resource[]> {
   const { data } = await api.get<ApiPageResponse<ApiResourceListItem>>('/resources', {
-    params: { page: 0, size: LIST_FETCH_SIZE },
+    params: {
+      q: params.search?.trim() || undefined,
+      category: params.category && params.category !== '전체' ? params.category : undefined,
+      sortBy: params.sortBy ?? 'createdAt',
+      sortDir: params.sortDir ?? 'desc',
+      page: params.page ?? 0,
+      size: params.size ?? 500,
+    },
   })
 
   return data.content.map(mapListItem)

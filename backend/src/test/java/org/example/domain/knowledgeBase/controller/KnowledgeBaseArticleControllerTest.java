@@ -3,6 +3,7 @@ package org.example.domain.knowledgeBase.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.domain.knowledgeBase.dto.KnowledgeBaseArticleCreateRequest;
 import org.example.domain.knowledgeBase.dto.KnowledgeBaseArticleDetailResponse;
+import org.example.domain.knowledgeBase.dto.KnowledgeBaseArticleListQuery;
 import org.example.domain.knowledgeBase.dto.KnowledgeBaseArticleListResponse;
 import org.example.domain.knowledgeBase.dto.KnowledgeBaseArticleUpdateRequest;
 import org.example.domain.knowledgeBase.service.KnowledgeBaseArticleService;
@@ -43,7 +44,14 @@ class KnowledgeBaseArticleControllerTest {
     @Test
     @DisplayName("지식베이스 목록 조회는 페이지 파라미터를 전달한다")
     void getArticles() throws Exception {
-        when(knowledgeBaseArticleService.findPage(1, 5)).thenReturn(new PageImpl<>(
+        KnowledgeBaseArticleListQuery expectedQuery = new KnowledgeBaseArticleListQuery(
+                null,
+                null,
+                null,
+                "id",
+                "desc"
+        );
+        when(knowledgeBaseArticleService.findPage(1, 5, expectedQuery)).thenReturn(new PageImpl<>(
                 List.of(listResponse(1L)),
                 PageRequest.of(1, 5),
                 6
@@ -58,7 +66,7 @@ class KnowledgeBaseArticleControllerTest {
                 .andExpect(jsonPath("$.number").value(1))
                 .andExpect(jsonPath("$.size").value(5));
 
-        verify(knowledgeBaseArticleService).findPage(1, 5);
+        verify(knowledgeBaseArticleService).findPage(1, 5, expectedQuery);
     }
 
     @Test

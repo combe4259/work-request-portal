@@ -88,7 +88,15 @@ export interface UpdateKnowledgeBaseArticleInput {
   relatedDocs?: string[]
 }
 
-const LIST_FETCH_SIZE = 500
+export interface KnowledgeBaseArticleListParams {
+  search?: string
+  category?: KBCategory | '전체'
+  tags?: string[]
+  sortBy?: string
+  sortDir?: 'asc' | 'desc'
+  page?: number
+  size?: number
+}
 
 function mapUserLabel(userId: number | null | undefined): string {
   if (userId == null) {
@@ -124,9 +132,21 @@ function mapListItem(item: ApiKnowledgeBaseListItem): KBArticle {
   }
 }
 
-export async function listKnowledgeBaseArticles(): Promise<KBArticle[]> {
+export async function listKnowledgeBaseArticles(params: KnowledgeBaseArticleListParams): Promise<KBArticle[]> {
+  const normalizedTags = (params.tags ?? [])
+    .map((tag) => tag.trim())
+    .filter((tag) => tag.length > 0)
+
   const { data } = await api.get<ApiPageResponse<ApiKnowledgeBaseListItem>>('/knowledge-base', {
-    params: { page: 0, size: LIST_FETCH_SIZE },
+    params: {
+      q: params.search?.trim() || undefined,
+      category: params.category && params.category !== '전체' ? params.category : undefined,
+      tags: normalizedTags.length > 0 ? normalizedTags : undefined,
+      sortBy: params.sortBy ?? 'updatedAt',
+      sortDir: params.sortDir ?? 'desc',
+      page: params.page ?? 0,
+      size: params.size ?? 500,
+    },
   })
 
   return data.content.map(mapListItem)

@@ -6,6 +6,7 @@ import org.example.domain.meetingNote.dto.MeetingActionItemResponse;
 import org.example.domain.meetingNote.dto.MeetingActionItemStatusUpdateRequest;
 import org.example.domain.meetingNote.dto.MeetingNoteCreateRequest;
 import org.example.domain.meetingNote.dto.MeetingNoteDetailResponse;
+import org.example.domain.meetingNote.dto.MeetingNoteListQuery;
 import org.example.domain.meetingNote.dto.MeetingNoteListResponse;
 import org.example.domain.meetingNote.dto.MeetingNoteRelatedRefItemRequest;
 import org.example.domain.meetingNote.dto.MeetingNoteRelatedRefResponse;
@@ -39,6 +40,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -111,14 +113,18 @@ class MeetingNoteServiceImplTest {
     @DisplayName("목록 조회 시 페이징/정렬을 적용하고 액션 요약을 함께 반환한다")
     void findPage() {
         MeetingNote entity = sampleMeetingNote(1L);
-        when(meetingNoteRepository.findAll(any(Pageable.class)))
+        when(meetingNoteRepository.findAll(any(Specification.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(entity)));
         when(meetingActionItemRepository.countByMeetingNoteId(1L)).thenReturn(4L);
         when(meetingActionItemRepository.countByMeetingNoteIdAndStatus(1L, "완료")).thenReturn(2L);
 
-        Page<MeetingNoteListResponse> page = meetingNoteService.findPage(1, 10);
+        Page<MeetingNoteListResponse> page = meetingNoteService.findPage(
+                1,
+                10,
+                new MeetingNoteListQuery(null, "id", "desc")
+        );
 
-        verify(meetingNoteRepository).findAll(pageableCaptor.capture());
+        verify(meetingNoteRepository).findAll(any(Specification.class), pageableCaptor.capture());
         Pageable pageable = pageableCaptor.getValue();
         Sort.Order idOrder = pageable.getSort().getOrderFor("id");
 

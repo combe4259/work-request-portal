@@ -2,6 +2,7 @@ package org.example.domain.knowledgeBase.service;
 
 import org.example.domain.knowledgeBase.dto.KnowledgeBaseArticleCreateRequest;
 import org.example.domain.knowledgeBase.dto.KnowledgeBaseArticleDetailResponse;
+import org.example.domain.knowledgeBase.dto.KnowledgeBaseArticleListQuery;
 import org.example.domain.knowledgeBase.dto.KnowledgeBaseArticleListResponse;
 import org.example.domain.knowledgeBase.dto.KnowledgeBaseRelatedRefResponse;
 import org.example.domain.knowledgeBase.dto.KnowledgeBaseRelatedRefsUpdateRequest;
@@ -12,7 +13,7 @@ import java.util.List;
 
 public interface KnowledgeBaseArticleService {
 
-    Page<KnowledgeBaseArticleListResponse> findPage(int page, int size);
+    Page<KnowledgeBaseArticleListResponse> findPage(int page, int size, KnowledgeBaseArticleListQuery query);
 
     KnowledgeBaseArticleDetailResponse findById(Long id);
 
