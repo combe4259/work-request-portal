@@ -13,6 +13,7 @@
 
 ## 2. 공통 규약
 - Base URL: `/api`
+- 예외 엔드포인트: Slack 인터랙션 수신은 `/slack/interactions` (Base URL `/api` 미적용)
 - 인증: `Authorization: Bearer <accessToken>` (`/auth/signup`, `/auth/login` 제외)
 - 팀 스코프: 팀 데이터는 `teamId` 기준으로 검증/조회
 - 페이징: `page`(0-base), `size`
@@ -180,6 +181,11 @@ Workflow 동시편집 규약(낙관적 락):
 | PUT | `/resources/{id}` | `SharedResourceUpdateRequest` | `204` | [x] |
 | DELETE | `/resources/{id}` | - | `204` | [x] |
 
+리소스 상세 UX 정책(프론트):
+- 별도 `/resources/:id` 상세 화면은 현재 미도입
+- 목록 카드 클릭 시 `url` 원문으로 이동
+- 상세 편집은 `/resources/:id/edit`에서 처리
+
 ### 4.10 Comment + Attachment (P1)
 | Method | Path | 핵심 Query/Body | Response | 구현 |
 |---|---|---|---|---|
@@ -217,6 +223,11 @@ Workflow 동시편집 규약(낙관적 락):
 | PATCH | `/users/me/password` | Header: Bearer + `{currentPassword,newPassword}` | `204` | [x] |
 | GET | `/users/me/preferences` | Header: Bearer | `{notification:{...},display:{landing,rowCount}}` | [x] |
 | PATCH | `/users/me/preferences` | Header: Bearer + `{notification:{...},display:{landing,rowCount}}` | same | [x] |
+
+### 4.13 External Integration (Slack)
+| Method | Path | Request | Response | 구현 |
+|---|---|---|---|---|
+| POST | `/slack/interactions` | `application/x-www-form-urlencoded`, `payload=<json>` | `200` | [x] |
 
 ## 5. 스키마-프론트 갭 및 보완 필요
 - 서버 목록 API의 검색/정렬/필터 기능이 도메인별로 완전 일치하지 않음(현재 프론트 보정 포함)

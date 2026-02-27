@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent as ReactMouseEvent } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useBlocker, useLocation, useNavigate } from 'react-router-dom'
 import { Client } from '@stomp/stompjs'
 import {
   ReactFlow,
@@ -33,6 +33,7 @@ import TestScenarioDetailBody, { type TestScenarioRelatedDocItem } from '@/compo
 import DefectDetailBody from '@/components/defect/DefectDetailBody'
 import DeploymentDetailBody from '@/components/deployment/DeploymentDetailBody'
 import KnowledgeBaseDetailBody from '@/components/knowledge-base/KnowledgeBaseDetailBody'
+import ConfirmDialog from '@/components/common/ConfirmDialog'
 import { TypeBadge, PriorityBadge, StatusBadge } from '@/components/work-request/Badges'
 import { TechTypeBadge } from '@/components/tech-task/Badges'
 import { TestTypeBadge, TestStatusBadge } from '@/components/test-scenario/Badges'
@@ -506,6 +507,9 @@ export default function WorkRequestFlowPage() {
   const [drawerDetail, setDrawerDetail] = useState<DrawerDetailPayload | null>(null)
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
   const [isFlowHydrated, setIsFlowHydrated] = useState(false)
+  const [isFlowUiSavePending, setIsFlowUiSavePending] = useState(false)
+  const [isFlowUiSaving, setIsFlowUiSaving] = useState(false)
+  const [isLeaveConfirmOpen, setIsLeaveConfirmOpen] = useState(false)
 
   const positionsRef = useRef<Record<string, { x: number; y: number }>>({})
   const nodesRef = useRef<Node[]>([])
@@ -517,6 +521,7 @@ export default function WorkRequestFlowPage() {
   const flowUiRemoteSyncTimerRef = useRef<number | null>(null)
   const skipNextFlowUiPersistRef = useRef(false)
   const hasUnsavedDraftRef = useRef(false)
+  const leaveConfirmIntentRef = useRef<'leave' | null>(null)
   const selectedNodeIdRef = useRef<string | null>(null)
   const stompClientRef = useRef<Client | null>(null)
   const drawerResizeStartRef = useRef<{ clientX: number; width: number } | null>(null)
@@ -734,6 +739,8 @@ export default function WorkRequestFlowPage() {
       setSelectedNodeId(null)
       setSelectedEdgeId(null)
       flowUiVersionRef.current = 0
+      setIsFlowUiSavePending(false)
+      setIsFlowUiSaving(false)
       closeDrawer()
       setIsFlowHydrated(false)
       setFlowError('')
@@ -888,10 +895,23 @@ export default function WorkRequestFlowPage() {
     () => nodes.some((node) => Boolean((node.data as FlowNodeCardData | undefined)?.isDraft)),
     [nodes]
   )
+  const shouldBlockPageLeave = hasUnsavedDraft || isFlowUiSavePending || isFlowUiSaving
+  const leaveBlocker = useBlocker(shouldBlockPageLeave)
+
+  useEffect(() => {
+    if (leaveBlocker.state === 'blocked') {
+      setIsLeaveConfirmOpen(true)
+      return
+    }
+    leaveConfirmIntentRef.current = null
+    if (leaveBlocker.state === 'unblocked') {
+      setIsLeaveConfirmOpen(false)
+    }
+  }, [leaveBlocker.state])
 
   useEffect(() => {
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
-      if (!hasUnsavedDraft) {
+      if (!shouldBlockPageLeave) {
         return
       }
       event.preventDefault()
@@ -900,11 +920,19 @@ export default function WorkRequestFlowPage() {
 
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
-  }, [hasUnsavedDraft])
+  }, [shouldBlockPageLeave])
 
   useEffect(() => {
     hasUnsavedDraftRef.current = hasUnsavedDraft
   }, [hasUnsavedDraft])
+
+  const handleLeavePage = useCallback(() => {
+    leaveConfirmIntentRef.current = 'leave'
+    setIsLeaveConfirmOpen(false)
+    if (leaveBlocker.state === 'blocked') {
+      leaveBlocker.proceed()
+    }
+  }, [leaveBlocker])
 
   useEffect(() => {
     selectedNodeIdRef.current = selectedNodeId
@@ -951,11 +979,14 @@ export default function WorkRequestFlowPage() {
 
   useEffect(() => {
     if (!isFlowHydrated || !selectedWorkRequestId) {
+      setIsFlowUiSavePending(false)
+      setIsFlowUiSaving(false)
       return
     }
 
     if (skipNextFlowUiPersistRef.current) {
       skipNextFlowUiPersistRef.current = false
+      setIsFlowUiSavePending(false)
       return
     }
 
@@ -963,9 +994,12 @@ export default function WorkRequestFlowPage() {
       window.clearTimeout(flowUiSaveTimerRef.current)
       flowUiSaveTimerRef.current = null
     }
+    setIsFlowUiSavePending(true)
 
     flowUiSaveTimerRef.current = window.setTimeout(() => {
       flowUiSaveTimerRef.current = null
+      setIsFlowUiSavePending(false)
+      setIsFlowUiSaving(true)
       void saveFlowUiState(selectedWorkRequestId, buildFlowUiPayload())
         .then(() => {
           flowUiVersionRef.current += 1
@@ -981,6 +1015,9 @@ export default function WorkRequestFlowPage() {
           ]).then(([data, flowUiData]) => {
             setFlowFromApiData(data, selectedNodeIdRef.current, flowUiData)
           })
+        })
+        .finally(() => {
+          setIsFlowUiSaving(false)
         })
     }, 600)
 
@@ -1844,6 +1881,34 @@ export default function WorkRequestFlowPage() {
           </aside>
         </div>
       ) : null}
+
+      <ConfirmDialog
+        open={isLeaveConfirmOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsLeaveConfirmOpen(false)
+            if (leaveConfirmIntentRef.current === 'leave') {
+              leaveConfirmIntentRef.current = null
+              return
+            }
+            if (leaveBlocker.state === 'blocked') {
+              leaveBlocker.reset()
+            }
+            return
+          }
+          setIsLeaveConfirmOpen(true)
+        }}
+        title={hasUnsavedDraft ? '저장되지 않은 초안이 있습니다.' : '저장되지 않은 변경사항이 있습니다.'}
+        description={
+          hasUnsavedDraft
+            ? '지금 페이지를 벗어나면 저장하지 않은 카드 초안이 사라집니다. 그래도 이동할까요?'
+            : '아직 서버에 저장 중인 변경이 있습니다. 지금 이동하면 최신 변경이 반영되지 않을 수 있습니다.'
+        }
+        confirmText="저장 안 하고 나가기"
+        cancelText="계속 편집하기"
+        destructive
+        onConfirm={handleLeavePage}
+      />
     </div>
   )
 }

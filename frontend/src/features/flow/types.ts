@@ -87,10 +87,3 @@ export interface FlowUiStateSaveRequest {
   edges: FlowUiEdge[]
   customNodes: FlowUiCustomNode[]
 }
-
-export interface AddItemModalConfig {
-  parentType: FlowParentType
-  parentId: number
-  workRequestId: number
-  allowedTypes: FlowItemType[]
-}

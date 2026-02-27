@@ -170,7 +170,6 @@ export function FlowNodeCard({ data, isRoot }: FlowNodeCardProps) {
                 event.stopPropagation()
                 data.onDraftTitleChange?.(data.id, event.target.value)
               }}
-              onBlur={() => data.onDraftTitleCommit?.(data.id)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') {
                   event.preventDefault()

@@ -9,7 +9,9 @@ import PageHeader from '@/components/common/PageHeader'
 import { useDeleteResourceMutation } from '@/features/resource/mutations'
 import { useResourcesQuery } from '@/features/resource/queries'
 
-const CATEGORY_OPTIONS = ['전체', 'Figma', 'GitHub', 'Confluence', 'Notion', '문서', '기타']
+type ResourceFilterCategory = '전체' | ResourceCategory
+
+const CATEGORY_OPTIONS: ResourceFilterCategory[] = ['전체', 'Figma', 'GitHub', 'Confluence', 'Notion', '문서', '기타']
 
 const CATEGORY_STYLE: Record<ResourceCategory, { bg: string; text: string; icon: React.ReactNode }> = {
   Figma: { bg: 'bg-pink-50', text: 'text-pink-600', icon: <FigmaIcon /> },
@@ -31,7 +33,7 @@ function hostname(url: string) {
 export default function ResourcesPage() {
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
-  const [filterCategory, setFilterCategory] = useState('전체')
+  const [filterCategory, setFilterCategory] = useState<ResourceFilterCategory>('전체')
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null)
 
   const listParams = useMemo(
@@ -71,7 +73,13 @@ export default function ResourcesPage() {
             className="w-full h-8 pl-8 pr-3 text-[13px] border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:border-brand focus:bg-white transition-colors"
           />
         </div>
-        <FilterSelect value={filterCategory} onChange={setFilterCategory} options={CATEGORY_OPTIONS} placeholder="카테고리" className="w-[120px]" />
+        <FilterSelect
+          value={filterCategory}
+          onChange={(value) => setFilterCategory(CATEGORY_OPTIONS.includes(value as ResourceFilterCategory) ? value as ResourceFilterCategory : '전체')}
+          options={CATEGORY_OPTIONS}
+          placeholder="카테고리"
+          className="w-[120px]"
+        />
       </div>
 
       {isPending ? (
