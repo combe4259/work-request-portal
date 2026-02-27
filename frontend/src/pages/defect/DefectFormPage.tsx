@@ -464,14 +464,14 @@ export default function DefectFormPage() {
             <button
               type="button"
               onClick={() => navigate(-1)}
-              className="h-9 px-4 text-[13px] font-medium text-gray-500 border border-gray-200 rounded-lg hover:bg-white transition-colors"
+              className="h-8 px-3 text-[13px] font-medium text-gray-500 border border-gray-200 rounded-lg hover:bg-white transition-colors"
             >
               취소
             </button>
             <button
               type="submit"
               disabled={isMutating}
-              className="h-9 px-5 text-[13px] font-semibold text-white bg-brand hover:bg-brand-hover rounded-lg transition-colors disabled:opacity-60 flex items-center gap-2"
+              className="h-8 px-4 text-[13px] font-semibold text-white bg-brand hover:bg-brand-hover rounded-lg transition-colors disabled:opacity-60 flex items-center gap-2"
             >
               {isMutating ? <><SpinnerIcon />{isEdit ? '수정 중...' : '등록 중...'}</> : isEdit ? '수정 완료' : '등록하기'}
             </button>

@@ -12,6 +12,9 @@ export interface DeploymentListParams {
   filterType: DeployType | '전체'
   filterEnv: DeployEnv | '전체'
   filterStatus: DeployStatus | '전체'
+  filterManagerId: number | null
+  scheduledFrom?: string
+  scheduledTo?: string
   sortKey: DeploymentSortKey
   sortDir: DeploymentSortDir
   page: number
@@ -92,6 +95,9 @@ export interface UpdateDeploymentInput {
 
 interface ApiPageResponse<T> {
   content: T[]
+  totalElements: number
+  totalPages: number
+  number: number
 }
 
 interface ApiDeploymentListItem {
@@ -181,15 +187,7 @@ interface ApiDeploymentRelatedRefResponse {
   title: string | null
 }
 
-const STATUS_ORDER: Record<string, number> = {
-  진행중: 0,
-  대기: 1,
-  완료: 2,
-  실패: 3,
-  롤백: 4,
-}
-
-const LIST_FETCH_SIZE = 500
+const SUMMARY_FETCH_SIZE = 500
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
 
 function toFallbackDocNo(refType: string, refId: number): string {
@@ -275,49 +273,40 @@ function getSummary(source: Deployment[]): DeploymentSummary {
 }
 
 export async function listDeployments(params: DeploymentListParams): Promise<DeploymentListResult> {
-  const { data } = await api.get<ApiPageResponse<ApiDeploymentListItem>>('/deployments', {
-    params: { page: 0, size: LIST_FETCH_SIZE },
-  })
+  const requestedPage = Math.max(0, params.page - 1)
 
-  const source = data.content.map(mapListItem)
+  const [listResponse, summaryResponse] = await Promise.all([
+    api.get<ApiPageResponse<ApiDeploymentListItem>>('/deployments', {
+      params: {
+        q: params.search.trim() || undefined,
+        type: params.filterType === '전체' ? undefined : params.filterType,
+        environment: params.filterEnv === '전체' ? undefined : params.filterEnv,
+        status: params.filterStatus === '전체' ? undefined : params.filterStatus,
+        managerId: params.filterManagerId ?? undefined,
+        scheduledFrom: params.scheduledFrom || undefined,
+        scheduledTo: params.scheduledTo || undefined,
+        sortBy: params.sortKey,
+        sortDir: params.sortDir,
+        page: requestedPage,
+        size: params.pageSize,
+      },
+    }),
+    api.get<ApiPageResponse<ApiDeploymentListItem>>('/deployments', {
+      params: { page: 0, size: SUMMARY_FETCH_SIZE },
+    }),
+  ])
 
-  const filtered = source.filter((item) => {
-    const keyword = params.search.trim()
-    const matchSearch = keyword.length === 0
-      || item.title.includes(keyword)
-      || item.docNo.includes(keyword)
-      || item.version.includes(keyword)
-    const matchType = params.filterType === '전체' || item.type === params.filterType
-    const matchEnv = params.filterEnv === '전체' || item.env === params.filterEnv
-    const matchStatus = params.filterStatus === '전체' || item.status === params.filterStatus
-    return matchSearch && matchType && matchEnv && matchStatus
-  })
-
-  const sorted = [...filtered].sort((a, b) => {
-    const sortFactor = params.sortDir === 'asc' ? 1 : -1
-    if (params.sortKey === 'docNo') {
-      return a.docNo.localeCompare(b.docNo, 'ko-KR', { numeric: true }) * sortFactor
-    }
-    if (params.sortKey === 'status') {
-      return ((STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9)) * sortFactor
-    }
-
-    const aDate = a.deployDate ? new Date(a.deployDate).getTime() : Number.MAX_SAFE_INTEGER
-    const bDate = b.deployDate ? new Date(b.deployDate).getTime() : Number.MAX_SAFE_INTEGER
-    return (aDate - bDate) * sortFactor
-  })
-
-  const totalPages = Math.max(1, Math.ceil(sorted.length / params.pageSize))
-  const safePage = Math.min(Math.max(1, params.page), totalPages)
-  const start = (safePage - 1) * params.pageSize
-  const items = sorted.slice(start, start + params.pageSize)
+  const listData = listResponse.data
+  const items = listData.content.map(mapListItem)
+  const summarySource = summaryResponse.data.content.map(mapListItem)
+  const totalPages = Math.max(1, listData.totalPages || 1)
 
   return {
     items,
-    total: sorted.length,
+    total: listData.totalElements ?? items.length,
     totalPages,
-    page: safePage,
-    summary: getSummary(source),
+    page: (listData.number ?? 0) + 1,
+    summary: getSummary(summarySource),
   }
 }
 

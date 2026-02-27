@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import type { KBArticle, KBCategory } from '@/types/knowledge-base'
 import { PlusIcon, SearchIcon } from '@/components/common/Icons'
 import { EmptyState, ErrorState, LoadingState } from '@/components/common/AsyncState'
+import PageHeader from '@/components/common/PageHeader'
 import { useKnowledgeBaseArticlesQuery } from '@/features/knowledge-base/queries'
 
 const CATEGORIES: KBCategory[] = ['개발 가이드', '아키텍처', '트러블슈팅', '온보딩', '기타']
@@ -52,23 +53,15 @@ export default function KnowledgeBasePage() {
   const categoryCount = (category: KBCategory) => articles.filter((article) => article.category === category).length
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-[18px] font-bold text-gray-900">지식 베이스</h1>
-          <p className="text-[12px] text-gray-400 mt-0.5">업무와 연결된 기술 문서 {filtered.length}건</p>
-        </div>
-        <button
-          onClick={() => navigate('/knowledge-base/new')}
-          className="flex items-center gap-1.5 h-8 px-3 bg-brand hover:bg-brand-hover text-white text-[13px] font-semibold rounded-lg transition-colors"
-        >
-          <PlusIcon />
-          문서 등록
-        </button>
-      </div>
+    <div className="p-4 sm:p-6 space-y-4">
+      <PageHeader
+        title="지식 베이스"
+        subtitle={`업무와 연결된 기술 문서 ${filtered.length}건`}
+        action={{ label: '문서 등록', onClick: () => navigate('/knowledge-base/new'), icon: <PlusIcon /> }}
+      />
 
-      <div className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] px-4 py-3 space-y-3">
-        <div className="relative">
+      <div className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] px-3 sm:px-4 py-3 space-y-3">
+        <div className="relative min-w-[220px]">
           <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400"><SearchIcon /></span>
           <input
             type="text"

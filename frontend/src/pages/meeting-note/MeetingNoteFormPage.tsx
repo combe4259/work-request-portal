@@ -128,14 +128,14 @@ export default function MeetingNoteFormPage() {
             <button
               type="button"
               onClick={() => navigate(-1)}
-              className="h-9 px-4 text-[13px] font-medium text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              className="h-8 px-3 text-[13px] font-medium text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
             >
               취소
             </button>
             <button
               type="submit"
               disabled={createMeetingNote.isPending}
-              className="h-9 px-5 text-[13px] font-semibold text-white bg-brand hover:bg-brand-hover rounded-lg transition-colors disabled:opacity-60 flex items-center gap-1.5"
+              className="h-8 px-4 text-[13px] font-semibold text-white bg-brand hover:bg-brand-hover rounded-lg transition-colors disabled:opacity-60 flex items-center gap-1.5"
             >
               {createMeetingNote.isPending ? (
                 <><SpinnerIcon />등록 중...</>

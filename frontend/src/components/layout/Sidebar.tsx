@@ -29,6 +29,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: '개발 사이클',
     items: [
+      { label: '워크플로우', path: '/workflow', icon: <WorkflowIcon /> },
       { label: '테스트 시나리오', path: '/test-scenarios', icon: <TestIcon />, badge: 3 },
       { label: '결함 목록', path: '/defects', icon: <DefectIcon />, badge: 7 },
       { label: '배포 관리', path: '/deployments', icon: <DeployIcon /> },
@@ -234,6 +235,17 @@ function DeployIcon() {
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path d="M8 11V4M8 4L5 7M8 4L11 7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M2 13H14" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function WorkflowIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <rect x="1.5" y="2" width="4" height="3" rx="0.8" stroke="currentColor" strokeWidth="1.3" />
+      <rect x="10.5" y="2" width="4" height="3" rx="0.8" stroke="currentColor" strokeWidth="1.3" />
+      <rect x="6" y="11" width="4" height="3" rx="0.8" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M5.5 3.5H10.5M8 3.5V9.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
     </svg>
   )
 }

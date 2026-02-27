@@ -1,4 +1,5 @@
 import type { TechTaskType } from '@/types/tech-task'
+import BadgePill from '@/components/common/BadgePill'
 
 const TECH_TYPE_STYLES: Record<TechTaskType, string> = {
   '리팩토링': 'bg-slate-100 text-slate-600',
@@ -10,9 +11,5 @@ const TECH_TYPE_STYLES: Record<TechTaskType, string> = {
 }
 
 export function TechTypeBadge({ type }: { type: TechTaskType }) {
-  return (
-    <span className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-medium ${TECH_TYPE_STYLES[type]}`}>
-      {type}
-    </span>
-  )
+  return <BadgePill label={type} tone={TECH_TYPE_STYLES[type]} />
 }

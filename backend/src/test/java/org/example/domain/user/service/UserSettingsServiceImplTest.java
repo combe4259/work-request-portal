@@ -69,7 +69,7 @@ class UserSettingsServiceImplTest {
     @DisplayName("프로필 수정 시 중복 이메일이면 409를 반환한다")
     void updateMyProfileConflictWhenEmailDuplicated() {
         PortalUser user = activeUser(1L, "tester@example.com");
-        UserProfileUpdateRequest request = new UserProfileUpdateRequest("새이름", "dup@example.com", "PM", "brand", null);
+        UserProfileUpdateRequest request = new UserProfileUpdateRequest("새이름", "dup@example.com", "PM", "brand", null, null);
 
         when(jwtTokenProvider.extractUserId("token-value")).thenReturn(1L);
         when(portalUserRepository.findById(1L)).thenReturn(Optional.of(user));

@@ -9,7 +9,7 @@
 - 프론트 라우팅/연동: `frontend/src/router/index.tsx`, `frontend/src/features/**/service.ts`
 - DB 마이그레이션: `backend/src/main/resources/db/migration/*.sql`
 
-기준일: **2026-02-25**
+기준일: **2026-02-26**
 
 ## 2. 공통 규약
 - Base URL: `/api`
@@ -24,7 +24,7 @@
 - topic prefix: `/topic`
 
 ## 3. 구현 상태 요약 (2026-02-25)
-- 구현됨: `Auth`, `Team(핵심)`, `WorkRequest`, `TechTask`, `TestScenario`, `Defect`, `Deployment`, `MeetingNote`, `Idea`, `KnowledgeBase`, `Resource`, `Comment`, `Attachment`, `Notification`, `Dashboard`, `Statistics`, `DocumentIndex`, `ActivityLog`
+- 구현됨: `Auth`, `Team(핵심)`, `WorkRequest`, `Flow`, `TechTask`, `TestScenario`, `Defect`, `Deployment`, `MeetingNote`, `Idea`, `KnowledgeBase`, `Resource`, `Comment`, `Attachment`, `Notification`, `Dashboard`, `Statistics`, `DocumentIndex`, `ActivityLog`
 - 부분 구현:
   - 일부 목록 API는 서버에서 `page/size` 중심으로 동작하며, 상세 검색/정렬/필터는 프론트 보정 포함
 
@@ -59,6 +59,23 @@ Auth/Team 응답 필드:
 | GET | `/work-requests/{id}/related-refs` | - | `WorkRequestRelatedRefResponse[]` | [x] |
 | PUT | `/work-requests/{id}/related-refs` | `WorkRequestRelatedRefsUpdateRequest` | `204` | [x] |
 | PATCH | `/work-requests/{id}/status` | `{status,statusNote?}` | `204` | [x] |
+
+### 4.2.1 Workflow (P0)
+| Method | Path | 핵심 Query/Body | Response | 구현 |
+|---|---|---|---|---|
+| GET | `/work-requests/{workRequestId}/flow-chain` | - | `FlowChainResponse` | [x] |
+| POST | `/work-requests/{workRequestId}/flow-items` | `FlowItemCreateRequest` | `FlowItemCreateResponse` | [x] |
+| GET | `/work-requests/{workRequestId}/flow-ui` | - | `FlowUiStateResponse(version 포함)` | [x] |
+| PUT | `/work-requests/{workRequestId}/flow-ui` | `FlowUiStateRequest(expectedVersion 필수)` | `204` | [x] |
+
+Workflow 실시간 동기화(STOMP):
+- `SUBSCRIBE /topic/work-requests/{workRequestId}/flow-ui`
+- `PUT /work-requests/{workRequestId}/flow-ui` 성공 시 변경 이벤트가 브로드캐스트된다.
+
+Workflow 동시편집 규약(낙관적 락):
+- 클라이언트는 `GET flow-ui` 응답의 `version`을 보관한다.
+- 저장 시 `PUT flow-ui` 본문에 `expectedVersion`을 포함한다.
+- 서버 현재 버전과 다르면 `409 Conflict`를 반환한다.
 
 ### 4.3 TechTask (P0)
 | Method | Path | 핵심 Query/Body | Response | 구현 |

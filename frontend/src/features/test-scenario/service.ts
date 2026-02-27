@@ -12,6 +12,9 @@ export interface TestScenarioListParams {
   filterType: TestScenarioType | '전체'
   filterPriority: Priority | '전체'
   filterStatus: TestStatus | '전체'
+  filterAssigneeId: number | null
+  deadlineFrom?: string
+  deadlineTo?: string
   sortKey: TestScenarioSortKey
   sortDir: TestScenarioSortDir
   page: number
@@ -86,8 +89,19 @@ export interface UpdateTestScenarioInput {
   relatedDoc?: string
 }
 
+export type TestScenarioExecutionResult = 'PASS' | 'FAIL' | 'SKIP'
+
+export interface UpdateTestScenarioExecutionInput {
+  stepResults: TestScenarioExecutionResult[]
+  actualResult?: string
+  executedAt?: string
+}
+
 interface ApiPageResponse<T> {
   content: T[]
+  totalElements: number
+  totalPages: number
+  number: number
 }
 
 interface ApiTestScenarioListItem {
@@ -161,6 +175,12 @@ interface ApiUpdateTestScenarioStatusRequest {
   statusNote?: string
 }
 
+interface ApiUpdateTestScenarioExecutionRequest {
+  stepResults: TestScenarioExecutionResult[]
+  actualResult?: string
+  executedAt?: string
+}
+
 interface ApiTestScenarioRelatedRefResponse {
   refType: string
   refId: number
@@ -168,9 +188,7 @@ interface ApiTestScenarioRelatedRefResponse {
   title: string | null
 }
 
-const PRIORITY_ORDER: Record<string, number> = { 긴급: 0, 높음: 1, 보통: 2, 낮음: 3 }
-const STATUS_ORDER: Record<string, number> = { 실행중: 0, 검토중: 1, 승인됨: 2, 실패: 3, 작성중: 4, 통과: 5, 보류: 6 }
-const LIST_FETCH_SIZE = 500
+const SUMMARY_FETCH_SIZE = 500
 
 function toFallbackDocNo(refType: string, refId: number): string {
   const prefix = refType === 'WORK_REQUEST'
@@ -238,48 +256,41 @@ function getSummary(source: TestScenario[]): TestScenarioSummary {
 }
 
 export async function listTestScenarios(params: TestScenarioListParams): Promise<TestScenarioListResult> {
-  const { data } = await api.get<ApiPageResponse<ApiTestScenarioListItem>>('/test-scenarios', {
-    params: { page: 0, size: LIST_FETCH_SIZE },
-  })
+  const requestedPage = Math.max(0, params.page - 1)
+  const sortBy = params.sortKey === 'docNo' ? 'docNo' : params.sortKey
 
-  const source = data.content.map(mapListItem)
+  const [listResponse, summaryResponse] = await Promise.all([
+    api.get<ApiPageResponse<ApiTestScenarioListItem>>('/test-scenarios', {
+      params: {
+        q: params.search.trim() || undefined,
+        type: params.filterType === '전체' ? undefined : params.filterType,
+        priority: params.filterPriority === '전체' ? undefined : params.filterPriority,
+        status: params.filterStatus === '전체' ? undefined : params.filterStatus,
+        assigneeId: params.filterAssigneeId ?? undefined,
+        deadlineFrom: params.deadlineFrom || undefined,
+        deadlineTo: params.deadlineTo || undefined,
+        sortBy,
+        sortDir: params.sortDir,
+        page: requestedPage,
+        size: params.pageSize,
+      },
+    }),
+    api.get<ApiPageResponse<ApiTestScenarioListItem>>('/test-scenarios', {
+      params: { page: 0, size: SUMMARY_FETCH_SIZE },
+    }),
+  ])
 
-  const filtered = source.filter((r) => {
-    const keyword = params.search.trim()
-    const matchSearch = keyword.length === 0 || r.title.includes(keyword) || r.docNo.includes(keyword)
-    const matchType = params.filterType === '전체' || r.type === params.filterType
-    const matchPriority = params.filterPriority === '전체' || r.priority === params.filterPriority
-    const matchStatus = params.filterStatus === '전체' || r.status === params.filterStatus
-    return matchSearch && matchType && matchPriority && matchStatus
-  })
-
-  const sorted = [...filtered].sort((a, b) => {
-    const sortFactor = params.sortDir === 'asc' ? 1 : -1
-    if (params.sortKey === 'docNo') {
-      return a.docNo.localeCompare(b.docNo, 'ko-KR', { numeric: true }) * sortFactor
-    }
-    if (params.sortKey === 'priority') {
-      return ((PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9)) * sortFactor
-    }
-    if (params.sortKey === 'status') {
-      return ((STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9)) * sortFactor
-    }
-
-    const aDeadline = a.deadline ? new Date(a.deadline).getTime() : Number.MAX_SAFE_INTEGER
-    const bDeadline = b.deadline ? new Date(b.deadline).getTime() : Number.MAX_SAFE_INTEGER
-    return (aDeadline - bDeadline) * sortFactor
-  })
-
-  const totalPages = Math.max(1, Math.ceil(sorted.length / params.pageSize))
-  const safePage = Math.min(Math.max(1, params.page), totalPages)
-  const items = sorted.slice((safePage - 1) * params.pageSize, safePage * params.pageSize)
+  const listData = listResponse.data
+  const items = listData.content.map(mapListItem)
+  const summarySource = summaryResponse.data.content.map(mapListItem)
+  const totalPages = Math.max(1, listData.totalPages || 1)
 
   return {
     items,
-    total: sorted.length,
+    total: listData.totalElements ?? items.length,
     totalPages,
-    page: safePage,
-    summary: getSummary(source),
+    page: (listData.number ?? 0) + 1,
+    summary: getSummary(summarySource),
   }
 }
 
@@ -395,6 +406,18 @@ export async function updateTestScenario(input: UpdateTestScenarioInput): Promis
 export async function updateTestScenarioStatus(id: string | number, status: TestStatus, statusNote?: string): Promise<void> {
   const payload: ApiUpdateTestScenarioStatusRequest = { status, statusNote }
   await api.patch(`/test-scenarios/${id}/status`, payload)
+}
+
+export async function updateTestScenarioExecution(
+  id: string | number,
+  input: UpdateTestScenarioExecutionInput,
+): Promise<void> {
+  const payload: ApiUpdateTestScenarioExecutionRequest = {
+    stepResults: input.stepResults,
+    actualResult: input.actualResult,
+    executedAt: input.executedAt,
+  }
+  await api.patch(`/test-scenarios/${id}/execution`, payload)
 }
 
 export async function deleteTestScenario(id: string | number): Promise<void> {

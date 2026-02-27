@@ -471,14 +471,14 @@ export default function KnowledgeBaseFormPage() {
             <button
               type="button"
               onClick={() => navigate('/knowledge-base')}
-              className="h-9 px-4 text-[13px] text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              className="h-8 px-3 text-[13px] text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
             >
               취소
             </button>
             <button
               type="submit"
               disabled={isMutating}
-              className="h-9 px-5 bg-brand hover:bg-brand-hover text-white text-[13px] font-semibold rounded-lg transition-colors disabled:opacity-60"
+              className="h-8 px-4 bg-brand hover:bg-brand-hover text-white text-[13px] font-semibold rounded-lg transition-colors disabled:opacity-60"
             >
               {isMutating ? (isEdit ? '수정 중...' : '등록 중...') : (isEdit ? '수정 완료' : '등록')}
             </button>

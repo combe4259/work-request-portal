@@ -1,4 +1,5 @@
 import type { DefectType, Severity, DefectStatus } from '@/types/defect'
+import BadgePill from '@/components/common/BadgePill'
 
 // ── 유형 배지 ─────────────────────────────────────────
 const TYPE_STYLES: Record<DefectType, string> = {
@@ -11,11 +12,7 @@ const TYPE_STYLES: Record<DefectType, string> = {
 }
 
 export function DefectTypeBadge({ type }: { type: DefectType }) {
-  return (
-    <span className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-medium ${TYPE_STYLES[type]}`}>
-      {type}
-    </span>
-  )
+  return <BadgePill label={type} tone={TYPE_STYLES[type]} />
 }
 
 // ── 심각도 배지 ───────────────────────────────────────
@@ -27,11 +24,7 @@ const SEVERITY_STYLES: Record<Severity, string> = {
 }
 
 export function SeverityBadge({ severity }: { severity: Severity }) {
-  return (
-    <span className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-semibold ${SEVERITY_STYLES[severity]}`}>
-      {severity}
-    </span>
-  )
+  return <BadgePill label={severity} tone={SEVERITY_STYLES[severity]} strong />
 }
 
 // ── 상태 배지 ─────────────────────────────────────────
@@ -46,9 +39,5 @@ const STATUS_STYLES: Record<DefectStatus, string> = {
 }
 
 export function DefectStatusBadge({ status }: { status: DefectStatus }) {
-  return (
-    <span className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-medium ${STATUS_STYLES[status]}`}>
-      {status}
-    </span>
-  )
+  return <BadgePill label={status} tone={STATUS_STYLES[status]} />
 }

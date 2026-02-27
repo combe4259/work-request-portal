@@ -10,6 +10,7 @@ export interface Idea {
   content: string
   proposer: string
   likes: number
+  likedByMe: boolean
   commentCount: number
   createdAt: string
 }

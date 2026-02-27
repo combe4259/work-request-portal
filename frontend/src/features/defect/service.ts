@@ -11,6 +11,9 @@ export interface DefectListParams {
   filterType: DefectType | '전체'
   filterSeverity: Severity | '전체'
   filterStatus: DefectStatus | '전체'
+  filterAssigneeId: number | null
+  deadlineFrom?: string
+  deadlineTo?: string
   sortKey: DefectSortKey
   sortDir: DefectSortDir
   page: number
@@ -81,6 +84,9 @@ export interface UpdateDefectInput {
 
 interface ApiPageResponse<T> {
   content: T[]
+  totalElements: number
+  totalPages: number
+  number: number
 }
 
 interface ApiDefectListItem {
@@ -160,9 +166,7 @@ interface ApiUpdateDefectStatusRequest {
   statusNote?: string
 }
 
-const SEVERITY_ORDER: Record<Severity, number> = { 치명적: 0, 높음: 1, 보통: 2, 낮음: 3 }
-const STATUS_ORDER: Record<string, number> = { 분석중: 0, 수정중: 1, 검증중: 2, 접수: 3, 재현불가: 4, 보류: 5, 완료: 6 }
-const LIST_FETCH_SIZE = 500
+const SUMMARY_FETCH_SIZE = 500
 
 function mapUserLabel(userId: number | null | undefined, fallbackText: string): string {
   if (userId == null) {
@@ -250,48 +254,41 @@ function getSummary(source: Defect[]): DefectSummary {
 }
 
 export async function listDefects(params: DefectListParams): Promise<DefectListResult> {
-  const { data } = await api.get<ApiPageResponse<ApiDefectListItem>>('/defects', {
-    params: { page: 0, size: LIST_FETCH_SIZE },
-  })
+  const requestedPage = Math.max(0, params.page - 1)
+  const sortBy = params.sortKey === 'docNo' ? 'docNo' : params.sortKey
 
-  const source = data.content.map(mapListItem)
+  const [listResponse, summaryResponse] = await Promise.all([
+    api.get<ApiPageResponse<ApiDefectListItem>>('/defects', {
+      params: {
+        q: params.search.trim() || undefined,
+        type: params.filterType === '전체' ? undefined : params.filterType,
+        severity: params.filterSeverity === '전체' ? undefined : params.filterSeverity,
+        status: params.filterStatus === '전체' ? undefined : params.filterStatus,
+        assigneeId: params.filterAssigneeId ?? undefined,
+        deadlineFrom: params.deadlineFrom || undefined,
+        deadlineTo: params.deadlineTo || undefined,
+        sortBy,
+        sortDir: params.sortDir,
+        page: requestedPage,
+        size: params.pageSize,
+      },
+    }),
+    api.get<ApiPageResponse<ApiDefectListItem>>('/defects', {
+      params: { page: 0, size: SUMMARY_FETCH_SIZE },
+    }),
+  ])
 
-  const filtered = source.filter((r) => {
-    const keyword = params.search.trim()
-    const matchSearch = keyword.length === 0 || r.title.includes(keyword) || r.docNo.includes(keyword)
-    const matchType = params.filterType === '전체' || r.type === params.filterType
-    const matchSeverity = params.filterSeverity === '전체' || r.severity === params.filterSeverity
-    const matchStatus = params.filterStatus === '전체' || r.status === params.filterStatus
-    return matchSearch && matchType && matchSeverity && matchStatus
-  })
-
-  const sorted = [...filtered].sort((a, b) => {
-    const sortFactor = params.sortDir === 'asc' ? 1 : -1
-    if (params.sortKey === 'severity') {
-      return (SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]) * sortFactor
-    }
-    if (params.sortKey === 'status') {
-      return ((STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9)) * sortFactor
-    }
-    if (params.sortKey === 'docNo') {
-      return a.docNo.localeCompare(b.docNo, 'ko-KR', { numeric: true }) * sortFactor
-    }
-
-    const aDeadline = a.deadline ? new Date(a.deadline).getTime() : Number.MAX_SAFE_INTEGER
-    const bDeadline = b.deadline ? new Date(b.deadline).getTime() : Number.MAX_SAFE_INTEGER
-    return (aDeadline - bDeadline) * sortFactor
-  })
-
-  const totalPages = Math.max(1, Math.ceil(sorted.length / params.pageSize))
-  const safePage = Math.min(Math.max(1, params.page), totalPages)
-  const items = sorted.slice((safePage - 1) * params.pageSize, safePage * params.pageSize)
+  const listData = listResponse.data
+  const items = listData.content.map(mapListItem)
+  const summarySource = summaryResponse.data.content.map(mapListItem)
+  const totalPages = Math.max(1, listData.totalPages || 1)
 
   return {
     items,
-    total: sorted.length,
+    total: listData.totalElements ?? items.length,
     totalPages,
-    page: safePage,
-    summary: getSummary(source),
+    page: (listData.number ?? 0) + 1,
+    summary: getSummary(summarySource),
   }
 }
 

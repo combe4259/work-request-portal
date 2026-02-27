@@ -7,7 +7,23 @@ import org.example.domain.attachment.dto.AttachmentUpdateRequest;
 import org.example.domain.attachment.entity.Attachment;
 import org.example.domain.attachment.mapper.AttachmentMapper;
 import org.example.domain.attachment.repository.AttachmentRepository;
+import org.example.domain.deployment.entity.Deployment;
+import org.example.domain.deployment.repository.DeploymentRepository;
+import org.example.domain.defect.entity.Defect;
+import org.example.domain.defect.repository.DefectRepository;
 import org.example.domain.documentIndex.repository.DocumentIndexRepository;
+import org.example.domain.idea.entity.ProjectIdea;
+import org.example.domain.idea.repository.ProjectIdeaRepository;
+import org.example.domain.knowledgeBase.entity.KnowledgeBaseArticle;
+import org.example.domain.knowledgeBase.repository.KnowledgeBaseArticleRepository;
+import org.example.domain.meetingNote.entity.MeetingNote;
+import org.example.domain.meetingNote.repository.MeetingNoteRepository;
+import org.example.domain.techTask.entity.TechTask;
+import org.example.domain.techTask.repository.TechTaskRepository;
+import org.example.domain.testScenario.entity.TestScenario;
+import org.example.domain.testScenario.repository.TestScenarioRepository;
+import org.example.domain.workRequest.entity.WorkRequest;
+import org.example.domain.workRequest.repository.WorkRequestRepository;
 import org.example.global.team.TeamScopeUtil;
 import org.springframework.http.HttpStatus;
 import org.springframework.lang.Nullable;
@@ -36,13 +52,37 @@ public class AttachmentServiceImpl implements AttachmentService {
 
     private final AttachmentRepository attachmentRepository;
     private final DocumentIndexRepository documentIndexRepository;
+    private final WorkRequestRepository workRequestRepository;
+    private final TechTaskRepository techTaskRepository;
+    private final TestScenarioRepository testScenarioRepository;
+    private final DefectRepository defectRepository;
+    private final DeploymentRepository deploymentRepository;
+    private final MeetingNoteRepository meetingNoteRepository;
+    private final ProjectIdeaRepository projectIdeaRepository;
+    private final KnowledgeBaseArticleRepository knowledgeBaseArticleRepository;
 
     public AttachmentServiceImpl(
             AttachmentRepository attachmentRepository,
-            @Nullable DocumentIndexRepository documentIndexRepository
+            @Nullable DocumentIndexRepository documentIndexRepository,
+            @Nullable WorkRequestRepository workRequestRepository,
+            @Nullable TechTaskRepository techTaskRepository,
+            @Nullable TestScenarioRepository testScenarioRepository,
+            @Nullable DefectRepository defectRepository,
+            @Nullable DeploymentRepository deploymentRepository,
+            @Nullable MeetingNoteRepository meetingNoteRepository,
+            @Nullable ProjectIdeaRepository projectIdeaRepository,
+            @Nullable KnowledgeBaseArticleRepository knowledgeBaseArticleRepository
     ) {
         this.attachmentRepository = attachmentRepository;
         this.documentIndexRepository = documentIndexRepository;
+        this.workRequestRepository = workRequestRepository;
+        this.techTaskRepository = techTaskRepository;
+        this.testScenarioRepository = testScenarioRepository;
+        this.defectRepository = defectRepository;
+        this.deploymentRepository = deploymentRepository;
+        this.meetingNoteRepository = meetingNoteRepository;
+        this.projectIdeaRepository = projectIdeaRepository;
+        this.knowledgeBaseArticleRepository = knowledgeBaseArticleRepository;
     }
 
     @Override
@@ -180,16 +220,54 @@ public class AttachmentServiceImpl implements AttachmentService {
 
     private void ensureRefAccessible(String refType, Long refId) {
         Long teamId = TeamScopeUtil.currentTeamId();
-        if (teamId == null || documentIndexRepository == null) {
+        if (teamId == null) {
             return;
         }
         if (refId == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "refId는 필수입니다.");
         }
 
-        boolean exists = documentIndexRepository.findByTeamIdAndRefTypeAndRefId(teamId, refType, refId).isPresent();
-        if (!exists) {
+        if (documentIndexRepository != null) {
+            boolean exists = documentIndexRepository.findByTeamIdAndRefTypeAndRefId(teamId, refType, refId).isPresent();
+            if (exists) {
+                return;
+            }
+        }
+
+        Long sourceTeamId = resolveTeamIdBySource(refType, refId);
+        if (sourceTeamId == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "참조 문서를 찾을 수 없습니다.");
         }
+        TeamScopeUtil.ensureAccessible(sourceTeamId);
+    }
+
+    private Long resolveTeamIdBySource(String refType, Long refId) {
+        return switch (refType) {
+            case "WORK_REQUEST" -> workRequestRepository == null
+                    ? null
+                    : workRequestRepository.findById(refId).map(WorkRequest::getTeamId).orElse(null);
+            case "TECH_TASK" -> techTaskRepository == null
+                    ? null
+                    : techTaskRepository.findById(refId).map(TechTask::getTeamId).orElse(null);
+            case "TEST_SCENARIO" -> testScenarioRepository == null
+                    ? null
+                    : testScenarioRepository.findById(refId).map(TestScenario::getTeamId).orElse(null);
+            case "DEFECT" -> defectRepository == null
+                    ? null
+                    : defectRepository.findById(refId).map(Defect::getTeamId).orElse(null);
+            case "DEPLOYMENT" -> deploymentRepository == null
+                    ? null
+                    : deploymentRepository.findById(refId).map(Deployment::getTeamId).orElse(null);
+            case "MEETING_NOTE" -> meetingNoteRepository == null
+                    ? null
+                    : meetingNoteRepository.findById(refId).map(MeetingNote::getTeamId).orElse(null);
+            case "PROJECT_IDEA" -> projectIdeaRepository == null
+                    ? null
+                    : projectIdeaRepository.findById(refId).map(ProjectIdea::getTeamId).orElse(null);
+            case "KNOWLEDGE_BASE" -> knowledgeBaseArticleRepository == null
+                    ? null
+                    : knowledgeBaseArticleRepository.findById(refId).map(KnowledgeBaseArticle::getTeamId).orElse(null);
+            default -> null;
+        };
     }
 }

@@ -64,11 +64,7 @@ public class SlackNotificationService {
 
         // 본문 — message 우선, 없으면 title fallback
         String body = (message != null && !message.isBlank()) ? message : title;
-
-        // 포탈 링크 추가
-        String link = buildPortalLink(refType, refId);
-        String fullBody = (link != null) ? body + "\n" + link : body;
-        attachment.put("text", fullBody);
+        attachment.put("text", body);
 
         // 하단 컨텍스트 + 발생 시각
         if (refType != null && refId != null) {
@@ -77,7 +73,36 @@ public class SlackNotificationService {
         attachment.put("ts", Instant.now().getEpochSecond());
 
         // mrkdwn 적용 범위
-        attachment.put("mrkdwn_in", List.of("pretext", "text", "footer"));
+        attachment.put("mrkdwn_in", List.of("text", "footer"));
+
+        // 인터랙션 콜백 ID
+        attachment.put("callback_id", "portal_notification");
+
+        // 액션 버튼
+        String portalLink = buildPortalLink(refType, refId);
+        if (portalLink != null) {
+            List<Map<String, Object>> actions = new java.util.ArrayList<>();
+
+            // 바로가기 버튼 (url 타입 — 인터랙션 불필요)
+            Map<String, Object> viewBtn = new HashMap<>();
+            viewBtn.put("type", "button");
+            viewBtn.put("text", "바로가기 →");
+            viewBtn.put("url", portalLink);
+            viewBtn.put("style", "primary");
+            actions.add(viewBtn);
+
+            // 담당자배정 전용 — "처리 시작" 버튼
+            if ("담당자배정".equals(type) && refType != null && refId != null) {
+                Map<String, Object> startBtn = new HashMap<>();
+                startBtn.put("type", "button");
+                startBtn.put("text", "처리 시작");
+                startBtn.put("name", "start_work");
+                startBtn.put("value", refType + ":" + refId);
+                actions.add(startBtn);
+            }
+
+            attachment.put("actions", actions);
+        }
 
         Map<String, Object> payload = new HashMap<>();
         payload.put("channel", channel);
@@ -100,7 +125,7 @@ public class SlackNotificationService {
             default              -> null;
         };
         if (path == null) return null;
-        return "<" + portalUrl + path + refId + "|바로가기 →>";
+        return portalUrl + path + refId;
     }
 
     private String resolveColor(String type) {

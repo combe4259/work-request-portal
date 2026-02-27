@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { EmptyState, ErrorState, LoadingState } from '@/components/common/AsyncState'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import ShowMoreButton from '@/components/common/ShowMoreButton'
+import TechTaskDetailBody, { parseDefinitionOfDone, type TechTaskDodItem } from '@/components/tech-task/TechTaskDetailBody'
 import { PriorityBadge, StatusBadge } from '@/components/work-request/Badges'
 import { TechTypeBadge } from '@/components/tech-task/Badges'
 import api from '@/lib/api'
@@ -16,57 +17,6 @@ import { useExpandableList } from '@/hooks/useExpandableList'
 import type { Status } from '@/types/tech-task'
 
 const STATUS_OPTIONS: Status[] = ['접수대기', '검토중', '개발중', '테스트중', '완료', '반려']
-
-type DodItem = {
-  id: number
-  text: string
-  done: boolean
-}
-
-function parseDefinitionOfDone(raw: string | undefined): DodItem[] {
-  if (!raw) {
-    return []
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as unknown
-    if (!Array.isArray(parsed)) {
-      return []
-    }
-
-    return parsed
-      .map((item, index) => {
-        if (typeof item === 'string') {
-          return { id: index + 1, text: item, done: false }
-        }
-
-        if (typeof item === 'object' && item !== null && 'text' in item) {
-          const text = String((item as { text: unknown }).text ?? '').trim()
-          const done = Boolean((item as { done?: unknown }).done)
-          if (text.length === 0) {
-            return null
-          }
-          return { id: index + 1, text, done }
-        }
-
-        return null
-      })
-      .filter((item): item is DodItem => item !== null)
-  } catch {
-    return []
-  }
-}
-
-function getRefRoute(refType: string, refId: number): string | null {
-  switch (refType) {
-    case 'WORK_REQUEST':
-      return `/work-requests/${refId}`
-    case 'TECH_TASK':
-      return `/tech-tasks/${refId}`
-    default:
-      return null
-  }
-}
 
 export default function TechTaskDetailPage() {
   const navigate = useNavigate()
@@ -85,7 +35,7 @@ export default function TechTaskDetailPage() {
   const [status, setStatus] = useState<Status>('접수대기')
   const [statusOpen, setStatusOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const [dod, setDod] = useState<DodItem[]>([])
+  const [dod, setDod] = useState<TechTaskDodItem[]>([])
   const [isSavingDod, setIsSavingDod] = useState(false)
   const [comment, setComment] = useState('')
 
@@ -123,7 +73,6 @@ export default function TechTaskDetailPage() {
   const attachments = attachmentsQuery.data ?? []
   const activityLogs = activityLogsQuery.data?.items ?? []
   const relatedDocs = relatedRefsQuery.data ?? []
-  const visibleRelatedDocs = useExpandableList(relatedDocs, 5)
   const visibleComments = useExpandableList(comments, 3)
   const visibleActivityLogs = useExpandableList(activityLogs, 5)
 
@@ -192,8 +141,6 @@ export default function TechTaskDetailPage() {
   const data = detailQuery.data
   const prLinks = prLinksQuery.data ?? []
 
-  const doneCnt = dod.filter((d) => d.done).length
-
   return (
     <div className="p-6">
       <div className="flex items-start justify-between mb-5">
@@ -259,154 +206,19 @@ export default function TechTaskDetailPage() {
 
       <div className="flex gap-5 items-start">
         <div className="flex-1 min-w-0 space-y-4">
-          <div className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] px-5 py-4">
-            <div className="grid grid-cols-4 gap-4">
-              <MetaItem label="등록자" value={data.registrant} />
-              <MetaItem label="담당자" value={data.assignee} />
-              <MetaItem label="마감일">
-                <DeadlineText date={data.deadline} />
-              </MetaItem>
-              <MetaItem label="등록일" value={data.createdAt} />
-            </div>
-          </div>
-
-          <Section title="문제 현황">
-            <p className="text-[13px] text-gray-700 leading-relaxed whitespace-pre-wrap">{data.currentIssue}</p>
-          </Section>
-
-          <Section title="개선 방안">
-            <p className="text-[13px] text-gray-700 leading-relaxed whitespace-pre-wrap">{data.solution}</p>
-          </Section>
-
-          <Section title={`완료 기준 (${doneCnt}/${dod.length})`}>
-            <div className="mb-3">
-              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-brand rounded-full transition-all duration-300"
-                  style={{ width: `${dod.length ? (doneCnt / dod.length) * 100 : 0}%` }}
-                />
-              </div>
-            </div>
-
-            {dod.length === 0 ? (
-              <EmptyState
-                title="완료 기준이 없습니다"
-                description="등록 시 입력된 완료 기준이 없어요."
-              />
-            ) : (
-              <div className="space-y-2">
-                {dod.map((item) => (
-                  <label key={item.id} className="flex items-start gap-2.5 cursor-pointer group">
-                    <div className="relative mt-0.5 flex-shrink-0">
-                      <input
-                        type="checkbox"
-                        checked={item.done}
-                        onChange={() => {
-                          void handleDodToggle(item.id)
-                        }}
-                        className="sr-only"
-                        disabled={isSavingDod}
-                      />
-                      <div
-                        className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${
-                          item.done ? 'bg-brand border-brand' : 'border-gray-300 group-hover:border-brand/50'
-                        }`}
-                      >
-                        {item.done && <CheckIcon />}
-                      </div>
-                    </div>
-                    <span
-                      className={`text-[13px] leading-snug transition-colors ${
-                        item.done ? 'text-gray-400 line-through' : 'text-gray-700'
-                      }`}
-                    >
-                      {item.text}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </Section>
-
-          <Section title="PR / 브랜치">
-            {prLinksQuery.isPending ? (
-              <p className="text-[12px] text-gray-400">불러오는 중...</p>
-            ) : prLinks.length === 0 ? (
-              <p className="text-[12px] text-gray-400">연결된 PR이 없습니다.</p>
-            ) : (
-              <div className="space-y-2">
-                {prLinks.map((pr) => (
-                  <a
-                    key={pr.id}
-                    href={pr.prUrl ?? '#'}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-3 px-3 py-2.5 bg-gray-50 rounded-lg border border-gray-100 hover:border-brand/30 hover:bg-blue-50/30 transition-colors group"
-                  >
-                    <GitBranchIcon />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[12px] font-mono text-gray-600 truncate group-hover:text-brand transition-colors">
-                        {pr.branchName}
-                      </p>
-                    </div>
-                    <span className="text-[11px] text-brand font-semibold flex-shrink-0">
-                      {pr.prNo ? `#${pr.prNo}` : '-'}
-                    </span>
-                    <ExternalLinkIcon />
-                  </a>
-                ))}
-              </div>
-            )}
-          </Section>
-
-          {relatedDocs.length > 0 && (
-            <Section title="연관 문서">
-              <div className="flex flex-wrap gap-2">
-                {visibleRelatedDocs.visibleItems.map((d) => {
-                  const route = getRefRoute(d.refType, d.refId)
-                  return (
-                    <button
-                      key={`${d.refType}-${d.refId}`}
-                      onClick={() => {
-                        if (route) {
-                          navigate(route)
-                        }
-                      }}
-                      disabled={!route}
-                      className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg hover:border-brand/40 hover:bg-blue-50/30 transition-colors group disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                      <span className="font-mono text-[11px] text-gray-400">{d.refNo}</span>
-                      <span className="text-[12px] text-gray-600 group-hover:text-brand transition-colors">{d.title ?? '제목 없음'}</span>
-                    </button>
-                  )
-                })}
-              </div>
-              <ShowMoreButton
-                expanded={visibleRelatedDocs.expanded}
-                hiddenCount={visibleRelatedDocs.hiddenCount}
-                onToggle={visibleRelatedDocs.toggle}
-                className="mt-3"
-              />
-            </Section>
-          )}
-
-          <Section title="첨부파일">
-            {attachmentsQuery.isPending ? (
-              <p className="text-[12px] text-gray-400">불러오는 중...</p>
-            ) : attachments.length === 0 ? (
-              <p className="text-[12px] text-gray-400">등록된 첨부파일이 없습니다.</p>
-            ) : (
-              <div className="space-y-2">
-                {attachments.map((file) => (
-                  <div key={file.id} className="flex items-center gap-2.5 px-3 py-2 bg-gray-50 rounded-lg border border-gray-100">
-                    <FileIcon />
-                    <span className="text-[12px] text-gray-700 flex-1 truncate">{file.originalName}</span>
-                    <span className="text-[11px] text-gray-400">{formatFileSize(file.fileSize)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Section>
+          <TechTaskDetailBody
+            data={data}
+            relatedDocs={relatedDocs}
+            prLinks={prLinks}
+            attachments={attachments}
+            attachmentsPending={attachmentsQuery.isPending}
+            dodItems={dod}
+            dodSaving={isSavingDod}
+            onToggleDod={(itemId) => {
+              void handleDodToggle(itemId)
+            }}
+            onNavigateToRef={(route) => navigate(route)}
+          />
         </div>
 
         <div className="w-[300px] flex-shrink-0 space-y-4">
@@ -520,38 +332,6 @@ export default function TechTaskDetailPage() {
   )
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] px-5 py-4">
-      <p className="text-[12px] font-semibold text-gray-700 mb-3">{title}</p>
-      {children}
-    </div>
-  )
-}
-
-function MetaItem({ label, value, children }: { label: string; value?: string; children?: React.ReactNode }) {
-  return (
-    <div>
-      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">{label}</p>
-      {children ?? <p className="text-[13px] text-gray-700 font-medium">{value}</p>}
-    </div>
-  )
-}
-
-function DeadlineText({ date }: { date: string }) {
-  if (!date) {
-    return <p className="text-[13px] font-medium text-gray-400">-</p>
-  }
-
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const diff = Math.ceil((new Date(date).getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-  let cls = 'text-gray-700'
-  if (diff < 0) cls = 'text-red-500'
-  else if (diff <= 3) cls = 'text-orange-500'
-  return <p className={`text-[13px] font-medium ${cls}`}>{date} {diff >= 0 ? `(D-${diff})` : `(D+${Math.abs(diff)})`}</p>
-}
-
 function toActionLabel(actionType: string): string {
   if (actionType === 'CREATED') return '등록'
   if (actionType === 'UPDATED') return '수정'
@@ -559,22 +339,6 @@ function toActionLabel(actionType: string): string {
   if (actionType === 'ASSIGNEE_CHANGED') return '담당자 변경'
   if (actionType === 'DELETED') return '삭제'
   return actionType
-}
-
-function formatFileSize(bytes: number | null): string {
-  if (bytes == null || bytes < 0) return '-'
-  if (bytes < 1024) return `${bytes}B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
-}
-
-function FileIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
-      <path d="M3 1H8L11 4V12H3V1Z" stroke="#9CA3AF" strokeWidth="1.2" strokeLinejoin="round" />
-      <path d="M8 1V4H11" stroke="#9CA3AF" strokeWidth="1.2" strokeLinejoin="round" />
-    </svg>
-  )
 }
 
 function BackIcon() {
@@ -587,24 +351,4 @@ function ChevronDownIcon() {
 
 function EditIcon() {
   return <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><path d="M9 2L11 4L4.5 10.5H2.5V8.5L9 2Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" /></svg>
-}
-
-function CheckIcon() {
-  return <svg width="9" height="9" viewBox="0 0 9 9" fill="none" aria-hidden="true"><path d="M1.5 4.5L3.5 6.5L7.5 2.5" stroke="white" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
-}
-
-function GitBranchIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-      <circle cx="4" cy="3" r="1.5" stroke="#9CA3AF" strokeWidth="1.2" />
-      <circle cx="4" cy="11" r="1.5" stroke="#9CA3AF" strokeWidth="1.2" />
-      <circle cx="10" cy="5" r="1.5" stroke="#9CA3AF" strokeWidth="1.2" />
-      <path d="M4 4.5V9.5" stroke="#9CA3AF" strokeWidth="1.2" strokeLinecap="round" />
-      <path d="M4 4.5C4 4.5 4 6.5 10 6.5V6.5" stroke="#9CA3AF" strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
-  )
-}
-
-function ExternalLinkIcon() {
-  return <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true"><path d="M4.5 2H2v7.5h7.5V7M6.5 1.5H10m0 0V5M10 1.5L5.5 6" stroke="#9CA3AF" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
 }

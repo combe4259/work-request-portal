@@ -1,20 +1,34 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { CategoryBadge, IdeaStatusBadge } from '@/components/idea/Badges'
 import { EmptyState, ErrorState, LoadingState } from '@/components/common/AsyncState'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import ShowMoreButton from '@/components/common/ShowMoreButton'
+import { useCreateCommentMutation } from '@/features/comment/mutations'
+import { useCommentsQuery } from '@/features/comment/queries'
 import { useIdeaQuery, useIdeaRelatedRefsQuery } from '@/features/idea/queries'
 import { useDeleteIdeaMutation, useLikeIdeaMutation, useUnlikeIdeaMutation, useUpdateIdeaStatusMutation } from '@/features/idea/mutations'
 import { useExpandableList } from '@/hooks/useExpandableList'
 import type { IdeaStatus } from '@/types/idea'
 
-const MOCK_COMMENTS = [
-  { id: 1, author: '이설계', content: '좋은 아이디어입니다. 구현 범위를 조금 더 구체화하면 좋겠습니다.', createdAt: '2026-02-16 10:20' },
-  { id: 2, author: '김개발', content: '기술 검토 후 다음 스프린트 후보로 올려보겠습니다.', createdAt: '2026-02-17 14:05' },
-]
-
 const STATUS_OPTIONS: IdeaStatus[] = ['제안됨', '검토중', '채택', '보류', '기각']
+const IDEA_LIKED_STORAGE_KEY = 'idea-liked-ids'
+
+function readLikedStorage(): Record<string, boolean> {
+  if (typeof window === 'undefined') {
+    return {}
+  }
+
+  try {
+    const raw = window.localStorage.getItem(IDEA_LIKED_STORAGE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as Record<string, boolean>
+    if (!parsed || typeof parsed !== 'object') return {}
+    return parsed
+  } catch {
+    return {}
+  }
+}
 
 function getRefRoute(refType: string, refId: number): string | null {
   switch (refType) {
@@ -40,8 +54,12 @@ function getRefRoute(refType: string, refId: number): string | null {
 export default function IdeaDetailPage() {
   const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
-  const { data, isPending, isError, refetch } = useIdeaQuery(id)
-  const relatedRefsQuery = useIdeaRelatedRefsQuery(id)
+  const numericId = Number(id)
+  const hasValidId = Number.isInteger(numericId) && numericId > 0
+  const { data, isPending, isError, refetch } = useIdeaQuery(hasValidId ? numericId : undefined)
+  const relatedRefsQuery = useIdeaRelatedRefsQuery(hasValidId ? numericId : undefined)
+  const commentsQuery = useCommentsQuery('PROJECT_IDEA', hasValidId ? numericId : undefined)
+  const createComment = useCreateCommentMutation('PROJECT_IDEA', hasValidId ? numericId : undefined)
   const updateStatus = useUpdateIdeaStatusMutation()
   const likeIdea = useLikeIdeaMutation()
   const unlikeIdea = useUnlikeIdeaMutation()
@@ -50,12 +68,39 @@ export default function IdeaDetailPage() {
   const [statusOpen, setStatusOpen] = useState(false)
   const [statusDraft, setStatusDraft] = useState<IdeaStatus | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const [liked, setLiked] = useState(false)
+  const [likedOverrides, setLikedOverrides] = useState<Record<string, boolean>>(() => readLikedStorage())
+  const [likeCountOverride, setLikeCountOverride] = useState<number | null>(null)
   const [comment, setComment] = useState('')
-  const [comments, setComments] = useState(MOCK_COMMENTS)
+  const comments = commentsQuery.data?.items ?? []
   const relatedRefs = relatedRefsQuery.data ?? []
   const visibleRelatedRefs = useExpandableList(relatedRefs, 5)
   const visibleComments = useExpandableList(comments, 3)
+  const currentIdeaId = data?.id ?? null
+  const currentLikeCount = data?.likes ?? null
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    window.localStorage.setItem(IDEA_LIKED_STORAGE_KEY, JSON.stringify(likedOverrides))
+  }, [likedOverrides])
+
+  useEffect(() => {
+    setLikeCountOverride(null)
+  }, [currentIdeaId, currentLikeCount])
+
+  if (!hasValidId) {
+    return (
+      <div className="p-6">
+        <ErrorState
+          title="잘못된 접근입니다"
+          description="아이디어 ID가 올바르지 않습니다."
+          actionLabel="목록으로 이동"
+          onAction={() => navigate('/ideas')}
+        />
+      </div>
+    )
+  }
 
   if (isPending) {
     return (
@@ -87,7 +132,8 @@ export default function IdeaDetailPage() {
   }
 
   const status = statusDraft ?? data.status
-  const likeCount = data.likes + (liked ? 1 : 0)
+  const liked = likedOverrides[data.id] ?? data.likedByMe
+  const likeCount = likeCountOverride ?? data.likes
 
   const handleStatusChange = async (nextStatus: IdeaStatus) => {
     setStatusDraft(nextStatus)
@@ -97,17 +143,20 @@ export default function IdeaDetailPage() {
 
   const handleLike = async () => {
     if (liked) {
-      await unlikeIdea.mutateAsync(data.id)
-      setLiked(false)
+      const response = await unlikeIdea.mutateAsync(data.id)
+      setLikedOverrides((prev) => ({ ...prev, [data.id]: response.liked }))
+      setLikeCountOverride(response.likeCount)
       return
     }
-    await likeIdea.mutateAsync(data.id)
-    setLiked(true)
+    const response = await likeIdea.mutateAsync(data.id)
+    setLikedOverrides((prev) => ({ ...prev, [data.id]: response.liked }))
+    setLikeCountOverride(response.likeCount)
   }
 
-  const handleComment = () => {
-    if (!comment.trim()) return
-    setComments((prev) => [...prev, { id: Date.now(), author: '나', content: comment.trim(), createdAt: '방금 전' }])
+  const handleComment = async () => {
+    const trimmed = comment.trim()
+    if (!trimmed) return
+    await createComment.mutateAsync({ content: trimmed })
     setComment('')
   }
 
@@ -254,20 +303,26 @@ export default function IdeaDetailPage() {
           <div className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] px-4 py-4">
             <p className="text-[12px] font-semibold text-gray-700 mb-3">댓글 {comments.length}</p>
             <div className="space-y-3 mb-3 max-h-[260px] overflow-y-auto">
-              {visibleComments.visibleItems.map((c) => (
-                <div key={c.id} className="flex gap-2.5">
-                  <div className="w-6 h-6 rounded-full bg-brand/10 flex items-center justify-center text-brand text-[10px] font-bold flex-shrink-0">
-                    {c.author[0]}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span className="text-[11px] font-semibold text-gray-800">{c.author}</span>
-                      <span className="text-[10px] text-gray-400">{c.createdAt}</span>
+              {commentsQuery.isPending ? (
+                <p className="text-[12px] text-gray-400">불러오는 중...</p>
+              ) : comments.length === 0 ? (
+                <p className="text-[12px] text-gray-400">등록된 댓글이 없습니다.</p>
+              ) : (
+                visibleComments.visibleItems.map((c) => (
+                  <div key={c.id} className="flex gap-2.5">
+                    <div className="w-6 h-6 rounded-full bg-brand/10 flex items-center justify-center text-brand text-[10px] font-bold flex-shrink-0">
+                      {c.authorName.slice(0, 1)}
                     </div>
-                    <p className="text-[12px] text-gray-600 leading-relaxed">{c.content}</p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-[11px] font-semibold text-gray-800">{c.authorName}</span>
+                        <span className="text-[10px] text-gray-400">{c.createdAt}</span>
+                      </div>
+                      <p className="text-[12px] text-gray-600 leading-relaxed">{c.content}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
             <ShowMoreButton
               expanded={visibleComments.expanded}
@@ -279,17 +334,21 @@ export default function IdeaDetailPage() {
               <textarea
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && e.metaKey) handleComment() }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && e.metaKey) {
+                    void handleComment()
+                  }
+                }}
                 placeholder="의견을 남겨주세요 (⌘+Enter로 전송)"
                 rows={2}
                 className="flex-1 px-2.5 py-2 text-[12px] border border-gray-200 rounded-lg focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand/20 resize-none"
               />
               <button
-                onClick={handleComment}
-                disabled={!comment.trim()}
+                onClick={() => { void handleComment() }}
+                disabled={!comment.trim() || createComment.isPending}
                 className="h-fit px-2.5 py-2 bg-brand text-white text-[11px] font-semibold rounded-lg hover:bg-brand-hover transition-colors disabled:opacity-40 self-end"
               >
-                전송
+                {createComment.isPending ? '전송 중...' : '전송'}
               </button>
             </div>
           </div>

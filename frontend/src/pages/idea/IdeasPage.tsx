@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CategoryBadge, IdeaStatusBadge } from '@/components/idea/Badges'
 import { FilterSelect } from '@/components/common/TableControls'
 import { PlusIcon, SearchIcon } from '@/components/common/Icons'
 import { EmptyState, ErrorState, LoadingState } from '@/components/common/AsyncState'
+import PageHeader from '@/components/common/PageHeader'
 import { useIdeasQuery } from '@/features/idea/queries'
 import { useLikeIdeaMutation, useUnlikeIdeaMutation } from '@/features/idea/mutations'
 import type { IdeaListParams } from '@/features/idea/service'
@@ -13,6 +14,23 @@ const CATEGORY_OPTIONS: string[] = ['전체', 'UX/UI', '기능', '인프라', '�
 const STATUS_OPTIONS: string[] = ['전체', '제안됨', '검토중', '채택', '보류', '기각']
 const SORT_OPTIONS = ['최신순', '좋아요순'] as const
 const PAGE_SIZE = 120
+const IDEA_LIKED_STORAGE_KEY = 'idea-liked-ids'
+
+function readLikedStorage(): Record<string, boolean> {
+  if (typeof window === 'undefined') {
+    return {}
+  }
+
+  try {
+    const raw = window.localStorage.getItem(IDEA_LIKED_STORAGE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as Record<string, boolean>
+    if (!parsed || typeof parsed !== 'object') return {}
+    return parsed
+  } catch {
+    return {}
+  }
+}
 
 export default function IdeasPage() {
   const navigate = useNavigate()
@@ -20,7 +38,7 @@ export default function IdeasPage() {
   const [filterCategory, setFilterCategory] = useState('전체')
   const [filterStatus, setFilterStatus] = useState('전체')
   const [sort, setSort] = useState<'최신순' | '좋아요순'>('최신순')
-  const [likedIds, setLikedIds] = useState<Set<string>>(new Set())
+  const [likedOverrides, setLikedOverrides] = useState<Record<string, boolean>>(() => readLikedStorage())
   const likeIdea = useLikeIdeaMutation()
   const unlikeIdea = useUnlikeIdeaMutation()
 
@@ -39,48 +57,38 @@ export default function IdeasPage() {
 
   const { data, isPending, isError, refetch } = useIdeasQuery(params)
 
-  const toggleLike = async (e: React.MouseEvent, id: string) => {
+  const toggleLike = async (e: React.MouseEvent, id: string, liked: boolean) => {
     e.stopPropagation()
-    const liked = likedIds.has(id)
 
     if (liked) {
-      await unlikeIdea.mutateAsync(id)
-      setLikedIds((prev) => {
-        const next = new Set(prev)
-        next.delete(id)
-        return next
-      })
+      const response = await unlikeIdea.mutateAsync(id)
+      setLikedOverrides((prev) => ({ ...prev, [id]: response.liked }))
       return
     }
 
-    await likeIdea.mutateAsync(id)
-    setLikedIds((prev) => {
-      const next = new Set(prev)
-      next.add(id)
-      return next
-    })
+    const response = await likeIdea.mutateAsync(id)
+    setLikedOverrides((prev) => ({ ...prev, [id]: response.liked }))
   }
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    window.localStorage.setItem(IDEA_LIKED_STORAGE_KEY, JSON.stringify(likedOverrides))
+  }, [likedOverrides])
 
   const isEmpty = !isPending && !isError && (data?.items.length ?? 0) === 0
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <h1 className="text-[22px] font-bold text-gray-900">아이디어 보드</h1>
-          <p className="text-[12px] text-gray-400 mt-0.5">총 {data?.total ?? 0}건</p>
-        </div>
-        <button
-          onClick={() => navigate('/ideas/new')}
-          className="flex items-center gap-1.5 h-9 px-4 bg-brand text-white text-[13px] font-semibold rounded-lg hover:bg-brand-hover transition-colors"
-        >
-          <PlusIcon />
-          아이디어 제안
-        </button>
-      </div>
+    <div className="p-4 sm:p-6 space-y-4">
+      <PageHeader
+        title="아이디어 보드"
+        count={data?.total ?? 0}
+        action={{ label: '아이디어 제안', onClick: () => navigate('/ideas/new'), icon: <PlusIcon /> }}
+      />
 
-      <div className="flex items-center gap-2 mb-5 flex-wrap">
-        <div className="relative">
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="relative flex-1 min-w-[220px] max-w-[320px]">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
             <SearchIcon />
           </span>
@@ -88,11 +96,11 @@ export default function IdeasPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="아이디어 검색"
-            className="h-8 pl-8 pr-3 text-[12px] border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:border-brand focus:bg-white transition-colors w-52"
+            className="w-full h-8 pl-8 pr-3 text-[13px] border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:border-brand focus:bg-white transition-colors"
           />
         </div>
-        <FilterSelect value={filterCategory} onChange={setFilterCategory} options={CATEGORY_OPTIONS} placeholder="카테고리" />
-        <FilterSelect value={filterStatus} onChange={setFilterStatus} options={STATUS_OPTIONS} placeholder="상태" />
+        <FilterSelect value={filterCategory} onChange={setFilterCategory} options={CATEGORY_OPTIONS} placeholder="카테고리" className="w-[120px]" />
+        <FilterSelect value={filterStatus} onChange={setFilterStatus} options={STATUS_OPTIONS} placeholder="상태" className="w-[128px]" />
         <div className="flex items-center gap-1 ml-auto bg-gray-100 rounded-lg p-0.5">
           {SORT_OPTIONS.map((s) => (
             <button
@@ -127,8 +135,8 @@ export default function IdeasPage() {
       ) : (
         <div className="grid grid-cols-3 gap-4">
           {(data?.items ?? []).map((idea) => {
-            const liked = likedIds.has(idea.id)
-            const likeCount = idea.likes + (liked ? 1 : 0)
+            const liked = likedOverrides[idea.id] ?? idea.likedByMe
+            const likeCount = idea.likes
             return (
               <div
                 key={idea.id}
@@ -157,7 +165,7 @@ export default function IdeasPage() {
                   </div>
                   <div className="flex items-center gap-3">
                     <button
-                      onClick={(e) => { void toggleLike(e, idea.id) }}
+                      onClick={(e) => { void toggleLike(e, idea.id, liked) }}
                       className={`flex items-center gap-1 text-[11px] font-medium transition-colors ${
                         liked ? 'text-red-500' : 'text-gray-400 hover:text-red-400'
                       }`}

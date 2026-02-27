@@ -4,6 +4,7 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/common/AsyncS
 import { SortTh, Pagination } from '@/components/common/TableControls'
 import type { SortDir } from '@/components/common/TableControls'
 import { PlusIcon, SearchIcon } from '@/components/common/Icons'
+import PageHeader from '@/components/common/PageHeader'
 import { useMeetingNotesQuery } from '@/features/meeting-note/queries'
 
 const PAGE_SIZE = 10
@@ -45,23 +46,15 @@ export default function MeetingNotesPage() {
   const isEmpty = !isPending && !isError && (data?.items.length ?? 0) === 0
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <h1 className="text-[22px] font-bold text-gray-900">회의록</h1>
-          <p className="text-[12px] text-gray-400 mt-0.5">총 {data?.total ?? 0}건</p>
-        </div>
-        <button
-          onClick={() => navigate('/meeting-notes/new')}
-          className="flex items-center gap-1.5 h-9 px-4 bg-brand text-white text-[13px] font-semibold rounded-lg hover:bg-brand-hover transition-colors"
-        >
-          <PlusIcon />
-          회의록 등록
-        </button>
-      </div>
+    <div className="p-4 sm:p-6 space-y-4">
+      <PageHeader
+        title="회의록"
+        count={data?.total ?? 0}
+        action={{ label: '회의록 등록', onClick: () => navigate('/meeting-notes/new'), icon: <PlusIcon /> }}
+      />
 
-      <div className="flex items-center gap-2 mb-4">
-        <div className="relative flex-1 max-w-[280px]">
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1 min-w-[220px] max-w-[320px]">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
             <SearchIcon />
           </span>
@@ -69,7 +62,7 @@ export default function MeetingNotesPage() {
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1) }}
             placeholder="제목 또는 문서번호 검색"
-            className="w-full h-8 pl-8 pr-3 text-[12px] border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:border-brand focus:bg-white transition-colors"
+            className="w-full h-8 pl-8 pr-3 text-[13px] border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:border-brand focus:bg-white transition-colors"
           />
         </div>
         {search && (
@@ -101,7 +94,7 @@ export default function MeetingNotesPage() {
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full table-fixed text-sm">
               <thead className="bg-gray-50/70 border-b border-gray-100">
                 <tr>
                   <SortTh label="문서번호" sortKey="docNo" current={sort} onSort={handleSort} />

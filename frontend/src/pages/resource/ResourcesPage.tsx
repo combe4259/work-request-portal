@@ -5,6 +5,7 @@ import ConfirmDialog from '@/components/common/ConfirmDialog'
 import { PlusIcon, SearchIcon } from '@/components/common/Icons'
 import { FilterSelect } from '@/components/common/TableControls'
 import { EmptyState, ErrorState, LoadingState } from '@/components/common/AsyncState'
+import PageHeader from '@/components/common/PageHeader'
 import { useDeleteResourceMutation } from '@/features/resource/mutations'
 import { useResourcesQuery } from '@/features/resource/queries'
 
@@ -50,23 +51,16 @@ export default function ResourcesPage() {
   }, [filterCategory, resources, search])
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <h1 className="text-[22px] font-bold text-gray-900">공유 리소스</h1>
-          <p className="text-[12px] text-gray-400 mt-0.5">총 {filtered.length}개</p>
-        </div>
-        <button
-          onClick={() => navigate('/resources/new')}
-          className="flex items-center gap-1.5 h-9 px-4 bg-brand text-white text-[13px] font-semibold rounded-lg hover:bg-brand-hover transition-colors"
-        >
-          <PlusIcon />
-          리소스 등록
-        </button>
-      </div>
+    <div className="p-4 sm:p-6 space-y-4">
+      <PageHeader
+        title="공유 리소스"
+        count={filtered.length}
+        unit="개"
+        action={{ label: '리소스 등록', onClick: () => navigate('/resources/new'), icon: <PlusIcon /> }}
+      />
 
-      <div className="flex items-center gap-2 mb-5">
-        <div className="relative">
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="relative flex-1 min-w-[220px] max-w-[320px]">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
             <SearchIcon />
           </span>
@@ -74,10 +68,10 @@ export default function ResourcesPage() {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="리소스 검색"
-            className="h-8 pl-8 pr-3 text-[12px] border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:border-brand focus:bg-white transition-colors w-52"
+            className="w-full h-8 pl-8 pr-3 text-[13px] border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:border-brand focus:bg-white transition-colors"
           />
         </div>
-        <FilterSelect value={filterCategory} onChange={setFilterCategory} options={CATEGORY_OPTIONS} placeholder="카테고리" />
+        <FilterSelect value={filterCategory} onChange={setFilterCategory} options={CATEGORY_OPTIONS} placeholder="카테고리" className="w-[120px]" />
       </div>
 
       {isPending ? (

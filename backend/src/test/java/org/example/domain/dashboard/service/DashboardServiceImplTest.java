@@ -73,7 +73,7 @@ class DashboardServiceImplTest {
     void getDashboardTeamScope() {
         WorkRequest wr = workRequest(1L, "WR-001", "개발중 업무", "기능개선", "높음", "개발중", 10L, 2L, LocalDate.now().plusDays(1));
         TechTask tk = techTask(2L, "TK-001", "완료 과제", "리팩토링", "보통", "완료", 10L, 3L, LocalDate.now().plusDays(10));
-        TestScenario ts = testScenario(3L, "TS-001", "검토 시나리오", "기능", "보통", "검토중", 10L, null, LocalDate.now().plusDays(2));
+        TestScenario ts = testScenario(3L, "TS-001", "승인 시나리오", "기능", "보통", "승인됨", 10L, null, LocalDate.now().plusDays(2));
         Defect df = defect(4L, "DF-001", "보류 결함", "버그", "보통", "보류", 10L, 2L, LocalDate.now().plusDays(2));
         Deployment dp = deployment(5L, "DP-001", "진행 배포", "핫픽스", "진행중", 10L, 4L, LocalDate.now().plusDays(5));
 

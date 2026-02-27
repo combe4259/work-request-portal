@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createDefect, deleteDefect, updateDefect, updateDefectStatus } from './service'
 import { defectQueryKeys } from './queries'
+import { dashboardQueryKeys } from '@/features/dashboard/queries'
 import type { DefectStatus } from '@/types/defect'
 
 export function useCreateDefectMutation() {
@@ -10,6 +11,7 @@ export function useCreateDefectMutation() {
     mutationFn: createDefect,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: defectQueryKeys.all })
+      await queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.all })
     },
   })
 }
@@ -22,6 +24,7 @@ export function useUpdateDefectMutation() {
     onSuccess: async (_data, variables) => {
       await queryClient.invalidateQueries({ queryKey: defectQueryKeys.all })
       await queryClient.invalidateQueries({ queryKey: defectQueryKeys.detail(variables.id) })
+      await queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.all })
     },
   })
 }
@@ -41,6 +44,7 @@ export function useUpdateDefectStatusMutation(id: string | number | undefined) {
       if (id != null) {
         await queryClient.invalidateQueries({ queryKey: defectQueryKeys.detail(id) })
       }
+      await queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.all })
     },
   })
 }
@@ -52,6 +56,7 @@ export function useDeleteDefectMutation() {
     mutationFn: deleteDefect,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: defectQueryKeys.all })
+      await queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.all })
     },
   })
 }

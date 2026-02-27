@@ -83,27 +83,8 @@ CREATE TABLE user_teams (
 -- =====================================================
 -- 4. 팀 초대 / 가입 요청 (Team Invitations)
 -- =====================================================
-CREATE TABLE team_invitations (
-    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
-    team_id     BIGINT NOT NULL,
-    email       VARCHAR(100) NOT NULL,
-    invited_by  BIGINT NOT NULL,
-    accepted_user_id BIGINT,
-    token       VARCHAR(64) UNIQUE NOT NULL,
-    status      ENUM('PENDING', 'ACCEPTED', 'REJECTED', 'EXPIRED') NOT NULL DEFAULT 'PENDING',
-    expires_at  DATETIME NOT NULL,
-    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    responded_at DATETIME,
-
-    CONSTRAINT fk_inv_team FOREIGN KEY (team_id) REFERENCES teams(id),
-    CONSTRAINT fk_inv_inviter FOREIGN KEY (invited_by) REFERENCES users(id),
-    CONSTRAINT fk_inv_accepted_user FOREIGN KEY (accepted_user_id) REFERENCES users(id),
-
-    INDEX idx_inv_email (email),
-    INDEX idx_inv_token (token),
-    INDEX idx_inv_status (status),
-    INDEX idx_inv_accepted_user (accepted_user_id)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+-- 초대 방식은 teams.invite_code 기반으로 일원화하여
+-- team_invitations 테이블은 V6 마이그레이션에서 제거됨.
 
 -- =====================================================
 -- 5. 업무 요청 (Work Requests)
@@ -659,6 +640,28 @@ CREATE TABLE knowledge_base_related_refs (
     UNIQUE KEY uq_kbr_ref (article_id, ref_type, ref_id),
     INDEX idx_kbr_article (article_id),
     INDEX idx_kbr_ref (ref_type, ref_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
+-- =====================================================
+-- 20-1. 워크플로우 UI 상태 (Flow UI States)
+-- 사용자별(work_request_id + user_id) 노드 위치/로컬 연결선을 저장
+-- =====================================================
+CREATE TABLE flow_ui_states (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    work_request_id BIGINT NOT NULL,
+    user_id         BIGINT NOT NULL,
+    team_id         BIGINT NOT NULL,
+    state_json      JSON NOT NULL,
+    version         BIGINT NOT NULL DEFAULT 0,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_fus_work_request FOREIGN KEY (work_request_id) REFERENCES work_requests(id) ON DELETE CASCADE,
+    CONSTRAINT fk_fus_user FOREIGN KEY (user_id) REFERENCES users(id),
+    CONSTRAINT fk_fus_team FOREIGN KEY (team_id) REFERENCES teams(id),
+
+    UNIQUE KEY uq_fus_work_request_user (work_request_id, user_id),
+    INDEX idx_fus_team_id (team_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 -- =====================================================

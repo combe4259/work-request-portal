@@ -112,7 +112,7 @@ global/util/
 
 ## 도메인-테이블 매핑
 
-- `team`: `teams`, `user_teams`, `team_invitations`
+- `team`: `teams`, `user_teams`
 - `workRequest`: `work_requests`
 - `techTask`: `tech_tasks`, `tech_task_related_refs`, `tech_task_pr_links`
 - `testScenario`: `test_scenarios`, `test_scenario_related_refs`

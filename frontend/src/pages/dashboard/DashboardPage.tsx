@@ -1,17 +1,25 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import KpiCard from '@/components/dashboard/KpiCard'
-import { PriorityBadge } from '@/components/work-request/Badges'
+import { PriorityBadge, TypeBadge, StatusBadge } from '@/components/work-request/Badges'
 import { SortTh, type SortDir } from '@/components/common/TableControls'
 import { EmptyState } from '@/components/common/AsyncState'
 import ShowMoreButton from '@/components/common/ShowMoreButton'
+import { TechTypeBadge } from '@/components/tech-task/Badges'
+import { TestTypeBadge, TestStatusBadge } from '@/components/test-scenario/Badges'
+import { DefectTypeBadge, DefectStatusBadge } from '@/components/defect/Badges'
+import { DeployTypeBadge, DeployStatusBadge } from '@/components/deployment/Badges'
 import { useDashboardSummaryQuery } from '@/features/dashboard/queries'
 import type { DashboardDomain, DashboardDomainFilter, DashboardScope } from '@/features/dashboard/service'
 import { useDashboardNotificationsQuery } from '@/features/notification/queries'
 import { getNotificationRoute } from '@/features/notification/routes'
 import { useExpandableList } from '@/hooks/useExpandableList'
 import { useAuthStore } from '@/stores/authStore'
-import type { Priority } from '@/types/work-request'
+import type { Priority, RequestType, Status as WorkRequestStatus } from '@/types/work-request'
+import type { TechTaskType, Status as TechTaskStatus } from '@/types/tech-task'
+import type { TestScenarioType, TestStatus } from '@/types/test-scenario'
+import type { DefectType, DefectStatus } from '@/types/defect'
+import type { DeployType, DeployStatus } from '@/types/deployment'
 
 type CalEvent = {
   date: string
@@ -61,6 +69,7 @@ const DOMAIN_FILTER_OPTIONS: Array<{ key: DomainFilter; label: string }> = [
 
 const IN_PROGRESS_STATUSES = new Set([
   '검토중',
+  '승인됨',
   '개발중',
   '테스트중',
   '실행중',
@@ -407,7 +416,9 @@ export default function DashboardPage() {
                         {item.title}
                       </span>
                     </td>
-                    <td className="px-3 py-3 whitespace-nowrap text-[12px] text-gray-600">{item.type}</td>
+                    <td className="px-3 py-3 whitespace-nowrap">
+                      <TypePill item={item} />
+                    </td>
                     <td className="px-3 py-3 whitespace-nowrap">
                       {item.priority === '-' ? (
                         <span className="text-[12px] text-gray-400">-</span>
@@ -416,7 +427,7 @@ export default function DashboardPage() {
                       )}
                     </td>
                     <td className="px-3 py-3 whitespace-nowrap">
-                      <StatusPill status={item.status} />
+                      <StatusPill item={item} />
                     </td>
                     <td className="px-3 py-3 whitespace-nowrap">
                       <span className="text-[12px] text-gray-600">{item.assignee}</span>
@@ -643,15 +654,38 @@ function DomainBadge({ domain }: { domain: string }) {
   return <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${className}`}>{domain}</span>
 }
 
-function StatusPill({ status }: { status: string }) {
-  const className =
-    status === '완료' || status === '통과'
-      ? 'bg-emerald-50 text-emerald-700'
-      : status === '실패' || status === '반려' || status === '롤백'
-      ? 'bg-red-50 text-red-700'
-      : 'bg-gray-100 text-gray-700'
+function TypePill({ item }: { item: UnifiedBoardItem }) {
+  switch (item.domainKey) {
+    case 'WORK_REQUEST':
+      return <TypeBadge type={item.type as RequestType} />
+    case 'TECH_TASK':
+      return <TechTypeBadge type={item.type as TechTaskType} />
+    case 'TEST_SCENARIO':
+      return <TestTypeBadge type={item.type as TestScenarioType} />
+    case 'DEFECT':
+      return <DefectTypeBadge type={item.type as DefectType} />
+    case 'DEPLOYMENT':
+      return <DeployTypeBadge type={item.type as DeployType} />
+    default:
+      return <span className="text-[12px] text-gray-600">{item.type}</span>
+  }
+}
 
-  return <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${className}`}>{status}</span>
+function StatusPill({ item }: { item: UnifiedBoardItem }) {
+  switch (item.domainKey) {
+    case 'WORK_REQUEST':
+      return <StatusBadge status={item.status as WorkRequestStatus} />
+    case 'TECH_TASK':
+      return <StatusBadge status={item.status as TechTaskStatus} />
+    case 'TEST_SCENARIO':
+      return <TestStatusBadge status={item.status as TestStatus} />
+    case 'DEFECT':
+      return <DefectStatusBadge status={item.status as DefectStatus} />
+    case 'DEPLOYMENT':
+      return <DeployStatusBadge status={item.status as DeployStatus} />
+    default:
+      return <span className="text-[12px] text-gray-600">{item.status}</span>
+  }
 }
 
 function DeadlineBadge({ date }: { date: string }) {

@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createDeployment, deleteDeployment, updateDeployment, updateDeploymentStatus } from './service'
 import { deploymentQueryKeys } from './queries'
+import { dashboardQueryKeys } from '@/features/dashboard/queries'
 import type { DeployStatus } from '@/types/deployment'
 
 export function useCreateDeploymentMutation() {
@@ -10,6 +11,7 @@ export function useCreateDeploymentMutation() {
     mutationFn: createDeployment,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: deploymentQueryKeys.all })
+      await queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.all })
     },
   })
 }
@@ -24,6 +26,7 @@ export function useUpdateDeploymentMutation() {
       await queryClient.invalidateQueries({ queryKey: deploymentQueryKeys.detail(variables.id) })
       await queryClient.invalidateQueries({ queryKey: deploymentQueryKeys.relatedRefs(variables.id) })
       await queryClient.invalidateQueries({ queryKey: deploymentQueryKeys.steps(variables.id) })
+      await queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.all })
     },
   })
 }
@@ -43,6 +46,7 @@ export function useUpdateDeploymentStatusMutation(id: string | number | undefine
       if (id != null) {
         await queryClient.invalidateQueries({ queryKey: deploymentQueryKeys.detail(id) })
       }
+      await queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.all })
     },
   })
 }
@@ -54,6 +58,7 @@ export function useDeleteDeploymentMutation() {
     mutationFn: deleteDeployment,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: deploymentQueryKeys.all })
+      await queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.all })
     },
   })
 }

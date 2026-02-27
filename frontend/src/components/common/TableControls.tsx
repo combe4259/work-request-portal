@@ -4,18 +4,19 @@ export type SortDir = 'asc' | 'desc'
 
 // ── FilterSelect ──────────────────────────────────────
 export function FilterSelect({
-  value, onChange, options, placeholder,
+  value, onChange, options, placeholder, className = '',
 }: {
   value: string
   onChange: (v: string) => void
   options: string[]
   placeholder: string
+  className?: string
 }) {
   return (
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="h-8 px-2.5 pr-7 text-[12px] border border-gray-200 rounded-lg bg-gray-50 text-gray-600 focus:outline-none focus:border-brand appearance-none cursor-pointer"
+      className={`h-8 px-2.5 pr-7 text-[12px] border border-gray-200 rounded-lg bg-gray-50 text-gray-600 focus:outline-none focus:border-brand appearance-none cursor-pointer ${className}`}
       style={{
         backgroundImage: `url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%239CA3AF' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
         backgroundRepeat: 'no-repeat',

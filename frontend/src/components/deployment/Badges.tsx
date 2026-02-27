@@ -1,4 +1,5 @@
 import type { DeployType, DeployEnv, DeployStatus } from '@/types/deployment'
+import BadgePill from '@/components/common/BadgePill'
 
 // ── 유형 배지 ─────────────────────────────────────────
 const TYPE_STYLES: Record<DeployType, string> = {
@@ -10,11 +11,7 @@ const TYPE_STYLES: Record<DeployType, string> = {
 }
 
 export function DeployTypeBadge({ type }: { type: DeployType }) {
-  return (
-    <span className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-medium ${TYPE_STYLES[type]}`}>
-      {type}
-    </span>
-  )
+  return <BadgePill label={type} tone={TYPE_STYLES[type]} />
 }
 
 // ── 환경 배지 ─────────────────────────────────────────
@@ -25,11 +22,7 @@ const ENV_STYLES: Record<DeployEnv, string> = {
 }
 
 export function DeployEnvBadge({ env }: { env: DeployEnv }) {
-  return (
-    <span className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-semibold ${ENV_STYLES[env]}`}>
-      {env}
-    </span>
-  )
+  return <BadgePill label={env} tone={ENV_STYLES[env]} strong />
 }
 
 // ── 상태 배지 ─────────────────────────────────────────
@@ -42,9 +35,5 @@ const STATUS_STYLES: Record<DeployStatus, string> = {
 }
 
 export function DeployStatusBadge({ status }: { status: DeployStatus }) {
-  return (
-    <span className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-medium ${STATUS_STYLES[status]}`}>
-      {status}
-    </span>
-  )
+  return <BadgePill label={status} tone={STATUS_STYLES[status]} />
 }

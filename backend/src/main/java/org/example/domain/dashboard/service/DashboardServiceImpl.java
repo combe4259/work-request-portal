@@ -36,6 +36,7 @@ public class DashboardServiceImpl implements DashboardService {
 
     private static final Set<String> IN_PROGRESS_STATUSES = Set.of(
             "검토중",
+            "승인됨",
             "개발중",
             "테스트중",
             "실행중",

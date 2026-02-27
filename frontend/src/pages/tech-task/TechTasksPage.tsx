@@ -5,7 +5,10 @@ import { FilterSelect, SortTh, Pagination, DeadlineCell, type SortDir } from '@/
 import { PlusIcon, SearchIcon } from '@/components/common/Icons'
 import { TechTypeBadge } from '@/components/tech-task/Badges'
 import { EmptyState, ErrorState, LoadingState } from '@/components/common/AsyncState'
+import PageHeader from '@/components/common/PageHeader'
+import { useTeamMembersQuery } from '@/features/auth/queries'
 import { useTechTasksQuery } from '@/features/tech-task/queries'
+import { useAuthStore } from '@/stores/authStore'
 import type { TechTaskType, Priority, Status } from '@/types/tech-task'
 
 const PAGE_SIZE = 10
@@ -14,12 +17,22 @@ type SortKey = 'docNo' | 'deadline'
 
 export default function TechTasksPage() {
   const navigate = useNavigate()
+  const currentTeamId = useAuthStore((state) => state.currentTeam?.id)
+  const teamMembersQuery = useTeamMembersQuery(currentTeamId)
   const [search, setSearch] = useState('')
   const [filterType, setFilterType] = useState<TechTaskType | '전체'>('전체')
   const [filterPriority, setFilterPriority] = useState<Priority | '전체'>('전체')
   const [filterStatus, setFilterStatus] = useState<Status | '전체'>('전체')
+  const [filterAssigneeId, setFilterAssigneeId] = useState<string>('전체')
+  const [deadlineFrom, setDeadlineFrom] = useState('')
+  const [deadlineTo, setDeadlineTo] = useState('')
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: 'docNo', dir: 'desc' })
   const [page, setPage] = useState(1)
+
+  const assigneeOptions = useMemo(
+    () => (teamMembersQuery.data ?? []).map((member) => ({ value: String(member.userId), label: member.name })),
+    [teamMembersQuery.data],
+  )
 
   const params = useMemo(
     () => ({
@@ -27,12 +40,15 @@ export default function TechTasksPage() {
       filterType,
       filterPriority,
       filterStatus,
+      filterAssigneeId: filterAssigneeId === '전체' ? null : Number(filterAssigneeId),
+      deadlineFrom: deadlineFrom || undefined,
+      deadlineTo: deadlineTo || undefined,
       sortKey: sort.key,
       sortDir: sort.dir,
       page,
       pageSize: PAGE_SIZE,
     }),
-    [filterPriority, filterStatus, filterType, page, search, sort.dir, sort.key],
+    [deadlineFrom, deadlineTo, filterAssigneeId, filterPriority, filterStatus, filterType, page, search, sort.dir, sort.key],
   )
   const { data, isPending, isError, refetch } = useTechTasksQuery(params)
 
@@ -42,33 +58,32 @@ export default function TechTasksPage() {
   }
 
   const resetFilters = () => {
-    setSearch(''); setFilterType('전체'); setFilterPriority('전체'); setFilterStatus('전체'); setPage(1)
+    setSearch('')
+    setFilterType('전체')
+    setFilterPriority('전체')
+    setFilterStatus('전체')
+    setFilterAssigneeId('전체')
+    setDeadlineFrom('')
+    setDeadlineTo('')
+    setPage(1)
   }
 
   const isFiltered = search || filterType !== '전체' || filterPriority !== '전체' || filterStatus !== '전체'
+    || filterAssigneeId !== '전체' || deadlineFrom || deadlineTo
 
   const isEmpty = !isPending && !isError && (data?.items.length ?? 0) === 0
 
   return (
-    <div className="p-6 space-y-4">
-      {/* 헤더 */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-[18px] font-bold text-gray-900">기술과제</h1>
-          <p className="text-[12px] text-gray-400 mt-0.5">총 {data?.total ?? 0}건</p>
-        </div>
-        <button
-          onClick={() => navigate('/tech-tasks/new')}
-          className="flex items-center gap-1.5 h-8 px-3 bg-brand hover:bg-brand-hover text-white text-[13px] font-semibold rounded-lg transition-colors"
-        >
-          <PlusIcon />
-          기술과제 등록
-        </button>
-      </div>
+    <div className="p-4 sm:p-6 space-y-4">
+      <PageHeader
+        title="기술과제"
+        count={data?.total ?? 0}
+        action={{ label: '기술과제 등록', onClick: () => navigate('/tech-tasks/new'), icon: <PlusIcon /> }}
+      />
 
       {/* 필터 바 */}
-      <div className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] px-4 py-3 flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-[200px]">
+      <div className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] px-3 sm:px-4 py-3 flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[220px]">
           <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400"><SearchIcon /></span>
           <input
             type="text"
@@ -78,14 +93,48 @@ export default function TechTasksPage() {
             className="w-full h-8 pl-8 pr-3 text-[13px] border border-gray-200 rounded-lg focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand/20 bg-gray-50"
           />
         </div>
-        <FilterSelect value={filterType} onChange={(v) => { setFilterType(v as TechTaskType | '전체'); setPage(1) }} options={['전체', '리팩토링', '기술부채', '성능개선', '보안', '테스트', '기타']} placeholder="유형" />
-        <FilterSelect value={filterPriority} onChange={(v) => { setFilterPriority(v as Priority | '전체'); setPage(1) }} options={['전체', '긴급', '높음', '보통', '낮음']} placeholder="우선순위" />
-        <FilterSelect value={filterStatus} onChange={(v) => { setFilterStatus(v as Status | '전체'); setPage(1) }} options={['전체', '접수대기', '검토중', '개발중', '테스트중', '완료', '반려']} placeholder="상태" />
-        {isFiltered && (
-          <button onClick={resetFilters} className="h-8 px-3 text-[12px] text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-            초기화
-          </button>
-        )}
+        <FilterSelect value={filterType} onChange={(v) => { setFilterType(v as TechTaskType | '전체'); setPage(1) }} options={['전체', '리팩토링', '기술부채', '성능개선', '보안', '테스트', '기타']} placeholder="유형" className="w-[120px]" />
+        <FilterSelect value={filterPriority} onChange={(v) => { setFilterPriority(v as Priority | '전체'); setPage(1) }} options={['전체', '긴급', '높음', '보통', '낮음']} placeholder="우선순위" className="w-[112px]" />
+        <FilterSelect value={filterStatus} onChange={(v) => { setFilterStatus(v as Status | '전체'); setPage(1) }} options={['전체', '접수대기', '검토중', '개발중', '테스트중', '완료', '반려']} placeholder="상태" className="w-[128px]" />
+        <select
+          value={filterAssigneeId}
+          onChange={(e) => { setFilterAssigneeId(e.target.value); setPage(1) }}
+          className="h-8 px-2.5 pr-7 text-[12px] border border-gray-200 rounded-lg bg-gray-50 text-gray-600 focus:outline-none focus:border-brand appearance-none cursor-pointer w-[124px]"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%239CA3AF' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
+            backgroundRepeat: 'no-repeat',
+            backgroundPosition: 'right 8px center',
+          }}
+        >
+          <option value="전체">담당자 전체</option>
+          {assigneeOptions.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+        <div className="flex items-center gap-1">
+          <input
+            type="date"
+            value={deadlineFrom}
+            max={deadlineTo || undefined}
+            onChange={(e) => { setDeadlineFrom(e.target.value); setPage(1) }}
+            className="h-8 px-2.5 text-[12px] border border-gray-200 rounded-lg bg-gray-50 text-gray-600 focus:outline-none focus:border-brand w-[132px]"
+          />
+          <span className="text-[12px] text-gray-400">~</span>
+          <input
+            type="date"
+            value={deadlineTo}
+            min={deadlineFrom || undefined}
+            onChange={(e) => { setDeadlineTo(e.target.value); setPage(1) }}
+            className="h-8 px-2.5 text-[12px] border border-gray-200 rounded-lg bg-gray-50 text-gray-600 focus:outline-none focus:border-brand w-[132px]"
+          />
+        </div>
+        <button
+          onClick={resetFilters}
+          disabled={!isFiltered}
+          className="h-8 px-3 text-[12px] text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          초기화
+        </button>
       </div>
 
       {/* 테이블 */}
@@ -108,7 +157,16 @@ export default function TechTasksPage() {
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full table-fixed text-sm">
+            <colgroup>
+              <col className="w-[120px]" />
+              <col />
+              <col className="w-[120px]" />
+              <col className="w-[110px]" />
+              <col className="w-[110px]" />
+              <col className="w-[120px]" />
+              <col className="w-[110px]" />
+            </colgroup>
             <thead>
               <tr className="bg-gray-50/80 border-b border-gray-100">
                 <SortTh label="문서번호" sortKey="docNo" current={sort} onSort={handleSort} />
@@ -130,7 +188,7 @@ export default function TechTasksPage() {
                     <td className="px-4 py-3 font-mono text-[11px] text-gray-400 whitespace-nowrap">
                       {task.docNo}
                     </td>
-                    <td className="px-4 py-3 max-w-[260px]">
+                    <td className="px-4 py-3">
                       <span className="text-[13px] text-gray-800 font-medium truncate block group-hover:text-brand transition-colors">
                         {task.title}
                       </span>

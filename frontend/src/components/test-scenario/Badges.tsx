@@ -1,4 +1,5 @@
 import type { TestScenarioType, TestStatus } from '@/types/test-scenario'
+import BadgePill from '@/components/common/BadgePill'
 
 // ── 유형 배지 ─────────────────────────────────────────
 const TYPE_STYLES: Record<TestScenarioType, string> = {
@@ -12,11 +13,7 @@ const TYPE_STYLES: Record<TestScenarioType, string> = {
 }
 
 export function TestTypeBadge({ type }: { type: TestScenarioType }) {
-  return (
-    <span className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-medium ${TYPE_STYLES[type]}`}>
-      {type}
-    </span>
-  )
+  return <BadgePill label={type} tone={TYPE_STYLES[type]} />
 }
 
 // ── 상태 배지 ─────────────────────────────────────────
@@ -31,9 +28,5 @@ const STATUS_STYLES: Record<TestStatus, string> = {
 }
 
 export function TestStatusBadge({ status }: { status: TestStatus }) {
-  return (
-    <span className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-medium ${STATUS_STYLES[status]}`}>
-      {status}
-    </span>
-  )
+  return <BadgePill label={status} tone={STATUS_STYLES[status]} />
 }

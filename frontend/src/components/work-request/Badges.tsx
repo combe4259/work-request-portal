@@ -1,4 +1,5 @@
 import type { RequestType, Priority, Status } from '@/types/work-request'
+import BadgePill from '@/components/common/BadgePill'
 
 // ── 유형 배지 ─────────────────────────────────────────
 const TYPE_STYLES: Record<RequestType, string> = {
@@ -10,11 +11,7 @@ const TYPE_STYLES: Record<RequestType, string> = {
 }
 
 export function TypeBadge({ type }: { type: RequestType }) {
-  return (
-    <span className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-medium ${TYPE_STYLES[type]}`}>
-      {type}
-    </span>
-  )
+  return <BadgePill label={type} tone={TYPE_STYLES[type]} />
 }
 
 // ── 우선순위 배지 ──────────────────────────────────────
@@ -26,11 +23,7 @@ const PRIORITY_STYLES: Record<Priority, string> = {
 }
 
 export function PriorityBadge({ priority }: { priority: Priority }) {
-  return (
-    <span className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-medium ${PRIORITY_STYLES[priority]}`}>
-      {priority}
-    </span>
-  )
+  return <BadgePill label={priority} tone={PRIORITY_STYLES[priority]} />
 }
 
 // ── 상태 배지 ─────────────────────────────────────────
@@ -44,9 +37,5 @@ const STATUS_STYLES: Record<Status, string> = {
 }
 
 export function StatusBadge({ status }: { status: Status }) {
-  return (
-    <span className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-medium ${STATUS_STYLES[status]}`}>
-      {status}
-    </span>
-  )
+  return <BadgePill label={status} tone={STATUS_STYLES[status]} />
 }

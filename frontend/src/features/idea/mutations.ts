@@ -31,7 +31,8 @@ export function useLikeIdeaMutation() {
 
   return useMutation({
     mutationFn: likeIdea,
-    onSuccess: async () => {
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({ queryKey: ideaQueryKeys.detail(variables) })
       await queryClient.invalidateQueries({ queryKey: ideaQueryKeys.all })
     },
   })
@@ -42,7 +43,8 @@ export function useUnlikeIdeaMutation() {
 
   return useMutation({
     mutationFn: unlikeIdea,
-    onSuccess: async () => {
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({ queryKey: ideaQueryKeys.detail(variables) })
       await queryClient.invalidateQueries({ queryKey: ideaQueryKeys.all })
     },
   })

@@ -7,6 +7,8 @@ import DashboardPage from '@/pages/dashboard/DashboardPage'
 import WorkRequestsPage from '@/pages/work-request/WorkRequestsPage'
 import WorkRequestFormPage from '@/pages/work-request/WorkRequestFormPage'
 import WorkRequestDetailPage from '@/pages/work-request/WorkRequestDetailPage'
+import WorkRequestFlowPage from '@/pages/work-request/WorkRequestFlowPage'
+import WorkRequestFlowLegacyRedirect from '@/pages/work-request/WorkRequestFlowLegacyRedirect'
 import TechTasksPage from '@/pages/tech-task/TechTasksPage'
 import TechTaskDetailPage from '@/pages/tech-task/TechTaskDetailPage'
 import TechTaskFormPage from '@/pages/tech-task/TechTaskFormPage'
@@ -79,6 +81,8 @@ const router = createBrowserRouter([
       { path: '/work-requests/new', element: <WorkRequestFormPage /> },
       { path: '/work-requests/:id/edit', element: <WorkRequestFormPage /> },
       { path: '/work-requests/:id', element: <WorkRequestDetailPage /> },
+      { path: '/work-requests/:id/flow', element: <WorkRequestFlowLegacyRedirect /> },
+      { path: '/workflow', element: <WorkRequestFlowPage /> },
       { path: '/tech-tasks', element: <TechTasksPage /> },
       { path: '/tech-tasks/new', element: <TechTaskFormPage /> },
       { path: '/tech-tasks/:id/edit', element: <TechTaskFormPage /> },

@@ -7,8 +7,12 @@ plugins {
 
 sonar {
     properties {
-        property "sonar.projectKey", "work-request-portal-backend"
-        property "sonar.host.url", "http://localhost:9000"
+        property "sonar.projectKey", "work-request-portal"
+
+        property "sonar.organization", "combe4259"
+
+        property "sonar.host.url", "https://sonarcloud.io"
+
         property "sonar.token", System.getenv("SONAR_TOKEN")
     }
 }

@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createWorkRequest, deleteWorkRequest, updateWorkRequest, updateWorkRequestStatus } from './service'
 import { workRequestQueryKeys } from './queries'
+import { dashboardQueryKeys } from '@/features/dashboard/queries'
 import type { Status } from '@/types/work-request'
 
 export function useCreateWorkRequestMutation() {
@@ -10,6 +11,7 @@ export function useCreateWorkRequestMutation() {
     mutationFn: createWorkRequest,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: workRequestQueryKeys.all })
+      await queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.all })
     },
   })
 }
@@ -29,6 +31,7 @@ export function useUpdateWorkRequestStatusMutation(id: string | number | undefin
       if (id != null) {
         await queryClient.invalidateQueries({ queryKey: workRequestQueryKeys.detail(id) })
       }
+      await queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.all })
     },
   })
 }
@@ -42,6 +45,7 @@ export function useUpdateWorkRequestMutation() {
       await queryClient.invalidateQueries({ queryKey: workRequestQueryKeys.all })
       await queryClient.invalidateQueries({ queryKey: workRequestQueryKeys.detail(variables.id) })
       await queryClient.invalidateQueries({ queryKey: workRequestQueryKeys.relatedRefs(variables.id) })
+      await queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.all })
     },
   })
 }
@@ -53,6 +57,7 @@ export function useDeleteWorkRequestMutation() {
     mutationFn: deleteWorkRequest,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: workRequestQueryKeys.all })
+      await queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.all })
     },
   })
 }

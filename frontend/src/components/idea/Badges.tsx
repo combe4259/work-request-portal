@@ -1,4 +1,5 @@
 import type { IdeaCategory, IdeaStatus } from '@/types/idea'
+import BadgePill from '@/components/common/BadgePill'
 
 const CATEGORY_STYLES: Record<IdeaCategory, string> = {
   'UX/UI':   'bg-blue-50 text-blue-600',
@@ -9,11 +10,7 @@ const CATEGORY_STYLES: Record<IdeaCategory, string> = {
 }
 
 export function CategoryBadge({ category }: { category: IdeaCategory }) {
-  return (
-    <span className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-medium ${CATEGORY_STYLES[category]}`}>
-      {category}
-    </span>
-  )
+  return <BadgePill label={category} tone={CATEGORY_STYLES[category]} />
 }
 
 const STATUS_STYLES: Record<IdeaStatus, string> = {
@@ -25,9 +22,5 @@ const STATUS_STYLES: Record<IdeaStatus, string> = {
 }
 
 export function IdeaStatusBadge({ status }: { status: IdeaStatus }) {
-  return (
-    <span className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-medium ${STATUS_STYLES[status]}`}>
-      {status}
-    </span>
-  )
+  return <BadgePill label={status} tone={STATUS_STYLES[status]} />
 }

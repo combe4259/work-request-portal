@@ -12,6 +12,9 @@ export interface WorkRequestListParams {
   filterType: RequestType | '전체'
   filterPriority: Priority | '전체'
   filterStatus: Status | '전체'
+  filterAssigneeId: number | null
+  deadlineFrom?: string
+  deadlineTo?: string
   sortKey: WorkRequestSortKey
   sortDir: WorkRequestSortDir
   page: number
@@ -55,6 +58,9 @@ export interface UpdateWorkRequestInput {
 
 interface ApiPageResponse<T> {
   content: T[]
+  totalElements: number
+  totalPages: number
+  number: number
 }
 
 interface ApiWorkRequestListItem {
@@ -118,8 +124,6 @@ interface ApiUpdateWorkRequestRequest {
   deadline?: string
 }
 
-const LIST_FETCH_SIZE = 500
-
 function mapUserLabel(userId: number | null | undefined, fallbackText: string): string {
   if (userId == null) {
     return fallbackText
@@ -169,41 +173,29 @@ function mapDetailItem(item: ApiWorkRequestDetailResponse): WorkRequestDetail {
 
 export async function listWorkRequests(params: WorkRequestListParams): Promise<WorkRequestListResult> {
   const { data } = await api.get<ApiPageResponse<ApiWorkRequestListItem>>('/work-requests', {
-    params: { page: 0, size: LIST_FETCH_SIZE },
+    params: {
+      q: params.search.trim() || undefined,
+      type: params.filterType === '전체' ? undefined : params.filterType,
+      priority: params.filterPriority === '전체' ? undefined : params.filterPriority,
+      status: params.filterStatus === '전체' ? undefined : params.filterStatus,
+      assigneeId: params.filterAssigneeId ?? undefined,
+      deadlineFrom: params.deadlineFrom || undefined,
+      deadlineTo: params.deadlineTo || undefined,
+      sortBy: params.sortKey,
+      sortDir: params.sortDir,
+      page: Math.max(0, params.page - 1),
+      size: params.pageSize,
+    },
   })
 
-  const filtered = data.content
-    .map(mapListItem)
-    .filter((item) => {
-      const keyword = params.search.trim()
-      const matchSearch = keyword.length === 0 || item.title.includes(keyword) || item.docNo.includes(keyword)
-      const matchType = params.filterType === '전체' || item.type === params.filterType
-      const matchPriority = params.filterPriority === '전체' || item.priority === params.filterPriority
-      const matchStatus = params.filterStatus === '전체' || item.status === params.filterStatus
-      return matchSearch && matchType && matchPriority && matchStatus
-    })
-
-  const sortFactor = params.sortDir === 'asc' ? 1 : -1
-  const sorted = [...filtered].sort((a, b) => {
-    if (params.sortKey === 'docNo') {
-      return a.docNo.localeCompare(b.docNo, 'ko-KR', { numeric: true }) * sortFactor
-    }
-
-    const aDeadline = a.deadline ? new Date(a.deadline).getTime() : Number.MAX_SAFE_INTEGER
-    const bDeadline = b.deadline ? new Date(b.deadline).getTime() : Number.MAX_SAFE_INTEGER
-    return (aDeadline - bDeadline) * sortFactor
-  })
-
-  const totalPages = Math.max(1, Math.ceil(sorted.length / params.pageSize))
-  const safePage = Math.min(Math.max(1, params.page), totalPages)
-  const start = (safePage - 1) * params.pageSize
-  const items = sorted.slice(start, start + params.pageSize)
+  const items = data.content.map(mapListItem)
+  const totalPages = Math.max(1, data.totalPages || 1)
 
   return {
     items,
-    total: sorted.length,
+    total: data.totalElements ?? items.length,
     totalPages,
-    page: safePage,
+    page: (data.number ?? 0) + 1,
   }
 }
 

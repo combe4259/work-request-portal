@@ -8,5 +8,7 @@ import java.util.List;
 public interface DeploymentRelatedRefRepository extends JpaRepository<DeploymentRelatedRef, Long> {
     List<DeploymentRelatedRef> findByDeploymentIdOrderBySortOrderAscIdAsc(Long deploymentId);
 
+    List<DeploymentRelatedRef> findByRefTypeAndRefId(String refType, Long refId);
+
     void deleteByDeploymentId(Long deploymentId);
 }

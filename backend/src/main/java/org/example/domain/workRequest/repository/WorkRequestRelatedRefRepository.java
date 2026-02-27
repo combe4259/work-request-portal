@@ -8,5 +8,7 @@ import java.util.List;
 public interface WorkRequestRelatedRefRepository extends JpaRepository<WorkRequestRelatedRef, Long> {
     List<WorkRequestRelatedRef> findByWorkRequestIdOrderBySortOrderAscIdAsc(Long workRequestId);
 
+    boolean existsByWorkRequestIdAndRefTypeAndRefId(Long workRequestId, String refType, Long refId);
+
     void deleteByWorkRequestId(Long workRequestId);
 }

@@ -21,6 +21,9 @@ public record UserProfileUpdateRequest(
         @Size(max = 20, message = "아바타 색상 값이 너무 깁니다.")
         String avatarColor,
 
-        String photoUrl
+        String photoUrl,
+
+        @Size(max = 50, message = "Slack 사용자 ID는 50자 이하여야 합니다.")
+        String slackUserId
 ) {
 }
