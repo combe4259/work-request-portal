@@ -20,7 +20,6 @@ public final class TechTaskMapper {
         entity.setType(request.type());
         entity.setPriority(request.priority());
         entity.setStatus(request.status());
-        entity.setTeamId(request.teamId());
         entity.setRegistrantId(request.registrantId());
         entity.setAssigneeId(request.assigneeId());
         entity.setDeadline(request.deadline());

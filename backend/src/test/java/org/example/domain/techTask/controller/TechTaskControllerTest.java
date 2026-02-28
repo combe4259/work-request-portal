@@ -144,7 +144,6 @@ class TechTaskControllerTest {
                 "리팩토링",
                 "보통",
                 "접수대기",
-                10L,
                 1L,
                 2L,
                 LocalDate.of(2026, 3, 7)

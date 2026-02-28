@@ -1,15 +1,16 @@
 package org.example.domain.idea.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import java.util.List;
 
 public record ProjectIdeaCreateRequest(
-        String title,
-        String content,
-        List<String> benefits,
-        String category,
-        String status,
-        String statusNote,
-        Long teamId,
-        Long proposedBy
+        @Schema(example = "AI 기반 업무요청 자동 분류 기능") String title,
+        @Schema(example = "업무요청 등록 시 AI가 유형/우선순위를 자동으로 분류해주면 PM 리소스를 크게 절감할 수 있습니다.") String content,
+        @Schema(example = "[\"PM 업무 30% 절감\",\"오분류율 감소\",\"신규 팀원 온보딩 시간 단축\"]") List<String> benefits,
+        @Schema(example = "기능", description = "UX/UI | 기능 | 인프라 | 프로세스 | 기타") String category,
+        @Schema(example = "제안됨", description = "제안됨 | 검토중 | 채택 | 보류 | 기각") String status,
+        @Schema(example = "null") String statusNote,
+        @Schema(example = "1") Long proposedBy
 ) {
 }

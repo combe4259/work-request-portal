@@ -20,7 +20,6 @@ public final class DefectMapper {
         entity.setType(request.type());
         entity.setSeverity(request.severity());
         entity.setStatus(request.status());
-        entity.setTeamId(request.teamId());
         entity.setRelatedRefType(request.relatedRefType());
         entity.setRelatedRefId(request.relatedRefId());
         entity.setEnvironment(request.environment());

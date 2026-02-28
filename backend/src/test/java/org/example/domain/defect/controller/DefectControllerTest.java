@@ -136,7 +136,6 @@ class DefectControllerTest {
                 "기능",
                 "높음",
                 "접수",
-                10L,
                 "TEST_SCENARIO",
                 17L,
                 "Chrome",

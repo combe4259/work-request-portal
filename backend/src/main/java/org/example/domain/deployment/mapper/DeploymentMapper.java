@@ -20,7 +20,6 @@ public final class DeploymentMapper {
         entity.setType(request.type());
         entity.setEnvironment(request.environment());
         entity.setStatus(request.status());
-        entity.setTeamId(request.teamId());
         entity.setManagerId(request.managerId());
         entity.setScheduledAt(request.scheduledAt());
         entity.setStartedAt(request.startedAt());

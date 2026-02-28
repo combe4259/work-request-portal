@@ -111,7 +111,7 @@ public class TestScenarioServiceImpl implements TestScenarioService {
         TestScenario entity = TestScenarioMapper.fromCreateRequest(request);
 
         entity.setScenarioNo(documentNoGenerator.next("TS"));
-        entity.setTeamId(TeamScopeUtil.requireTeamId(request.teamId()));
+        entity.setTeamId(TeamScopeUtil.requireCurrentTeamId());
         entity.setType(defaultIfBlank(request.type(), "기능"));
         entity.setPriority(defaultIfBlank(request.priority(), "보통"));
         entity.setStatus(defaultIfBlank(request.status(), "작성중"));
@@ -301,7 +301,6 @@ public class TestScenarioServiceImpl implements TestScenarioService {
         if (request.title() == null || request.title().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "title은 필수입니다.");
         }
-        TeamScopeUtil.requireTeamId(request.teamId());
         if (request.createdBy() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "createdBy는 필수입니다.");
         }

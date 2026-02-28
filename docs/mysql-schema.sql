@@ -59,6 +59,24 @@ CREATE TABLE user_preferences (
     CONSTRAINT ck_user_preferences_row_count CHECK (row_count > 0)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
+-- =====================================================
+-- 2-2. 인증 Refresh 토큰 (Auth Refresh Tokens)
+-- =====================================================
+CREATE TABLE auth_refresh_tokens (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id     BIGINT NOT NULL,
+    token_hash  CHAR(64) NOT NULL,
+    expires_at  DATETIME NOT NULL,
+    revoked_at  DATETIME,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_auth_refresh_tokens_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE KEY uq_auth_refresh_tokens_token_hash (token_hash),
+    INDEX idx_auth_refresh_tokens_user_id (user_id),
+    INDEX idx_auth_refresh_tokens_expires_at (expires_at)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
 -- teams.created_by FK는 users 생성 이후에 연결
 ALTER TABLE teams
     ADD CONSTRAINT fk_team_created_by FOREIGN KEY (created_by) REFERENCES users(id);

@@ -144,7 +144,6 @@ class DeploymentControllerTest {
                 "정기배포",
                 "운영",
                 "대기",
-                10L,
                 2L,
                 LocalDate.of(2026, 2, 28),
                 null,

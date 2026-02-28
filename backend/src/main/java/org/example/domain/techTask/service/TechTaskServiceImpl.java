@@ -112,7 +112,7 @@ public class TechTaskServiceImpl implements TechTaskService {
         TechTask entity = TechTaskMapper.fromCreateRequest(request);
 
         entity.setTaskNo(documentNoGenerator.next("TK"));
-        entity.setTeamId(TeamScopeUtil.requireTeamId(request.teamId()));
+        entity.setTeamId(TeamScopeUtil.requireCurrentTeamId());
         entity.setType(defaultIfBlank(request.type(), "기타"));
         entity.setPriority(defaultIfBlank(request.priority(), "보통"));
         entity.setStatus(defaultIfBlank(request.status(), "접수대기"));

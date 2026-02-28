@@ -9,15 +9,20 @@
 - 프론트 라우팅/연동: `frontend/src/router/index.tsx`, `frontend/src/features/**/service.ts`
 - DB 마이그레이션: `backend/src/main/resources/db/migration/*.sql`
 
-기준일: **2026-02-26**
+기준일: **2026-02-27**
 
 ## 2. 공통 규약
 - Base URL: `/api`
 - 예외 엔드포인트: Slack 인터랙션 수신은 `/slack/interactions` (Base URL `/api` 미적용)
-- 인증: `Authorization: Bearer <accessToken>` (`/auth/signup`, `/auth/login` 제외)
+- 인증: `Authorization: Bearer <accessToken>` (`/auth/signup`, `/auth/login`, `/auth/refresh`, `/auth/logout` 제외)
 - 팀 스코프: 팀 데이터는 `teamId` 기준으로 검증/조회
 - 페이징: `page`(0-base), `size`
 - 목록 검색/정렬/필터: 일부 API는 백엔드 미구현이며 프론트에서 보정 중
+
+인증 토큰 정책:
+- Access Token: 짧은 수명(기본 30분)
+- Refresh Token: `HttpOnly` 쿠키(`refresh_token`, `SameSite`, `Secure` 설정 가능)로 관리
+- 클라이언트는 401 응답 시 `/auth/refresh` 1회 자동 시도 후 실패하면 로그아웃 처리
 
 실시간(회의록):
 - WebSocket(SockJS) endpoint: `/ws`
@@ -36,8 +41,9 @@
 |---|---|---|---|---|
 | POST | `/auth/signup` | `SignupRequest` | `SignupResponse` | [x] |
 | POST | `/auth/login` | `LoginRequest` | `LoginResponse` | [x] |
+| POST | `/auth/refresh` | Cookie: `refresh_token` | `TokenRefreshResponse` | [x] |
 | GET | `/auth/me` | Header: Bearer | `LoginResponse` | [x] |
-| POST | `/auth/logout` | - | `204` | [x] |
+| POST | `/auth/logout` | Cookie: `refresh_token` | `204` | [x] |
 | GET | `/teams/mine` | Header: Bearer | `TeamResponse[]` | [x] |
 | POST | `/teams` | Header: Bearer + `TeamCreateRequest` | `TeamResponse` | [x] |
 | POST | `/teams/join` | Header: Bearer + `TeamJoinRequest` | `TeamResponse` | [x] |
@@ -47,6 +53,7 @@
 
 Auth/Team 응답 필드:
 - `LoginResponse.teams[*]`: `id`, `name`, `description`, `teamRole`, `inviteCode`
+- `TokenRefreshResponse`: `accessToken`
 - `TeamResponse`: `id`, `name`, `description`, `teamRole`, `inviteCode`
 
 ### 4.2 Work Requests (P0)

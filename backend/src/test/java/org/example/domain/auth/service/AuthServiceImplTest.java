@@ -1,9 +1,13 @@
 package org.example.domain.auth.service;
 
+import org.example.domain.auth.dto.AuthLoginResult;
+import org.example.domain.auth.dto.AuthRefreshResult;
 import org.example.domain.auth.dto.LoginRequest;
 import org.example.domain.auth.dto.LoginResponse;
 import org.example.domain.auth.dto.SignupRequest;
 import org.example.domain.auth.dto.SignupResponse;
+import org.example.domain.auth.entity.AuthRefreshToken;
+import org.example.domain.auth.repository.AuthRefreshTokenRepository;
 import org.example.domain.team.repository.TeamRepository;
 import org.example.domain.team.repository.UserTeamRepository;
 import org.example.domain.user.entity.PortalUser;
@@ -19,6 +23,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.LocalDateTime;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 
@@ -48,6 +57,9 @@ class AuthServiceImplTest {
 
     @Mock
     private JwtTokenProvider jwtTokenProvider;
+
+    @Mock
+    private AuthRefreshTokenRepository authRefreshTokenRepository;
 
     @InjectMocks
     private AuthServiceImpl authService;
@@ -85,7 +97,7 @@ class AuthServiceImplTest {
     }
 
     @Test
-    @DisplayName("login 성공 시 JWT를 포함한 응답을 반환한다")
+    @DisplayName("login 성공 시 access token과 refresh token을 발급한다")
     void loginSuccess() {
         PortalUser user = activeUser(1L, "test@example.com");
         user.setPasswordHash("encoded-password");
@@ -95,11 +107,14 @@ class AuthServiceImplTest {
         when(portalUserRepository.save(any(PortalUser.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(userTeamRepository.findByUserId(1L)).thenReturn(List.of());
         when(jwtTokenProvider.createAccessToken(1L, "test@example.com", "DEVELOPER")).thenReturn("jwt-token");
+        when(authRefreshTokenRepository.findByUserIdAndRevokedAtIsNull(1L)).thenReturn(List.of());
+        when(authRefreshTokenRepository.save(any(AuthRefreshToken.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        LoginResponse response = authService.login(new LoginRequest("Test@Example.com", "password123"));
+        AuthLoginResult result = authService.login(new LoginRequest("Test@Example.com", "password123"));
 
-        assertEquals("jwt-token", response.accessToken());
-        assertEquals(1L, response.user().id());
+        assertEquals("jwt-token", result.response().accessToken());
+        assertEquals(1L, result.response().user().id());
+        assertNotNull(result.refreshToken());
         assertNotNull(user.getLastLoginAt());
     }
 
@@ -148,6 +163,51 @@ class AuthServiceImplTest {
         verify(jwtTokenProvider, never()).extractUserId(anyString());
     }
 
+    @Test
+    @DisplayName("refresh 성공 시 access token을 재발급하고 refresh token을 회전한다")
+    void refreshSuccess() {
+        String refreshToken = "refresh-token";
+        String tokenHash = sha256(refreshToken);
+
+        PortalUser user = activeUser(7L, "refresh@example.com");
+        AuthRefreshToken storedToken = new AuthRefreshToken();
+        storedToken.setId(100L);
+        storedToken.setUserId(7L);
+        storedToken.setTokenHash(tokenHash);
+        storedToken.setExpiresAt(LocalDateTime.now().plusDays(1));
+
+        when(authRefreshTokenRepository.findByTokenHashAndRevokedAtIsNull(tokenHash)).thenReturn(Optional.of(storedToken));
+        when(portalUserRepository.findById(7L)).thenReturn(Optional.of(user));
+        when(authRefreshTokenRepository.findByUserIdAndRevokedAtIsNull(7L)).thenReturn(List.of());
+        when(authRefreshTokenRepository.save(any(AuthRefreshToken.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(jwtTokenProvider.createAccessToken(7L, "refresh@example.com", "DEVELOPER")).thenReturn("new-access-token");
+
+        AuthRefreshResult result = authService.refresh(refreshToken);
+
+        assertEquals("new-access-token", result.accessToken());
+        assertNotNull(result.refreshToken());
+        assertNotNull(storedToken.getRevokedAt());
+    }
+
+    @Test
+    @DisplayName("logout은 현재 refresh token을 무효화한다")
+    void logoutRevokesToken() {
+        String refreshToken = "refresh-token";
+        String tokenHash = sha256(refreshToken);
+
+        AuthRefreshToken storedToken = new AuthRefreshToken();
+        storedToken.setId(22L);
+        storedToken.setUserId(3L);
+        storedToken.setTokenHash(tokenHash);
+        storedToken.setExpiresAt(LocalDateTime.now().plusDays(1));
+
+        when(authRefreshTokenRepository.findByTokenHashAndRevokedAtIsNull(tokenHash)).thenReturn(Optional.of(storedToken));
+
+        authService.logout(refreshToken);
+
+        assertNotNull(storedToken.getRevokedAt());
+    }
+
     private PortalUser activeUser(Long id, String email) {
         PortalUser user = new PortalUser();
         user.setId(id);
@@ -156,5 +216,15 @@ class AuthServiceImplTest {
         user.setRole("DEVELOPER");
         user.setIsActive(true);
         return user;
+    }
+
+    private String sha256(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hashed = digest.digest(value.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hashed);
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException(ex);
+        }
     }
 }

@@ -112,7 +112,6 @@ class ProjectIdeaControllerTest {
                 "UX/UI",
                 "제안됨",
                 null,
-                10L,
                 2L
         );
 

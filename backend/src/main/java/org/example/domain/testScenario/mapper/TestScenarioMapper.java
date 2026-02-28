@@ -18,7 +18,6 @@ public final class TestScenarioMapper {
         entity.setType(request.type());
         entity.setPriority(request.priority());
         entity.setStatus(request.status());
-        entity.setTeamId(request.teamId());
         entity.setAssigneeId(request.assigneeId());
         entity.setPrecondition(request.precondition());
         entity.setSteps(request.steps());

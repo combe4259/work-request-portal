@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { useProfileStore, AVATAR_COLOR_HEX } from '@/stores/profileStore'
 import { ROLE_LABELS } from '@/lib/constants'
+import { logoutFromServer } from '@/features/auth/service'
 import { useDashboardNotificationsQuery } from '@/features/notification/queries'
 import { updateAllNotificationsReadState, updateNotificationReadState } from '@/features/notification/service'
 import { getNotificationRoute } from '@/features/notification/routes'
@@ -53,7 +54,12 @@ export default function Topbar({ onOpenSidebar }: TopbarProps) {
   const initials = (displayName || user?.name)?.slice(0, 1) ?? '?'
   const colorHex = AVATAR_COLOR_HEX[avatarColor] ?? AVATAR_COLOR_HEX['brand']
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await logoutFromServer()
+    } catch {
+      // 서버 상태와 무관하게 로컬 세션은 반드시 종료한다.
+    }
     logout()
     navigate('/login')
   }
@@ -254,7 +260,9 @@ export default function Topbar({ onOpenSidebar }: TopbarProps) {
             <DropdownMenuSeparator />
             <DropdownMenuItem
               variant="destructive"
-              onClick={handleLogout}
+              onClick={() => {
+                void handleLogout()
+              }}
             >
               <LogoutIcon />
               로그아웃

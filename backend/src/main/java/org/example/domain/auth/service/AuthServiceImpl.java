@@ -1,11 +1,15 @@
 package org.example.domain.auth.service;
 
+import org.example.domain.auth.dto.AuthLoginResult;
+import org.example.domain.auth.dto.AuthRefreshResult;
 import org.example.domain.auth.dto.AuthTeamResponse;
 import org.example.domain.auth.dto.AuthUserResponse;
 import org.example.domain.auth.dto.LoginRequest;
 import org.example.domain.auth.dto.LoginResponse;
 import org.example.domain.auth.dto.SignupRequest;
 import org.example.domain.auth.dto.SignupResponse;
+import org.example.domain.auth.entity.AuthRefreshToken;
+import org.example.domain.auth.repository.AuthRefreshTokenRepository;
 import org.example.domain.team.entity.Team;
 import org.example.domain.team.entity.UserTeam;
 import org.example.domain.team.repository.TeamRepository;
@@ -13,18 +17,25 @@ import org.example.domain.team.repository.UserTeamRepository;
 import org.example.domain.user.entity.PortalUser;
 import org.example.domain.user.repository.PortalUserRepository;
 import org.example.global.security.JwtTokenProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
+import java.util.Base64;
+import java.util.HexFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.security.SecureRandom;
 
 @Service
 @Transactional(readOnly = true)
@@ -37,19 +48,30 @@ public class AuthServiceImpl implements AuthService {
     private final UserTeamRepository userTeamRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
+    private final AuthRefreshTokenRepository authRefreshTokenRepository;
+    private final long refreshTokenExpireSeconds;
+    private final SecureRandom secureRandom = new SecureRandom();
 
     public AuthServiceImpl(
             PortalUserRepository portalUserRepository,
             TeamRepository teamRepository,
             UserTeamRepository userTeamRepository,
             PasswordEncoder passwordEncoder,
-            JwtTokenProvider jwtTokenProvider
+            JwtTokenProvider jwtTokenProvider,
+            AuthRefreshTokenRepository authRefreshTokenRepository,
+            @Value("${app.jwt.refresh-token-expire-seconds:1209600}") Long refreshTokenExpireSeconds
     ) {
         this.portalUserRepository = portalUserRepository;
         this.teamRepository = teamRepository;
         this.userTeamRepository = userTeamRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenProvider = jwtTokenProvider;
+        this.authRefreshTokenRepository = authRefreshTokenRepository;
+        if (refreshTokenExpireSeconds == null || refreshTokenExpireSeconds <= 0) {
+            this.refreshTokenExpireSeconds = 1209600L;
+        } else {
+            this.refreshTokenExpireSeconds = refreshTokenExpireSeconds;
+        }
     }
 
     @Override
@@ -76,7 +98,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public LoginResponse login(LoginRequest request) {
+    public AuthLoginResult login(LoginRequest request) {
         if (request == null || isBlank(request.email()) || isBlank(request.password())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "이메일과 비밀번호를 입력해주세요.");
         }
@@ -94,7 +116,8 @@ public class AuthServiceImpl implements AuthService {
         portalUserRepository.save(user);
 
         String accessToken = jwtTokenProvider.createAccessToken(user.getId(), user.getEmail(), user.getRole());
-        return toLoginResponse(user, accessToken);
+        String refreshToken = issueRefreshToken(user.getId());
+        return new AuthLoginResult(toLoginResponse(user, accessToken), refreshToken);
     }
 
     @Override
@@ -109,6 +132,45 @@ public class AuthServiceImpl implements AuthService {
         return toLoginResponse(user, accessToken);
     }
 
+    @Override
+    @Transactional
+    public AuthRefreshResult refresh(String refreshToken) {
+        if (isBlank(refreshToken)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "리프레시 토큰이 필요합니다.");
+        }
+
+        String tokenHash = hashToken(refreshToken);
+        AuthRefreshToken tokenRow = authRefreshTokenRepository.findByTokenHashAndRevokedAtIsNull(tokenHash)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "유효하지 않은 리프레시 토큰입니다."));
+
+        LocalDateTime now = LocalDateTime.now();
+        if (tokenRow.getExpiresAt() == null || tokenRow.getExpiresAt().isBefore(now)) {
+            tokenRow.setRevokedAt(now);
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "리프레시 토큰이 만료되었습니다.");
+        }
+
+        PortalUser user = portalUserRepository.findById(tokenRow.getUserId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "유효하지 않은 리프레시 토큰입니다."));
+        validateActiveUser(user);
+
+        tokenRow.setRevokedAt(now);
+        String nextRefreshToken = issueRefreshToken(user.getId());
+        String nextAccessToken = jwtTokenProvider.createAccessToken(user.getId(), user.getEmail(), user.getRole());
+
+        return new AuthRefreshResult(nextAccessToken, nextRefreshToken);
+    }
+
+    @Override
+    @Transactional
+    public void logout(String refreshToken) {
+        if (isBlank(refreshToken)) {
+            return;
+        }
+        String tokenHash = hashToken(refreshToken);
+        authRefreshTokenRepository.findByTokenHashAndRevokedAtIsNull(tokenHash)
+                .ifPresent(row -> row.setRevokedAt(LocalDateTime.now()));
+    }
+
     private LoginResponse toLoginResponse(PortalUser user, String accessToken) {
         AuthUserResponse userResponse = new AuthUserResponse(
                 user.getId(),
@@ -120,6 +182,46 @@ public class AuthServiceImpl implements AuthService {
 
         List<AuthTeamResponse> teams = loadTeams(user.getId());
         return new LoginResponse(accessToken, userResponse, teams);
+    }
+
+    private String issueRefreshToken(Long userId) {
+        revokeActiveRefreshTokens(userId);
+
+        String refreshTokenValue = generateRefreshTokenValue();
+        String refreshTokenHash = hashToken(refreshTokenValue);
+
+        AuthRefreshToken row = new AuthRefreshToken();
+        row.setUserId(userId);
+        row.setTokenHash(refreshTokenHash);
+        row.setExpiresAt(LocalDateTime.now().plusSeconds(refreshTokenExpireSeconds));
+        row.setRevokedAt(null);
+        authRefreshTokenRepository.save(row);
+
+        return refreshTokenValue;
+    }
+
+    private void revokeActiveRefreshTokens(Long userId) {
+        LocalDateTime now = LocalDateTime.now();
+        List<AuthRefreshToken> activeTokens = authRefreshTokenRepository.findByUserIdAndRevokedAtIsNull(userId);
+        for (AuthRefreshToken token : activeTokens) {
+            token.setRevokedAt(now);
+        }
+    }
+
+    private String generateRefreshTokenValue() {
+        byte[] randomBytes = new byte[48];
+        secureRandom.nextBytes(randomBytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
+    }
+
+    private String hashToken(String tokenValue) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hashed = digest.digest(tokenValue.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hashed);
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 해시 알고리즘을 사용할 수 없습니다.", ex);
+        }
     }
 
     private List<AuthTeamResponse> loadTeams(Long userId) {

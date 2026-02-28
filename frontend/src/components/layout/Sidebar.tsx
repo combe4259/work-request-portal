@@ -3,6 +3,7 @@ import { Separator } from '@/components/ui/separator'
 import { useAuthStore } from '@/stores/authStore'
 import { useProfileStore, AVATAR_COLOR_HEX } from '@/stores/profileStore'
 import { ROLE_LABELS } from '@/lib/constants'
+import { logoutFromServer } from '@/features/auth/service'
 import shinhanLogo from '@/assets/shinhan-ci.png'
 
 interface NavItem {
@@ -64,7 +65,12 @@ export default function Sidebar({ className = '', onNavigate }: SidebarProps) {
   const colorHex = AVATAR_COLOR_HEX[avatarColor] ?? AVATAR_COLOR_HEX['brand']
   const initials = (displayName || user?.name)?.slice(0, 1) ?? '?'
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await logoutFromServer()
+    } catch {
+      // 서버 상태와 무관하게 로컬 세션은 반드시 종료한다.
+    }
     logout()
     onNavigate?.()
     navigate('/login')
@@ -166,7 +172,9 @@ export default function Sidebar({ className = '', onNavigate }: SidebarProps) {
         </NavLink>
         <button
           type="button"
-          onClick={handleLogout}
+          onClick={() => {
+            void handleLogout()
+          }}
           aria-label="로그아웃"
           className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] text-white/40 hover:bg-white/[0.07] hover:text-white/70 transition-all"
         >

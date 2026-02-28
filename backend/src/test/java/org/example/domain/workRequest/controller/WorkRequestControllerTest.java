@@ -137,7 +137,6 @@ class WorkRequestControllerTest {
                 "BUG",
                 "HIGH",
                 "NEW",
-                10L,
                 1L,
                 2L,
                 LocalDate.of(2026, 3, 3)

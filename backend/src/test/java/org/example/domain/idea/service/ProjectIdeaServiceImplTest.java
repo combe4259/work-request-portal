@@ -17,7 +17,10 @@ import org.example.domain.idea.repository.ProjectIdeaRepository;
 import org.example.domain.user.entity.PortalUser;
 import org.example.domain.user.repository.PortalUserRepository;
 import org.example.global.security.JwtTokenProvider;
+import org.example.global.team.TeamRequestContext;
 import org.example.global.util.DocumentNoGenerator;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -87,11 +90,21 @@ class ProjectIdeaServiceImplTest {
     @Captor
     private ArgumentCaptor<IdeaVote> ideaVoteCaptor;
 
+    @BeforeEach
+    void setUpTeamContext() {
+        TeamRequestContext.set(1L, 10L);
+    }
+
+    @AfterEach
+    void clearTeamContext() {
+        TeamRequestContext.clear();
+    }
+
     @Test
     @DisplayName("목록 조회 시 페이징/정렬을 적용하고 좋아요 수를 함께 반환한다")
     void findPage() {
         ProjectIdea entity = sampleIdea(1L);
-        when(projectIdeaRepository.search(isNull(), isNull(), isNull(), isNull(), any(Pageable.class)))
+        when(projectIdeaRepository.search(eq(10L), isNull(), isNull(), isNull(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(entity)));
         when(ideaVoteRepository.countByIdeaId(1L)).thenReturn(3L);
         when(commentRepository.countByRefTypeAndRefIds(eq("PROJECT_IDEA"), anyList())).thenReturn(List.of());
@@ -102,7 +115,7 @@ class ProjectIdeaServiceImplTest {
                 new ProjectIdeaListQuery(null, null, null, "createdAt", "desc")
         );
 
-        verify(projectIdeaRepository).search(isNull(), isNull(), isNull(), isNull(), pageableCaptor.capture());
+        verify(projectIdeaRepository).search(eq(10L), isNull(), isNull(), isNull(), pageableCaptor.capture());
         Pageable pageable = pageableCaptor.getValue();
         Sort.Order createdAtOrder = pageable.getSort().getOrderFor("createdAt");
 
@@ -123,7 +136,7 @@ class ProjectIdeaServiceImplTest {
     @DisplayName("목록 조회에서 좋아요순 정렬을 요청하면 좋아요 기준 쿼리를 사용한다")
     void findPageSortedByLikes() {
         ProjectIdea entity = sampleIdea(1L);
-        when(projectIdeaRepository.searchOrderByLikeCountDesc(isNull(), isNull(), isNull(), isNull(), any(Pageable.class)))
+        when(projectIdeaRepository.searchOrderByLikeCountDesc(eq(10L), isNull(), isNull(), isNull(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(entity)));
         when(ideaVoteRepository.countByIdeaId(1L)).thenReturn(3L);
         when(commentRepository.countByRefTypeAndRefIds(eq("PROJECT_IDEA"), anyList())).thenReturn(List.of());
@@ -131,7 +144,7 @@ class ProjectIdeaServiceImplTest {
         projectIdeaService.findPage(0, 20, new ProjectIdeaListQuery(null, null, null, "likes", "desc"));
 
         verify(projectIdeaRepository).searchOrderByLikeCountDesc(
-                isNull(),
+                eq(10L),
                 isNull(),
                 isNull(),
                 isNull(),
@@ -169,7 +182,6 @@ class ProjectIdeaServiceImplTest {
                 "",
                 " ",
                 " ",
-                10L,
                 2L
         );
 

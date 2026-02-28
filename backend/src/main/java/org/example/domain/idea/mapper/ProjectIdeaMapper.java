@@ -21,7 +21,6 @@ public final class ProjectIdeaMapper {
         entity.setCategory(request.category());
         entity.setStatus(request.status());
         entity.setStatusNote(request.statusNote());
-        entity.setTeamId(request.teamId());
         entity.setProposedBy(request.proposedBy());
         return entity;
     }

@@ -45,6 +45,14 @@ public final class TeamScopeUtil {
         return resolved;
     }
 
+    public static Long requireCurrentTeamId() {
+        Long teamId = currentTeamId();
+        if (teamId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "X-Team-Id 헤더가 필요합니다.");
+        }
+        return teamId;
+    }
+
     private static Long resolveTeamIdFromRequest() {
         ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
         if (attributes == null) {

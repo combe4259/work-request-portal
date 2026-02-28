@@ -22,6 +22,9 @@ import org.example.domain.techTask.repository.TechTaskRepository;
 import org.example.domain.workRequest.entity.WorkRequest;
 import org.example.domain.workRequest.repository.WorkRequestRepository;
 import org.example.global.util.DocumentNoGenerator;
+import org.example.global.team.TeamRequestContext;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -83,6 +86,16 @@ class TechTaskServiceImplTest {
 
     @Captor
     private ArgumentCaptor<List<TechTaskRelatedRef>> relatedRefRowsCaptor;
+
+    @BeforeEach
+    void setUpTeamContext() {
+        TeamRequestContext.set(1L, 10L);
+    }
+
+    @AfterEach
+    void clearTeamContext() {
+        TeamRequestContext.clear();
+    }
 
     @Test
     @DisplayName("목록 조회 시 페이징/정렬을 적용하고 리스트 응답으로 매핑한다")
@@ -152,7 +165,6 @@ class TechTaskServiceImplTest {
                 "",
                 " ",
                 null,
-                10L,
                 20L,
                 null,
                 LocalDate.of(2026, 3, 7)
@@ -234,7 +246,6 @@ class TechTaskServiceImplTest {
                 "리팩토링",
                 "높음",
                 "검토중",
-                10L,
                 20L,
                 30L,
                 LocalDate.of(2026, 3, 7)
@@ -289,7 +300,7 @@ class TechTaskServiceImplTest {
     @Test
     @DisplayName("연관 문서 조회 시 참조 메타데이터를 함께 반환한다")
     void getRelatedRefs() {
-        when(techTaskRepository.existsById(1L)).thenReturn(true);
+        when(techTaskRepository.findById(1L)).thenReturn(Optional.of(sampleEntity(1L)));
         when(techTaskRelatedRefRepository.findByTechTaskIdOrderByIdAsc(1L)).thenReturn(List.of(
                 relatedRef(1L, "WORK_REQUEST", 11L),
                 relatedRef(2L, "TECH_TASK", 12L),
@@ -320,7 +331,7 @@ class TechTaskServiceImplTest {
     @Test
     @DisplayName("연관 문서 교체 시 중복 제거 후 저장한다")
     void replaceRelatedRefs() {
-        when(techTaskRepository.existsById(1L)).thenReturn(true);
+        when(techTaskRepository.findById(1L)).thenReturn(Optional.of(sampleEntity(1L)));
 
         TechTaskRelatedRefsUpdateRequest request = new TechTaskRelatedRefsUpdateRequest(List.of(
                 new TechTaskRelatedRefItemRequest("tech_task", 12L, 2),
@@ -344,7 +355,7 @@ class TechTaskServiceImplTest {
     @Test
     @DisplayName("PR 링크 조회 성공")
     void getPrLinks() {
-        when(techTaskRepository.existsById(1L)).thenReturn(true);
+        when(techTaskRepository.findById(1L)).thenReturn(Optional.of(sampleEntity(1L)));
         when(techTaskPrLinkRepository.findByTechTaskIdOrderByIdAsc(1L)).thenReturn(List.of(
                 prLink(1L, 1L, "feature/login", "42", "https://example.com/pr/42")
         ));
@@ -359,7 +370,7 @@ class TechTaskServiceImplTest {
     @Test
     @DisplayName("PR 링크 생성 성공")
     void createPrLink() {
-        when(techTaskRepository.existsById(1L)).thenReturn(true);
+        when(techTaskRepository.findById(1L)).thenReturn(Optional.of(sampleEntity(1L)));
         when(techTaskPrLinkRepository.save(any(TechTaskPrLink.class))).thenAnswer(invocation -> {
             TechTaskPrLink row = invocation.getArgument(0);
             row.setId(10L);
@@ -374,7 +385,7 @@ class TechTaskServiceImplTest {
     @Test
     @DisplayName("PR 링크 삭제 성공")
     void deletePrLink() {
-        when(techTaskRepository.existsById(1L)).thenReturn(true);
+        when(techTaskRepository.findById(1L)).thenReturn(Optional.of(sampleEntity(1L)));
         when(techTaskPrLinkRepository.findByIdAndTechTaskId(10L, 1L))
                 .thenReturn(Optional.of(prLink(10L, 1L, "feature/login", "42", "https://example.com/pr/42")));
 

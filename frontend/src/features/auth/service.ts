@@ -1,5 +1,10 @@
 import api from '@/lib/api'
-import type { LoginRequest, LoginResponse, SignupRequest, SignupResponse, Team } from '@/types/auth'
+import type { LoginRequest, LoginResponse, SignupRequest, SignupResponse, Team, TokenRefreshResponse } from '@/types/auth'
+import type { AxiosRequestConfig } from 'axios'
+
+const skipAuthRefreshConfig = {
+  _skipAuthRefresh: true,
+} as AxiosRequestConfig
 
 export async function signup(payload: SignupRequest): Promise<SignupResponse> {
   const { data } = await api.post<SignupResponse>('/auth/signup', payload)
@@ -14,6 +19,15 @@ export async function login(payload: LoginRequest): Promise<LoginResponse> {
 export async function me(): Promise<LoginResponse> {
   const { data } = await api.get<LoginResponse>('/auth/me')
   return data
+}
+
+export async function refreshAccessToken(): Promise<TokenRefreshResponse> {
+  const { data } = await api.post<TokenRefreshResponse>('/auth/refresh', undefined, skipAuthRefreshConfig)
+  return data
+}
+
+export async function logoutFromServer(): Promise<void> {
+  await api.post('/auth/logout', undefined, skipAuthRefreshConfig)
 }
 
 export interface CreateTeamRequest {

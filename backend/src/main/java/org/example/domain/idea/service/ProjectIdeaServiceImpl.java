@@ -143,7 +143,7 @@ public class ProjectIdeaServiceImpl implements ProjectIdeaService {
 
         ProjectIdea entity = ProjectIdeaMapper.fromCreateRequest(request, benefitsJson);
         entity.setIdeaNo(documentNoGenerator.next("ID"));
-        entity.setTeamId(TeamScopeUtil.requireTeamId(request.teamId()));
+        entity.setTeamId(TeamScopeUtil.requireCurrentTeamId());
         entity.setCategory(normalizeCategory(request.category()));
         entity.setStatus(normalizeStatus(defaultIfBlank(request.status(), "제안됨")));
         entity.setStatusNote(normalizeNullable(request.statusNote()));
@@ -320,7 +320,6 @@ public class ProjectIdeaServiceImpl implements ProjectIdeaService {
         if (isBlank(request.content())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "content는 필수입니다.");
         }
-        TeamScopeUtil.requireTeamId(request.teamId());
         if (request.proposedBy() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "proposedBy는 필수입니다.");
         }

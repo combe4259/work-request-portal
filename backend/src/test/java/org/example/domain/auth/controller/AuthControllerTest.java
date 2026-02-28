@@ -1,6 +1,9 @@
 package org.example.domain.auth.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.Cookie;
+import org.example.domain.auth.dto.AuthLoginResult;
+import org.example.domain.auth.dto.AuthRefreshResult;
 import org.example.domain.auth.dto.AuthTeamResponse;
 import org.example.domain.auth.dto.AuthUserResponse;
 import org.example.domain.auth.dto.LoginRequest;
@@ -21,12 +24,14 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -34,6 +39,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class AuthControllerTest {
 
     private static final String AUTH_HEADER = "Bearer token";
+    private static final String REFRESH_COOKIE_NAME = "refresh_token";
 
     @Autowired
     private MockMvc mockMvc;
@@ -75,7 +81,7 @@ class AuthControllerTest {
     }
 
     @Test
-    @DisplayName("로그인 성공")
+    @DisplayName("로그인 성공 시 refresh cookie를 발급한다")
     void loginSuccess() throws Exception {
         LoginRequest request = new LoginRequest("hong@example.com", "password123");
         LoginResponse response = new LoginResponse(
@@ -83,7 +89,7 @@ class AuthControllerTest {
                 new AuthUserResponse(1L, "홍길동", "hong@example.com", "DEVELOPER", "U12345"),
                 List.of(new AuthTeamResponse(10L, "개발팀", "업무 포털", "OWNER", "ABCDEFGH"))
         );
-        when(authService.login(eq(request))).thenReturn(response);
+        when(authService.login(eq(request))).thenReturn(new AuthLoginResult(response, "refresh-token-value"));
 
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -91,7 +97,9 @@ class AuthControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accessToken").value("access-token"))
                 .andExpect(jsonPath("$.user.id").value(1L))
-                .andExpect(jsonPath("$.teams[0].id").value(10L));
+                .andExpect(jsonPath("$.teams[0].id").value(10L))
+                .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString(REFRESH_COOKIE_NAME + "=")))
+                .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("HttpOnly")));
 
         verify(authService).login(eq(request));
     }
@@ -140,11 +148,29 @@ class AuthControllerTest {
     }
 
     @Test
-    @DisplayName("로그아웃은 204를 반환한다")
-    void logoutSuccess() throws Exception {
-        mockMvc.perform(post("/api/auth/logout"))
-                .andExpect(status().isNoContent());
+    @DisplayName("refresh 성공 시 access token 재발급과 refresh cookie 회전을 수행한다")
+    void refreshSuccess() throws Exception {
+        when(authService.refresh("refresh-cookie-value"))
+                .thenReturn(new AuthRefreshResult("new-access-token", "next-refresh-token"));
 
-        verifyNoInteractions(authService);
+        mockMvc.perform(post("/api/auth/refresh")
+                        .cookie(new Cookie(REFRESH_COOKIE_NAME, "refresh-cookie-value")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").value("new-access-token"))
+                .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString(REFRESH_COOKIE_NAME + "=")))
+                .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("HttpOnly")));
+
+        verify(authService).refresh("refresh-cookie-value");
+    }
+
+    @Test
+    @DisplayName("로그아웃은 refresh token을 무효화하고 쿠키를 제거한다")
+    void logoutSuccess() throws Exception {
+        mockMvc.perform(post("/api/auth/logout")
+                        .cookie(new Cookie(REFRESH_COOKIE_NAME, "refresh-cookie-value")))
+                .andExpect(status().isNoContent())
+                .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("Max-Age=0")));
+
+        verify(authService).logout("refresh-cookie-value");
     }
 }

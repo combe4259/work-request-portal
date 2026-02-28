@@ -39,3 +39,7 @@ export interface LoginResponse {
   user: User
   teams: Team[]
 }
+
+export interface TokenRefreshResponse {
+  accessToken: string
+}

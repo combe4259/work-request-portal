@@ -89,7 +89,7 @@ public class DefectServiceImpl implements DefectService {
         Defect entity = DefectMapper.fromCreateRequest(request);
 
         entity.setDefectNo(documentNoGenerator.next("DF"));
-        entity.setTeamId(TeamScopeUtil.requireTeamId(request.teamId()));
+        entity.setTeamId(TeamScopeUtil.requireCurrentTeamId());
         entity.setType(defaultIfBlank(request.type(), "기능"));
         entity.setSeverity(defaultIfBlank(request.severity(), "보통"));
         entity.setStatus(defaultIfBlank(request.status(), "접수"));
@@ -187,7 +187,6 @@ public class DefectServiceImpl implements DefectService {
         if (request.title() == null || request.title().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "title은 필수입니다.");
         }
-        TeamScopeUtil.requireTeamId(request.teamId());
         if (request.reporterId() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "reporterId는 필수입니다.");
         }

@@ -137,7 +137,6 @@ class TestScenarioControllerTest {
                 "E2E",
                 "높음",
                 "작성중",
-                10L,
                 2L,
                 "사전조건",
                 "[]",

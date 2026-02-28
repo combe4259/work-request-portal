@@ -146,7 +146,6 @@ class WorkRequestServiceImplTest {
                 "",
                 " ",
                 null,
-                10L,
                 20L,
                 null,
                 LocalDate.of(2026, 3, 1)
@@ -216,7 +215,6 @@ class WorkRequestServiceImplTest {
                 "기능개선",
                 "보통",
                 "접수대기",
-                10L,
                 20L,
                 30L,
                 LocalDate.of(2026, 3, 1)

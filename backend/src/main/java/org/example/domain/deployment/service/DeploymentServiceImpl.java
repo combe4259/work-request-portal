@@ -130,7 +130,7 @@ public class DeploymentServiceImpl implements DeploymentService {
 
         Deployment deployment = DeploymentMapper.fromCreateRequest(request);
         deployment.setDeployNo(documentNoGenerator.next("DP"));
-        deployment.setTeamId(TeamScopeUtil.requireTeamId(request.teamId()));
+        deployment.setTeamId(TeamScopeUtil.requireCurrentTeamId());
         deployment.setType(normalizeType(request.type()));
         deployment.setEnvironment(normalizeEnvironment(request.environment()));
         deployment.setStatus(normalizeStatus(request.status()));
@@ -315,7 +315,6 @@ public class DeploymentServiceImpl implements DeploymentService {
         if (isBlank(request.version())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "version은 필수입니다.");
         }
-        TeamScopeUtil.requireTeamId(request.teamId());
         if (request.scheduledAt() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "scheduledAt은 필수입니다.");
         }
