@@ -31,7 +31,7 @@ public class UserPreference {
     private Boolean notifyDeploy = true;
 
     @Column(name = "notify_mention", nullable = false)
-    private Boolean notifyMention = false;
+    private Boolean notifyMention = true;
 
     @Column(name = "landing_page", nullable = false, length = 50)
     private String landingPage = "/dashboard";

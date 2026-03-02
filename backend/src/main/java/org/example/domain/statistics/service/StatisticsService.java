@@ -4,5 +4,5 @@ import org.example.domain.statistics.dto.StatisticsResponse;
 
 public interface StatisticsService {
 
-    StatisticsResponse getStatistics(Long teamId);
+    StatisticsResponse getStatistics(Long teamId, int days);
 }

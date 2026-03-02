@@ -1,18 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { EmptyState, ErrorState, LoadingState } from '@/components/common/AsyncState'
+import { ErrorState, LoadingState } from '@/components/common/AsyncState'
 import TestScenarioDetailBody, { parseScenarioSteps, type StepResult } from '@/components/test-scenario/TestScenarioDetailBody'
 import { TestTypeBadge, TestStatusBadge } from '@/components/test-scenario/Badges'
 import { PriorityBadge } from '@/components/work-request/Badges'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import ShowMoreButton from '@/components/common/ShowMoreButton'
+import CommentSection from '@/components/common/CommentSection'
 import { useDeleteTestScenarioMutation, useUpdateTestScenarioExecutionMutation, useUpdateTestScenarioStatusMutation } from '@/features/test-scenario/mutations'
 import { useTestScenarioDetailQuery, useTestScenarioRelatedRefsQuery } from '@/features/test-scenario/queries'
-import { useCreateCommentMutation } from '@/features/comment/mutations'
-import { useCommentsQuery } from '@/features/comment/queries'
 import { useAttachmentsQuery } from '@/features/attachment/queries'
 import { useActivityLogsQuery } from '@/features/activity-log/queries'
 import { useExpandableList } from '@/hooks/useExpandableList'
+import { useMarkNotificationsRead } from '@/hooks/useMarkNotificationsRead'
 import type { TestStatus } from '@/types/test-scenario'
 
 const STATUS_OPTIONS: TestStatus[] = ['작성중', '검토중', '승인됨', '실행중', '통과', '실패', '보류']
@@ -46,26 +46,24 @@ export default function TestScenarioDetailPage() {
   const numericId = Number(id)
   const hasValidId = Number.isInteger(numericId) && numericId > 0
 
+  useMarkNotificationsRead('TEST_SCENARIO', hasValidId ? numericId : undefined)
+
   const detailQuery = useTestScenarioDetailQuery(hasValidId ? numericId : undefined)
   const relatedRefsQuery = useTestScenarioRelatedRefsQuery(hasValidId ? numericId : undefined)
-  const commentsQuery = useCommentsQuery('TEST_SCENARIO', hasValidId ? numericId : undefined)
   const attachmentsQuery = useAttachmentsQuery('TEST_SCENARIO', hasValidId ? numericId : undefined)
   const activityLogsQuery = useActivityLogsQuery('TEST_SCENARIO', hasValidId ? numericId : undefined)
 
   const updateStatus = useUpdateTestScenarioStatusMutation(hasValidId ? numericId : undefined)
   const updateExecution = useUpdateTestScenarioExecutionMutation(hasValidId ? numericId : undefined)
   const deleteScenario = useDeleteTestScenarioMutation()
-  const createComment = useCreateCommentMutation('TEST_SCENARIO', hasValidId ? numericId : undefined)
 
   const [statusOpen, setStatusOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const [comment, setComment] = useState('')
   const [status, setStatus] = useState<TestStatus>('작성중')
   const [stepResults, setStepResults] = useState<StepResult[]>([])
 
   const data = detailQuery.data
   const parsedSteps = useMemo(() => parseScenarioSteps(data?.steps ?? '[]'), [data?.steps])
-  const comments = commentsQuery.data?.items ?? []
   const attachments = attachmentsQuery.data ?? []
   const activityLogs = activityLogsQuery.data?.items ?? []
 
@@ -85,7 +83,6 @@ export default function TestScenarioDetailPage() {
     title: item.title ?? item.refNo,
     route: getRefRoute(item.refType, item.refId),
   })) ?? []
-  const visibleComments = useExpandableList(comments, 3)
   const visibleActivityLogs = useExpandableList(activityLogs, 5)
 
   const handleStatusChange = async (next: TestStatus) => {
@@ -106,16 +103,6 @@ export default function TestScenarioDetailPage() {
     } catch {
       setStatus(prev)
     }
-  }
-
-  const handleComment = async () => {
-    const trimmed = comment.trim()
-    if (!trimmed) {
-      return
-    }
-
-    await createComment.mutateAsync({ content: trimmed })
-    setComment('')
   }
 
   const setStepResult = async (idx: number, result: StepResult) => {
@@ -265,60 +252,7 @@ export default function TestScenarioDetailPage() {
         </div>
 
         <div className="w-[300px] flex-shrink-0 space-y-4">
-          <div className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] px-4 py-4">
-            <p className="text-[12px] font-semibold text-gray-700 mb-3">댓글 {comments.length}</p>
-            <div className="space-y-3 mb-3 max-h-[260px] overflow-y-auto">
-              {commentsQuery.isPending ? (
-                <p className="text-[12px] text-gray-400">불러오는 중...</p>
-              ) : comments.length === 0 ? (
-                <EmptyState title="댓글이 없습니다" description="첫 댓글을 남겨보세요." />
-              ) : (
-                visibleComments.visibleItems.map((item) => (
-                  <div key={item.id} className="flex gap-2.5">
-                    <div className="w-6 h-6 rounded-full bg-brand/10 flex items-center justify-center text-brand text-[10px] font-bold flex-shrink-0">
-                      {item.authorName[0]}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-[11px] font-semibold text-gray-800">{item.authorName}</span>
-                        <span className="text-[10px] text-gray-400">{item.createdAt}</span>
-                      </div>
-                      <p className="text-[12px] text-gray-600 leading-relaxed">{item.content}</p>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-            <ShowMoreButton
-              expanded={visibleComments.expanded}
-              hiddenCount={visibleComments.hiddenCount}
-              onToggle={visibleComments.toggle}
-              className="mb-3"
-            />
-            <div className="flex gap-2 pt-2 border-t border-gray-100">
-              <textarea
-                value={comment}
-                onChange={(event) => setComment(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && event.metaKey) {
-                    void handleComment()
-                  }
-                }}
-                placeholder="댓글을 입력하세요 (⌘+Enter로 전송)"
-                rows={2}
-                className="flex-1 px-2.5 py-2 text-[12px] border border-gray-200 rounded-lg focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand/20 resize-none"
-              />
-              <button
-                onClick={() => {
-                  void handleComment()
-                }}
-                disabled={!comment.trim() || createComment.isPending}
-                className="h-fit px-2.5 py-2 bg-brand text-white text-[11px] font-semibold rounded-lg hover:bg-brand-hover transition-colors disabled:opacity-40 self-end"
-              >
-                전송
-              </button>
-            </div>
-          </div>
+          <CommentSection refType="TEST_SCENARIO" refId={hasValidId ? numericId : undefined} />
 
           <div className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] p-4">
             <p className="text-[12px] font-semibold text-gray-700 mb-4">처리 이력</p>

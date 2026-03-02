@@ -4,30 +4,27 @@ import java.util.List;
 
 public record StatisticsResponse(
         Kpi kpi,
-        List<WeeklyTrendItem> weeklyTrend,
-        List<TypeDistributionItem> typeDistribution,
+        List<BurndownItem> burndown,
+        List<StatusSnapshotItem> statusSnapshot,
         List<DefectSeverityItem> defectSeverity,
-        List<MemberStatItem> memberStats,
-        List<StatusFlowItem> statusFlow
+        List<MemberStatItem> memberStats
 ) {
 
     public record Kpi(
-            int totalRequests,
-            double averageProcessingDays,
-            int completionRate,
-            int unresolvedDefects
+            int incompleteCount,
+            int overdueCount,
+            int completedThisMonth,
+            double averageProcessingDays
     ) {
     }
 
-    public record WeeklyTrendItem(
-            String week,
-            int wr,
-            int defect,
-            int deploy
+    public record BurndownItem(
+            String date,
+            int remaining
     ) {
     }
 
-    public record TypeDistributionItem(
+    public record StatusSnapshotItem(
             String name,
             int value
     ) {
@@ -43,12 +40,6 @@ public record StatisticsResponse(
             String name,
             int done,
             int inProgress
-    ) {
-    }
-
-    public record StatusFlowItem(
-            String name,
-            int value
     ) {
     }
 }

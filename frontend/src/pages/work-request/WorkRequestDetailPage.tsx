@@ -1,17 +1,17 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { EmptyState, ErrorState, LoadingState } from '@/components/common/AsyncState'
+import { ErrorState, LoadingState } from '@/components/common/AsyncState'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import ShowMoreButton from '@/components/common/ShowMoreButton'
+import CommentSection from '@/components/common/CommentSection'
 import { TypeBadge, PriorityBadge, StatusBadge } from '@/components/work-request/Badges'
 import WorkRequestDetailBody from '@/components/work-request/WorkRequestDetailBody'
-import { useCreateCommentMutation } from '@/features/comment/mutations'
-import { useCommentsQuery } from '@/features/comment/queries'
 import { useAttachmentsQuery } from '@/features/attachment/queries'
 import { useActivityLogsQuery } from '@/features/activity-log/queries'
 import { useDeleteWorkRequestMutation, useUpdateWorkRequestStatusMutation } from '@/features/work-request/mutations'
 import { useWorkRequestDetailQuery, useWorkRequestRelatedRefsQuery } from '@/features/work-request/queries'
 import { useExpandableList } from '@/hooks/useExpandableList'
+import { useMarkNotificationsRead } from '@/hooks/useMarkNotificationsRead'
 import type { Status } from '@/types/work-request'
 
 const STATUS_OPTIONS: Status[] = ['접수대기', '검토중', '개발중', '테스트중', '완료', '반려']
@@ -22,18 +22,17 @@ export default function WorkRequestDetailPage() {
   const numericId = Number(id)
   const hasValidId = Number.isInteger(numericId) && numericId > 0
 
+  useMarkNotificationsRead('WORK_REQUEST', hasValidId ? numericId : undefined)
+
   const { data, isPending, isError, refetch } = useWorkRequestDetailQuery(hasValidId ? numericId : undefined)
   const relatedRefsQuery = useWorkRequestRelatedRefsQuery(hasValidId ? numericId : undefined)
-  const commentsQuery = useCommentsQuery('WORK_REQUEST', hasValidId ? numericId : undefined)
   const attachmentsQuery = useAttachmentsQuery('WORK_REQUEST', hasValidId ? numericId : undefined)
   const activityLogsQuery = useActivityLogsQuery('WORK_REQUEST', hasValidId ? numericId : undefined)
   const updateStatusMutation = useUpdateWorkRequestStatusMutation(hasValidId ? numericId : undefined)
-  const createCommentMutation = useCreateCommentMutation('WORK_REQUEST', hasValidId ? numericId : undefined)
   const deleteMutation = useDeleteWorkRequestMutation()
 
   const [statusOpen, setStatusOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const [comment, setComment] = useState('')
 
   const handleStatusChange = async (next: Status) => {
     if (!hasValidId || !data || next === data.status) {
@@ -50,22 +49,10 @@ export default function WorkRequestDetailPage() {
     }
   }
 
-  const comments = commentsQuery.data?.items ?? []
   const attachments = attachmentsQuery.data ?? []
   const activityLogs = activityLogsQuery.data?.items ?? []
   const relatedRefs = relatedRefsQuery.data ?? []
-  const visibleComments = useExpandableList(comments, 3)
   const visibleActivityLogs = useExpandableList(activityLogs, 5)
-
-  const handleComment = async () => {
-    const trimmed = comment.trim()
-    if (!trimmed) {
-      return
-    }
-
-    await createCommentMutation.mutateAsync({ content: trimmed })
-    setComment('')
-  }
 
   if (!hasValidId) {
     return (
@@ -188,60 +175,7 @@ export default function WorkRequestDetailPage() {
         </div>
 
         <div className="w-[300px] flex-shrink-0 space-y-4">
-          <div className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] px-4 py-4">
-            <p className="text-[12px] font-semibold text-gray-700 mb-3">댓글 {comments.length}</p>
-            <div className="space-y-3 mb-3 max-h-[260px] overflow-y-auto">
-              {commentsQuery.isPending ? (
-                <p className="text-[12px] text-gray-400">불러오는 중...</p>
-              ) : comments.length === 0 ? (
-                <EmptyState title="댓글이 없습니다" description="첫 댓글을 남겨보세요." />
-              ) : (
-                visibleComments.visibleItems.map((item) => (
-                    <div key={item.id} className="flex gap-2.5">
-                    <div className="w-6 h-6 rounded-full bg-brand/10 flex items-center justify-center text-brand text-[10px] font-bold flex-shrink-0">
-                      {item.authorName[0]}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-[11px] font-semibold text-gray-800">{item.authorName}</span>
-                        <span className="text-[10px] text-gray-400">{item.createdAt}</span>
-                      </div>
-                      <p className="text-[12px] text-gray-600 leading-relaxed">{item.content}</p>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-            <ShowMoreButton
-              expanded={visibleComments.expanded}
-              hiddenCount={visibleComments.hiddenCount}
-              onToggle={visibleComments.toggle}
-              className="mb-3"
-            />
-            <div className="flex gap-2 pt-2 border-t border-gray-100">
-              <textarea
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && e.metaKey) {
-                    void handleComment()
-                  }
-                }}
-                placeholder="댓글 입력 (⌘+Enter 전송)"
-                rows={2}
-                className="flex-1 px-2.5 py-2 text-[12px] border border-gray-200 rounded-lg focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand/20 resize-none"
-              />
-              <button
-                onClick={() => {
-                  void handleComment()
-                }}
-                disabled={!comment.trim() || createCommentMutation.isPending}
-                className="h-fit px-2.5 py-2 bg-brand text-white text-[11px] font-semibold rounded-lg hover:bg-brand-hover transition-colors disabled:opacity-40 self-end"
-              >
-                전송
-              </button>
-            </div>
-          </div>
+          <CommentSection refType="WORK_REQUEST" refId={hasValidId ? numericId : undefined} />
 
           <div className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] p-4">
             <p className="text-[12px] font-semibold text-gray-700 mb-4">처리 이력</p>

@@ -1,17 +1,17 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { EmptyState, ErrorState, LoadingState } from '@/components/common/AsyncState'
+import { ErrorState, LoadingState } from '@/components/common/AsyncState'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import ShowMoreButton from '@/components/common/ShowMoreButton'
+import CommentSection from '@/components/common/CommentSection'
 import DefectDetailBody from '@/components/defect/DefectDetailBody'
 import { DefectTypeBadge, SeverityBadge, DefectStatusBadge } from '@/components/defect/Badges'
 import { useDeleteDefectMutation, useUpdateDefectStatusMutation } from '@/features/defect/mutations'
 import { useDefectDetailQuery } from '@/features/defect/queries'
-import { useCreateCommentMutation } from '@/features/comment/mutations'
-import { useCommentsQuery } from '@/features/comment/queries'
 import { useAttachmentsQuery } from '@/features/attachment/queries'
 import { useActivityLogsQuery } from '@/features/activity-log/queries'
 import { useExpandableList } from '@/hooks/useExpandableList'
+import { useMarkNotificationsRead } from '@/hooks/useMarkNotificationsRead'
 import type { DefectStatus } from '@/types/defect'
 
 const STATUS_OPTIONS: DefectStatus[] = ['접수', '분석중', '수정중', '검증중', '완료', '재현불가', '보류']
@@ -22,25 +22,22 @@ export default function DefectDetailPage() {
   const numericId = Number(id)
   const hasValidId = Number.isInteger(numericId) && numericId > 0
 
+  useMarkNotificationsRead('DEFECT', hasValidId ? numericId : undefined)
+
   const detailQuery = useDefectDetailQuery(hasValidId ? numericId : undefined)
-  const commentsQuery = useCommentsQuery('DEFECT', hasValidId ? numericId : undefined)
   const attachmentsQuery = useAttachmentsQuery('DEFECT', hasValidId ? numericId : undefined)
   const activityLogsQuery = useActivityLogsQuery('DEFECT', hasValidId ? numericId : undefined)
 
   const updateStatus = useUpdateDefectStatusMutation(hasValidId ? numericId : undefined)
   const deleteDefect = useDeleteDefectMutation()
-  const createComment = useCreateCommentMutation('DEFECT', hasValidId ? numericId : undefined)
 
   const [statusOpen, setStatusOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const [comment, setComment] = useState('')
   const [status, setStatus] = useState<DefectStatus>('접수')
 
   const data = detailQuery.data
-  const comments = commentsQuery.data?.items ?? []
   const attachments = attachmentsQuery.data ?? []
   const activityLogs = activityLogsQuery.data?.items ?? []
-  const visibleComments = useExpandableList(comments, 3)
   const visibleActivityLogs = useExpandableList(activityLogs, 5)
 
   useEffect(() => {
@@ -68,16 +65,6 @@ export default function DefectDetailPage() {
     } catch {
       setStatus(prev)
     }
-  }
-
-  const handleComment = async () => {
-    const trimmed = comment.trim()
-    if (!trimmed) {
-      return
-    }
-
-    await createComment.mutateAsync({ content: trimmed })
-    setComment('')
   }
 
   if (!hasValidId) {
@@ -198,60 +185,7 @@ export default function DefectDetailPage() {
         </div>
 
         <div className="w-[300px] flex-shrink-0 space-y-4">
-          <div className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] px-4 py-4">
-            <p className="text-[12px] font-semibold text-gray-700 mb-3">댓글 {comments.length}</p>
-            <div className="space-y-3 mb-3 max-h-[260px] overflow-y-auto">
-              {commentsQuery.isPending ? (
-                <p className="text-[12px] text-gray-400">불러오는 중...</p>
-              ) : comments.length === 0 ? (
-                <EmptyState title="댓글이 없습니다" description="첫 댓글을 남겨보세요." />
-              ) : (
-                visibleComments.visibleItems.map((item) => (
-                  <div key={item.id} className="flex gap-2.5">
-                    <div className="w-6 h-6 rounded-full bg-brand/10 flex items-center justify-center text-brand text-[10px] font-bold flex-shrink-0">
-                      {item.authorName[0]}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-[11px] font-semibold text-gray-800">{item.authorName}</span>
-                        <span className="text-[10px] text-gray-400">{item.createdAt}</span>
-                      </div>
-                      <p className="text-[12px] text-gray-600 leading-relaxed">{item.content}</p>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-            <ShowMoreButton
-              expanded={visibleComments.expanded}
-              hiddenCount={visibleComments.hiddenCount}
-              onToggle={visibleComments.toggle}
-              className="mb-3"
-            />
-            <div className="flex gap-2 pt-2 border-t border-gray-100">
-              <textarea
-                value={comment}
-                onChange={(event) => setComment(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && event.metaKey) {
-                    void handleComment()
-                  }
-                }}
-                placeholder="댓글을 입력하세요 (⌘+Enter로 전송)"
-                rows={2}
-                className="flex-1 px-2.5 py-2 text-[12px] border border-gray-200 rounded-lg focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand/20 resize-none"
-              />
-              <button
-                onClick={() => {
-                  void handleComment()
-                }}
-                disabled={!comment.trim() || createComment.isPending}
-                className="h-fit px-2.5 py-2 bg-brand text-white text-[11px] font-semibold rounded-lg hover:bg-brand-hover transition-colors disabled:opacity-40 self-end"
-              >
-                전송
-              </button>
-            </div>
-          </div>
+          <CommentSection refType="DEFECT" refId={hasValidId ? numericId : undefined} />
 
           <div className="bg-white rounded-xl border border-blue-50 shadow-[0_2px_8px_rgba(30,58,138,0.05)] p-4">
             <p className="text-[12px] font-semibold text-gray-700 mb-4">처리 이력</p>

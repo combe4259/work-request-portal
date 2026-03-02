@@ -18,7 +18,10 @@ public class StatisticsController {
     }
 
     @GetMapping
-    public StatisticsResponse getStatistics(@RequestParam(required = false) Long teamId) {
-        return statisticsService.getStatistics(teamId);
+    public StatisticsResponse getStatistics(
+            @RequestParam(required = false) Long teamId,
+            @RequestParam(defaultValue = "30") int days
+    ) {
+        return statisticsService.getStatistics(teamId, days);
     }
 }

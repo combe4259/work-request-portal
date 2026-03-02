@@ -8,6 +8,7 @@ import org.example.domain.comment.dto.CommentUpdateRequest;
 import org.example.domain.comment.entity.Comment;
 import org.example.domain.comment.mapper.CommentMapper;
 import org.example.domain.comment.repository.CommentRepository;
+import org.example.domain.notification.service.NotificationEventService;
 import org.example.global.team.TeamScopeUtil;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -18,12 +19,19 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 @Transactional(readOnly = true)
 public class CommentServiceImpl implements CommentService {
+
+    // @[displayName](userId) 패턴 파싱
+    private static final Pattern MENTION_PATTERN = Pattern.compile("@\\[([^]]+)]\\((\\d+)\\)");
 
     private static final Set<String> ALLOWED_REF_TYPES = Set.of(
             "WORK_REQUEST",
@@ -38,13 +46,16 @@ public class CommentServiceImpl implements CommentService {
 
     private final CommentRepository commentRepository;
     private final DocumentIndexRepository documentIndexRepository;
+    private final NotificationEventService notificationEventService;
 
     public CommentServiceImpl(
             CommentRepository commentRepository,
-            @Nullable DocumentIndexRepository documentIndexRepository
+            @Nullable DocumentIndexRepository documentIndexRepository,
+            NotificationEventService notificationEventService
     ) {
         this.commentRepository = commentRepository;
         this.documentIndexRepository = documentIndexRepository;
+        this.notificationEventService = notificationEventService;
     }
 
     @Override
@@ -78,7 +89,9 @@ public class CommentServiceImpl implements CommentService {
         entity.setRefType(normalizedRefType);
         entity.setContent(request.content().trim());
 
-        return commentRepository.save(entity).getId();
+        Comment saved = commentRepository.save(entity);
+        fireMentionNotifications(saved);
+        return saved.getId();
     }
 
     @Override
@@ -103,6 +116,48 @@ public class CommentServiceImpl implements CommentService {
         Comment entity = getCommentOrThrow(id);
         ensureRefAccessible(entity.getRefType(), entity.getRefId());
         commentRepository.delete(entity);
+    }
+
+    private void fireMentionNotifications(Comment comment) {
+        List<Long> mentionedUserIds = parseMentionedUserIds(comment.getContent());
+        String displayContent = stripMentionMarkup(comment.getContent());
+        for (Long mentionedUserId : mentionedUserIds) {
+            if (mentionedUserId.equals(comment.getAuthorId())) {
+                continue; // 자기 자신 멘션은 알림 생략
+            }
+            notificationEventService.create(
+                    mentionedUserId,
+                    "멘션",
+                    "댓글에서 멘션되었습니다.",
+                    displayContent,
+                    comment.getRefType(),
+                    comment.getRefId()
+            );
+        }
+    }
+
+    /** @[name](id) → @name 으로 변환 */
+    private String stripMentionMarkup(String content) {
+        if (content == null) {
+            return "";
+        }
+        return MENTION_PATTERN.matcher(content).replaceAll("@$1");
+    }
+
+    private List<Long> parseMentionedUserIds(String content) {
+        if (content == null || content.isBlank()) {
+            return List.of();
+        }
+        List<Long> ids = new ArrayList<>();
+        Matcher matcher = MENTION_PATTERN.matcher(content);
+        while (matcher.find()) {
+            try {
+                ids.add(Long.parseLong(matcher.group(2)));
+            } catch (NumberFormatException ignored) {
+                // 파싱 불가능한 userId는 무시
+            }
+        }
+        return ids;
     }
 
     private Comment getCommentOrThrow(Long id) {

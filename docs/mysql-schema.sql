@@ -47,7 +47,7 @@ CREATE TABLE user_preferences (
     notify_deadline TINYINT(1) NOT NULL DEFAULT 1,
     notify_status   TINYINT(1) NOT NULL DEFAULT 0,
     notify_deploy   TINYINT(1) NOT NULL DEFAULT 1,
-    notify_mention  TINYINT(1) NOT NULL DEFAULT 0,
+    notify_mention  TINYINT(1) NOT NULL DEFAULT 1,
     landing_page    VARCHAR(50) NOT NULL DEFAULT '/dashboard',
     row_count       INT NOT NULL DEFAULT 20,
     avatar_color    VARCHAR(20) NOT NULL DEFAULT 'brand',
