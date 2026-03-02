@@ -3,6 +3,7 @@ plugins {
     id 'org.springframework.boot' version '3.3.5'
     id 'io.spring.dependency-management' version '1.1.6'
     id 'org.sonarqube' version '5.1.0.4882'
+    id 'jacoco'
 }
 
 sonar {
@@ -56,4 +57,39 @@ dependencies {
 
 test {
     useJUnitPlatform()
+    finalizedBy jacocoTestReport
+}
+
+jacoco {
+    toolVersion = "0.8.12"
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = true   // SonarCloud 연동용
+        html.required = true  // 브라우저로 볼 수 있는 리포트
+    }
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: [
+                // 커버리지 측정 제외 대상
+                '**/dto/**',
+                '**/entity/**',
+                '**/config/**',
+                '**/*Application*',
+                '**/mapper/**',
+            ])
+        }))
+    }
+}
+
+jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            limit {
+                minimum = 0.50  // 전체 50% 미만이면 빌드 실패
+            }
+        }
+    }
 }

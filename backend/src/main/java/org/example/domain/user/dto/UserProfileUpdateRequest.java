@@ -17,12 +17,12 @@ public record UserProfileUpdateRequest(
         @Size(max = 100, message = "이메일은 100자 이하여야 합니다.")
         String email,
 
-        @Schema(example = "백엔드개발자")
+        @Schema(example = "개발자", allowableValues = {"PM", "CTO", "개발자", "디자이너", "QA", "기획자"})
         @NotBlank(message = "역할은 필수입니다.")
         @Size(max = 30, message = "역할은 30자 이하여야 합니다.")
         String role,
 
-        @Schema(example = "#4F46E5")
+        @Schema(example = "indigo", allowableValues = {"brand", "indigo", "violet", "emerald", "amber", "rose", "slate"})
         @Size(max = 20, message = "아바타 색상 값이 너무 깁니다.")
         String avatarColor,
 
