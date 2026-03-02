@@ -3,6 +3,7 @@ package org.example.domain.attachment.service;
 import org.example.domain.attachment.dto.AttachmentCreateRequest;
 import org.example.domain.attachment.dto.AttachmentListResponse;
 import org.example.domain.attachment.dto.AttachmentUpdateRequest;
+import org.springframework.http.HttpStatus;
 import org.example.domain.attachment.entity.Attachment;
 import org.example.domain.attachment.repository.AttachmentRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -133,6 +134,65 @@ class AttachmentServiceImplTest {
         attachmentService.delete(12L);
 
         verify(attachmentRepository).delete(entity);
+    }
+
+    @Test
+    @DisplayName("상세 조회 성공 시 id와 refType을 포함한 응답을 반환한다")
+    void findById() {
+        when(attachmentRepository.findById(1L)).thenReturn(Optional.of(sampleEntity(1L)));
+
+        var response = attachmentService.findById(1L);
+
+        assertThat(response.id()).isEqualTo(1L);
+        assertThat(response.refType()).isEqualTo("DEFECT");
+        assertThat(response.originalName()).isEqualTo("capture.png");
+    }
+
+    @Test
+    @DisplayName("상세 조회 시 대상이 없으면 404 예외를 던진다")
+    void findByIdNotFound() {
+        when(attachmentRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> attachmentService.findById(999L))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(ex -> assertThat(((ResponseStatusException) ex).getStatusCode())
+                        .isEqualTo(HttpStatus.NOT_FOUND));
+    }
+
+    @Test
+    @DisplayName("삭제 시 대상이 없으면 404 예외를 던진다")
+    void deleteNotFound() {
+        when(attachmentRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> attachmentService.delete(999L))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(ex -> assertThat(((ResponseStatusException) ex).getStatusCode())
+                        .isEqualTo(HttpStatus.NOT_FOUND));
+    }
+
+    @Test
+    @DisplayName("생성 시 잘못된 refType이면 400 예외를 던진다")
+    void createWithInvalidRefType() {
+        AttachmentCreateRequest request = new AttachmentCreateRequest(
+                "INVALID_TYPE", 77L, "file.txt", "/path/file.txt", 1L, null, 2L
+        );
+
+        assertThatThrownBy(() -> attachmentService.create(request))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(ex -> assertThat(((ResponseStatusException) ex).getStatusCode())
+                        .isEqualTo(HttpStatus.BAD_REQUEST));
+    }
+
+    @Test
+    @DisplayName("수정 시 대상이 없으면 404 예외를 던진다")
+    void updateNotFound() {
+        when(attachmentRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> attachmentService.update(999L,
+                new AttachmentUpdateRequest(null, null, "new.txt", "/new.txt", null, null)))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(ex -> assertThat(((ResponseStatusException) ex).getStatusCode())
+                        .isEqualTo(HttpStatus.NOT_FOUND));
     }
 
     private Attachment sampleEntity(Long id) {
