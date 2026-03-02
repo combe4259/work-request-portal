@@ -1,0 +1,49 @@
+{
+  "id": "work-request-portal-local",
+  "name": "Work Request Portal - Local",
+  "_postman_variable_scope": "environment",
+  "values": [
+    { "key": "baseUrl",            "value": "http://localhost:8080/api", "enabled": true },
+    { "key": "token",              "value": "",                          "enabled": true },
+
+    { "key": "userId",             "value": "1",  "enabled": true },
+    { "key": "userId2",            "value": "2",  "enabled": true },
+    { "key": "userId3",            "value": "3",  "enabled": true },
+
+    { "key": "teamId",             "value": "1",  "enabled": true },
+    { "key": "teamId2",            "value": "4",  "enabled": true },
+
+    { "key": "workRequestId",      "value": "2",  "enabled": true },
+    { "key": "workRequestId2",     "value": "3",  "enabled": true },
+    { "key": "workRequestId3",     "value": "6",  "enabled": true },
+
+    { "key": "techTaskId",         "value": "1",  "enabled": true },
+    { "key": "techTaskId2",        "value": "2",  "enabled": true },
+    { "key": "techTaskId3",        "value": "4",  "enabled": true },
+
+    { "key": "testScenarioId",     "value": "4",  "enabled": true },
+    { "key": "testScenarioId2",    "value": "6",  "enabled": true },
+    { "key": "testScenarioId3",    "value": "7",  "enabled": true },
+
+    { "key": "deploymentId",       "value": "1",  "enabled": true },
+    { "key": "deploymentId2",      "value": "2",  "enabled": true },
+    { "key": "deploymentId3",      "value": "3",  "enabled": true },
+
+    { "key": "defectId",           "value": "1",  "enabled": true },
+    { "key": "defectId2",          "value": "2",  "enabled": true },
+    { "key": "defectId3",          "value": "3",  "enabled": true },
+
+    { "key": "ideaId",             "value": "1",  "enabled": true },
+
+    { "key": "knowledgeBaseId",    "value": "1",  "enabled": true },
+    { "key": "knowledgeBaseId2",   "value": "2",  "enabled": true },
+
+    { "key": "meetingNoteId",      "value": "1",  "enabled": true },
+    { "key": "meetingNoteId2",     "value": "2",  "enabled": true },
+
+    { "key": "sharedResourceId",   "value": "1",  "enabled": true },
+
+    { "key": "commentId",          "value": "1",  "enabled": true },
+    { "key": "commentId2",         "value": "2",  "enabled": true }
+  ]
+}

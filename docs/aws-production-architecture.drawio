@@ -1,0 +1,196 @@
+<mxfile host="app.diagrams.net" modified="2026-02-28T15:30:00.000Z" agent="Codex GPT-5" version="24.7.17" type="device">
+  <diagram id="aws-prod-arch-01" name="AWS-Production-Architecture">
+    <mxGraphModel dx="2010" dy="1158" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2800" pageHeight="1600" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="100" value="VPC (2 AZ)" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#6c8ebf;fillColor=#dae8fc;fontStyle=1;verticalAlign=top;align=left;spacingLeft=10;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="560" y="180" width="1700" height="1040" as="geometry" />
+        </mxCell>
+        <mxCell id="101" value="Public Subnets" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#82b366;fillColor=#d5e8d4;fontStyle=1;verticalAlign=top;align=left;spacingLeft=10;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="610" y="250" width="560" height="350" as="geometry" />
+        </mxCell>
+        <mxCell id="102" value="Private App Subnets" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#b46504;fillColor=#ffe6cc;fontStyle=1;verticalAlign=top;align=left;spacingLeft=10;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="1210" y="250" width="1010" height="470" as="geometry" />
+        </mxCell>
+        <mxCell id="103" value="Private Data Subnets" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#9673a6;fillColor=#e1d5e7;fontStyle=1;verticalAlign=top;align=left;spacingLeft=10;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="1210" y="760" width="1010" height="420" as="geometry" />
+        </mxCell>
+
+        <mxCell id="2" value="Users (Browser)" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="60" y="300" width="190" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="3" value="Route 53\napp.yourdomain.com" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="290" y="300" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="4" value="CloudFront + WAF + ACM" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="290" y="410" width="270" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="5" value="S3 Private Bucket\n(React Static Hosting)" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="290" y="540" width="270" height="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="6" value="Application Load Balancer" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="690" y="330" width="270" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="11" value="NAT Gateway" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="700" y="440" width="180" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="24" value="Internet Gateway" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="940" y="440" width="180" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="12" value="ECS Fargate Task A\n(Spring Boot API + /ws + /slack/interactions)" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#fff2cc;" vertex="1" parent="1">
+          <mxGeometry x="1280" y="330" width="330" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="13" value="ECS Fargate Task B\n(Spring Boot API + /ws + /slack/interactions)" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#fff2cc;" vertex="1" parent="1">
+          <mxGeometry x="1650" y="330" width="330" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="14" value="Amazon MQ for RabbitMQ\n(STOMP Broker Relay)" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#fff2cc;" vertex="1" parent="1">
+          <mxGeometry x="1430" y="520" width="430" height="90" as="geometry" />
+        </mxCell>
+
+        <mxCell id="15" value="RDS Proxy" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#f8cecc;" vertex="1" parent="1">
+          <mxGeometry x="1390" y="850" width="230" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="16" value="RDS MySQL\nMulti-AZ" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=15;strokeColor=#000000;fillColor=#f8cecc;" vertex="1" parent="1">
+          <mxGeometry x="1680" y="840" width="230" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="21" value="ElastiCache Redis\n(Optional: Cache / Rate Limit / Lock)" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#f8cecc;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="1390" y="980" width="520" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="17" value="Secrets Manager" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#e1d5e7;" vertex="1" parent="1">
+          <mxGeometry x="60" y="760" width="210" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="18" value="CloudWatch\nLogs / Metrics / Alarms" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#e1d5e7;" vertex="1" parent="1">
+          <mxGeometry x="60" y="870" width="230" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="19" value="ECR" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#d5e8d4;" vertex="1" parent="1">
+          <mxGeometry x="300" y="760" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="20" value="CI/CD\n(GitHub Actions / CodePipeline)" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#d5e8d4;" vertex="1" parent="1">
+          <mxGeometry x="300" y="870" width="300" height="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="22" value="Slack API\n(chat.postMessage)" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#fff2cc;" vertex="1" parent="1">
+          <mxGeometry x="2340" y="320" width="220" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="23" value="Slack Workspace\n(Interaction Callback)" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#fff2cc;" vertex="1" parent="1">
+          <mxGeometry x="2340" y="470" width="240" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="25" value="Security Note\n- Verify X-Slack-Signature\n- Verify X-Slack-Request-Timestamp\n- Replay window check" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#c73500;fillColor=#ffe6cc;dashed=1;align=left;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="2340" y="620" width="320" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="26" value="Reliability Note\n- Retry + Exponential Backoff\n- Optional SQS DLQ for failed Slack sends" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#0050b3;fillColor=#dae8fc;dashed=1;align=left;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="2340" y="770" width="320" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="27" value="EC2 (Not used)\nECS Fargate로 대체" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#999999;fillColor=#f5f5f5;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="2340" y="900" width="220" height="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="201" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="2" target="3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="202" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="3" target="4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="203" value="/*" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="4" target="5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="204" value="/api/*, /ws/*, /slack/*" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="4" target="6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="205" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="6" target="12">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="206" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="6" target="13">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="207" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="12" target="15">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="208" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="13" target="15">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="209" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="15" target="16">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="210" value="STOMP" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="12" target="14">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="211" value="STOMP" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="13" target="14">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="212" value="secrets" style="endArrow=block;html=1;rounded=0;dashed=1;" edge="1" parent="1" source="12" target="17">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="213" value="secrets" style="endArrow=block;html=1;rounded=0;dashed=1;" edge="1" parent="1" source="13" target="17">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="214" value="logs/metrics" style="endArrow=block;html=1;rounded=0;dashed=1;" edge="1" parent="1" source="12" target="18">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="215" value="logs/metrics" style="endArrow=block;html=1;rounded=0;dashed=1;" edge="1" parent="1" source="13" target="18">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="216" value="metrics" style="endArrow=block;html=1;rounded=0;dashed=1;" edge="1" parent="1" source="6" target="18">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="217" value="metrics" style="endArrow=block;html=1;rounded=0;dashed=1;" edge="1" parent="1" source="16" target="18">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="218" value="metrics" style="endArrow=block;html=1;rounded=0;dashed=1;" edge="1" parent="1" source="14" target="18">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="219" value="image push" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="20" target="19">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="220" value="deploy" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="19" target="12">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="221" value="deploy" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="19" target="13">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="222" value="frontend build" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="20" target="5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="223" value="invalidate" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="20" target="4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="224" value="outbound HTTPS" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="12" target="11">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="225" value="outbound HTTPS" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="13" target="11">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="226" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="11" target="24">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="227" value="chat.postMessage" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="24" target="22">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="228" value="POST /slack/interactions" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="23" target="4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="229" value="optional" style="endArrow=block;html=1;rounded=0;dashed=1;" edge="1" parent="1" source="12" target="21">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="230" value="optional" style="endArrow=block;html=1;rounded=0;dashed=1;" edge="1" parent="1" source="13" target="21">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

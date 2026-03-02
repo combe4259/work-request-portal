@@ -1,0 +1,1003 @@
+{
+  "info": {
+    "name": "Work Request Portal API - Full Coverage",
+    "_postman_id": "wrp-full-coverage-v2",
+    "description": "전체 API 스모크 테스트 (~120개 엔드포인트)\n\n## 실행 방법\n```\nnewman run work-request-portal.postman_collection.json \\\n  -e local.postman_environment.json \\\n  --reporters cli,htmlextra \\\n  --reporter-htmlextra-export reports/smoke-test-report.html\n```",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const token  = pm.environment.get('token');",
+          "const teamId = pm.environment.get('teamId');",
+          "if (token)  pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });",
+          "if (teamId) pm.request.headers.upsert({ key: 'X-Team-Id',     value: teamId });"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "01. Auth",
+      "item": [
+        {
+          "name": "회원가입",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('서버 오류 없음', () => pm.expect(pm.response.code).to.not.equal(500));"
+          ]}}],
+          "request": {
+            "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"smoke_{{$timestamp}}@test.com\",\n  \"password\": \"qwer1234\",\n  \"name\": \"스모크테스트유저\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/auth/signup", "host": ["{{baseUrl}}"], "path": ["auth", "signup"] }
+          }
+        },
+        {
+          "name": "로그인",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) {",
+            "    const body = pm.response.json();",
+            "    pm.environment.set('token',  body.accessToken);",
+            "    pm.environment.set('userId', String(body.user.id));",
+            "    if (body.teams && body.teams.length > 0) pm.environment.set('teamId', String(body.teams[0].id));",
+            "    console.log('✓ token saved. userId=' + body.user.id + ' teamId=' + body.teams[0].id);",
+            "}"
+          ]}}],
+          "request": {
+            "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] }
+          }
+        },
+        {
+          "name": "내 정보 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('user.id 존재', () => pm.expect(pm.response.json().user).to.have.property('id'));"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/auth/me", "host": ["{{baseUrl}}"], "path": ["auth", "me"] } }
+        },
+        {
+          "name": "토큰 갱신",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('서버 오류 없음', () => pm.expect(pm.response.code).to.not.equal(500));",
+            "if (pm.response.code === 200) {",
+            "    pm.environment.set('token', pm.response.json().accessToken);",
+            "    console.log('✓ 토큰 갱신 성공');",
+            "}"
+          ]}}],
+          "request": { "method": "POST", "header": [], "url": { "raw": "{{baseUrl}}/auth/refresh", "host": ["{{baseUrl}}"], "path": ["auth", "refresh"] } }
+        }
+      ]
+    },
+    {
+      "name": "02. Teams",
+      "item": [
+        {
+          "name": "내 팀 목록",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('배열 응답', () => pm.expect(pm.response.json()).to.be.an('array'));"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/teams/mine", "host": ["{{baseUrl}}"], "path": ["teams", "mine"] } }
+        },
+        {
+          "name": "팀 생성",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) {",
+            "    const body = pm.response.json();",
+            "    pm.environment.set('teamId2', String(body.id));",
+            "    pm.environment.set('inviteCode', body.inviteCode);",
+            "    console.log('✓ teamId2=' + body.id + ' inviteCode=' + body.inviteCode);",
+            "}"
+          ]}}],
+          "request": {
+            "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"[스모크테스트] 임시팀\",\n  \"description\": \"스모크 테스트용 임시 팀\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/teams", "host": ["{{baseUrl}}"], "path": ["teams"] }
+          }
+        },
+        {
+          "name": "팀 가입 (초대코드)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('서버 오류 없음', () => pm.expect(pm.response.code).to.not.equal(500));"
+          ]}}],
+          "request": {
+            "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"inviteCode\": \"INVALID99\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/teams/join", "host": ["{{baseUrl}}"], "path": ["teams", "join"] }
+          }
+        },
+        {
+          "name": "팀 멤버 목록",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('배열 응답', () => pm.expect(pm.response.json()).to.be.an('array'));"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/teams/{{teamId}}/members", "host": ["{{baseUrl}}"], "path": ["teams", "{{teamId}}", "members"] } }
+        },
+        {
+          "name": "멤버 역할 변경",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('서버 오류 없음', () => pm.expect(pm.response.code).to.not.equal(500));"
+          ]}}],
+          "request": {
+            "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"teamRole\": \"MEMBER\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/teams/{{teamId}}/members/{{userId}}/role", "host": ["{{baseUrl}}"], "path": ["teams", "{{teamId}}", "members", "{{userId}}", "role"] }
+          }
+        },
+        {
+          "name": "멤버 제거 (스스로 제거, 예상 실패)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('서버 오류 없음', () => pm.expect(pm.response.code).to.not.equal(500));"
+          ]}}],
+          "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/teams/{{teamId2}}/members/{{userId}}", "host": ["{{baseUrl}}"], "path": ["teams", "{{teamId2}}", "members", "{{userId}}"] } }
+        }
+      ]
+    },
+    {
+      "name": "03. Work Requests",
+      "item": [
+        {
+          "name": "목록 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('페이지 구조', () => pm.expect(pm.response.json()).to.have.property('content'));"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/work-requests?page=0&size=10", "host": ["{{baseUrl}}"], "path": ["work-requests"], "query": [{"key":"page","value":"0"},{"key":"size","value":"10"}] } }
+        },
+        {
+          "name": "업무요청 생성",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) { pm.environment.set('workRequestId', String(pm.response.json().id)); console.log('✓ workRequestId='+pm.response.json().id); }"
+          ]}}],
+          "request": {
+            "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"[스모크테스트] 로그인 기능 개선\",\n  \"background\": \"보안 강화를 위해 개선이 필요합니다.\",\n  \"description\": \"JWT 기반 로그인/로그아웃 API 개발\",\n  \"type\": \"기능개선\",\n  \"priority\": \"보통\",\n  \"status\": \"접수대기\",\n  \"requesterId\": {{userId}},\n  \"assigneeId\": null,\n  \"deadline\": \"2026-12-31\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/work-requests", "host": ["{{baseUrl}}"], "path": ["work-requests"] }
+          }
+        },
+        {
+          "name": "상세 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('requestNo 존재', () => pm.expect(pm.response.json()).to.have.property('requestNo'));"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/work-requests/{{workRequestId}}", "host": ["{{baseUrl}}"], "path": ["work-requests", "{{workRequestId}}"] } }
+        },
+        {
+          "name": "수정",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": {
+            "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"[스모크테스트-수정] 로그인 기능 개선\",\n  \"background\": \"수정된 배경\",\n  \"description\": \"수정된 설명\",\n  \"type\": \"기능개선\",\n  \"priority\": \"높음\",\n  \"status\": \"검토중\",\n  \"assigneeId\": null,\n  \"deadline\": \"2026-12-31\",\n  \"startedAt\": null,\n  \"completedAt\": null,\n  \"rejectedReason\": null,\n  \"rejectedAt\": null\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/work-requests/{{workRequestId}}", "host": ["{{baseUrl}}"], "path": ["work-requests", "{{workRequestId}}"] }
+          }
+        },
+        {
+          "name": "연관문서 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/work-requests/{{workRequestId}}/related-refs", "host": ["{{baseUrl}}"], "path": ["work-requests", "{{workRequestId}}", "related-refs"] } }
+        },
+        {
+          "name": "연관문서 교체",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": {
+            "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"items\": []}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/work-requests/{{workRequestId}}/related-refs", "host": ["{{baseUrl}}"], "path": ["work-requests", "{{workRequestId}}", "related-refs"] }
+          }
+        },
+        {
+          "name": "상태 변경",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": {
+            "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"검토중\",\n  \"statusNote\": \"스모크 테스트 상태 변경\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/work-requests/{{workRequestId}}/status", "host": ["{{baseUrl}}"], "path": ["work-requests", "{{workRequestId}}", "status"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "04. Flow Chain",
+      "item": [
+        {
+          "name": "Flow Chain 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/work-requests/{{workRequestId}}/flow-chain", "host": ["{{baseUrl}}"], "path": ["work-requests", "{{workRequestId}}", "flow-chain"] } }
+        },
+        {
+          "name": "Flow Item 생성",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]}}],
+          "request": {
+            "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"parentType\": \"WORK_REQUEST\",\n  \"parentId\": {{workRequestId}},\n  \"itemType\": \"TECH_TASK\",\n  \"title\": \"[스모크테스트] Flow 기술과제\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/work-requests/{{workRequestId}}/flow-items", "host": ["{{baseUrl}}"], "path": ["work-requests", "{{workRequestId}}", "flow-items"] }
+          }
+        },
+        {
+          "name": "Flow UI 상태 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) { pm.environment.set('flowVersion', String(pm.response.json().version)); }"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/work-requests/{{workRequestId}}/flow-ui", "host": ["{{baseUrl}}"], "path": ["work-requests", "{{workRequestId}}", "flow-ui"] } }
+        },
+        {
+          "name": "Flow UI 상태 저장",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('서버 오류 없음', () => pm.expect(pm.response.code).to.not.equal(500));"]}}],
+          "request": {
+            "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"expectedVersion\": {{flowVersion}},\n  \"positions\": {},\n  \"edges\": [],\n  \"customNodes\": []\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/work-requests/{{workRequestId}}/flow-ui", "host": ["{{baseUrl}}"], "path": ["work-requests", "{{workRequestId}}", "flow-ui"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05. Tech Tasks",
+      "item": [
+        {
+          "name": "목록 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200)); pm.test('페이지 구조', () => pm.expect(pm.response.json()).to.have.property('content'));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/tech-tasks?page=0&size=10", "host": ["{{baseUrl}}"], "path": ["tech-tasks"], "query": [{"key":"page","value":"0"},{"key":"size","value":"10"}] } }
+        },
+        {
+          "name": "기술과제 생성",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) { pm.environment.set('techTaskId', String(pm.response.json().id)); console.log('✓ techTaskId='+pm.response.json().id); }"
+          ]}}],
+          "request": {
+            "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"[스모크테스트] JWT 인증 모듈 리팩토링\",\n  \"currentIssue\": \"세션 기반 인증만 지원하여 확장성 부족\",\n  \"solution\": \"jjwt 라이브러리 기반 토큰 구조로 전환\",\n  \"definitionOfDone\": \"[\\\"토큰 발급 확인\\\",\\\"갱신 시나리오 검증\\\"]\",\n  \"type\": \"리팩토링\",\n  \"priority\": \"보통\",\n  \"status\": \"접수대기\",\n  \"registrantId\": {{userId}},\n  \"assigneeId\": null,\n  \"deadline\": \"2026-12-31\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/tech-tasks", "host": ["{{baseUrl}}"], "path": ["tech-tasks"] }
+          }
+        },
+        {
+          "name": "상세 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200)); pm.test('taskNo 존재', () => pm.expect(pm.response.json()).to.have.property('taskNo'));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/tech-tasks/{{techTaskId}}", "host": ["{{baseUrl}}"], "path": ["tech-tasks", "{{techTaskId}}"] } }
+        },
+        {
+          "name": "수정",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": {
+            "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"[스모크테스트-수정] JWT 인증 모듈\",\n  \"currentIssue\": \"수정된 이슈\",\n  \"solution\": \"수정된 해결책\",\n  \"definitionOfDone\": \"[\\\"수정된 기준\\\"]\",\n  \"type\": \"기술부채\",\n  \"priority\": \"높음\",\n  \"status\": \"검토중\",\n  \"assigneeId\": null,\n  \"deadline\": \"2026-12-31\",\n  \"startedAt\": null,\n  \"completedAt\": null,\n  \"rejectedReason\": null,\n  \"rejectedAt\": null\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/tech-tasks/{{techTaskId}}", "host": ["{{baseUrl}}"], "path": ["tech-tasks", "{{techTaskId}}"] }
+          }
+        },
+        {
+          "name": "연관문서 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/tech-tasks/{{techTaskId}}/related-refs", "host": ["{{baseUrl}}"], "path": ["tech-tasks", "{{techTaskId}}", "related-refs"] } }
+        },
+        {
+          "name": "연관문서 교체",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": {
+            "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"items\": []}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/tech-tasks/{{techTaskId}}/related-refs", "host": ["{{baseUrl}}"], "path": ["tech-tasks", "{{techTaskId}}", "related-refs"] }
+          }
+        },
+        {
+          "name": "PR 링크 목록",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/tech-tasks/{{techTaskId}}/pr-links", "host": ["{{baseUrl}}"], "path": ["tech-tasks", "{{techTaskId}}", "pr-links"] } }
+        },
+        {
+          "name": "PR 링크 생성",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) { pm.environment.set('prLinkId', String(pm.response.json().id)); }"
+          ]}}],
+          "request": {
+            "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"branchName\": \"feature/smoke-test\",\n  \"prNo\": \"PR-999\",\n  \"prUrl\": \"https://github.com/example/repo/pull/999\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/tech-tasks/{{techTaskId}}/pr-links", "host": ["{{baseUrl}}"], "path": ["tech-tasks", "{{techTaskId}}", "pr-links"] }
+          }
+        },
+        {
+          "name": "PR 링크 삭제",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/tech-tasks/{{techTaskId}}/pr-links/{{prLinkId}}", "host": ["{{baseUrl}}"], "path": ["tech-tasks", "{{techTaskId}}", "pr-links", "{{prLinkId}}"] } }
+        },
+        {
+          "name": "상태 변경",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": {
+            "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"검토중\",\n  \"statusNote\": null\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/tech-tasks/{{techTaskId}}/status", "host": ["{{baseUrl}}"], "path": ["tech-tasks", "{{techTaskId}}", "status"] }
+          }
+        },
+        {
+          "name": "삭제",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/tech-tasks/{{techTaskId}}", "host": ["{{baseUrl}}"], "path": ["tech-tasks", "{{techTaskId}}"] } }
+        }
+      ]
+    },
+    {
+      "name": "06. Test Scenarios",
+      "item": [
+        {
+          "name": "목록 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200)); pm.test('페이지 구조', () => pm.expect(pm.response.json()).to.have.property('content'));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/test-scenarios?page=0&size=10", "host": ["{{baseUrl}}"], "path": ["test-scenarios"], "query": [{"key":"page","value":"0"},{"key":"size","value":"10"}] } }
+        },
+        {
+          "name": "테스트시나리오 생성",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) { pm.environment.set('testScenarioId', String(pm.response.json().id)); console.log('✓ testScenarioId='+pm.response.json().id); }"
+          ]}}],
+          "request": {
+            "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"[스모크테스트] 로그인 성공 시나리오\",\n  \"description\": \"정상 자격증명으로 JWT 토큰이 발급되는지 확인\",\n  \"type\": \"기능\",\n  \"priority\": \"높음\",\n  \"status\": \"작성중\",\n  \"assigneeId\": null,\n  \"precondition\": \"사용자가 DB에 존재하고 자격증명이 올바른 상태\",\n  \"steps\": \"[\\\"로그인 페이지 접속\\\",\\\"이메일/비밀번호 입력\\\",\\\"로그인 버튼 클릭\\\"]\",\n  \"expectedResult\": \"HTTP 200, accessToken 반환\",\n  \"actualResult\": null,\n  \"deadline\": \"2026-12-31\",\n  \"executedAt\": null,\n  \"statusNote\": null,\n  \"createdBy\": {{userId}}\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/test-scenarios", "host": ["{{baseUrl}}"], "path": ["test-scenarios"] }
+          }
+        },
+        {
+          "name": "상세 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200)); pm.test('scenarioNo 존재', () => pm.expect(pm.response.json()).to.have.property('scenarioNo'));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/test-scenarios/{{testScenarioId}}", "host": ["{{baseUrl}}"], "path": ["test-scenarios", "{{testScenarioId}}"] } }
+        },
+        {
+          "name": "수정",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": {
+            "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"[스모크테스트-수정] 로그인 시나리오\",\n  \"description\": \"수정된 설명\",\n  \"type\": \"기능\",\n  \"priority\": \"높음\",\n  \"status\": \"검토중\",\n  \"assigneeId\": null,\n  \"precondition\": \"수정된 전제조건\",\n  \"steps\": \"[\\\"수정된 단계1\\\",\\\"수정된 단계2\\\"]\",\n  \"expectedResult\": \"수정된 기대결과\",\n  \"actualResult\": null,\n  \"deadline\": \"2026-12-31\",\n  \"executedAt\": null,\n  \"statusNote\": null\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/test-scenarios/{{testScenarioId}}", "host": ["{{baseUrl}}"], "path": ["test-scenarios", "{{testScenarioId}}"] }
+          }
+        },
+        {
+          "name": "연관문서 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/test-scenarios/{{testScenarioId}}/related-refs", "host": ["{{baseUrl}}"], "path": ["test-scenarios", "{{testScenarioId}}", "related-refs"] } }
+        },
+        {
+          "name": "연관문서 교체",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": {
+            "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"items\": []}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/test-scenarios/{{testScenarioId}}/related-refs", "host": ["{{baseUrl}}"], "path": ["test-scenarios", "{{testScenarioId}}", "related-refs"] }
+          }
+        },
+        {
+          "name": "상태 변경",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": {
+            "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"승인됨\",\n  \"statusNote\": null\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/test-scenarios/{{testScenarioId}}/status", "host": ["{{baseUrl}}"], "path": ["test-scenarios", "{{testScenarioId}}", "status"] }
+          }
+        },
+        {
+          "name": "실행 결과 업데이트",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('서버 오류 없음', () => pm.expect(pm.response.code).to.not.equal(500));"]}}],
+          "request": {
+            "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"actualResult\": \"테스트 통과 확인\",\n  \"executedAt\": \"2026-03-01T10:00:00\",\n  \"status\": \"통과\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/test-scenarios/{{testScenarioId}}/execution", "host": ["{{baseUrl}}"], "path": ["test-scenarios", "{{testScenarioId}}", "execution"] }
+          }
+        },
+        {
+          "name": "삭제",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/test-scenarios/{{testScenarioId}}", "host": ["{{baseUrl}}"], "path": ["test-scenarios", "{{testScenarioId}}"] } }
+        }
+      ]
+    },
+    {
+      "name": "07. Defects",
+      "item": [
+        {
+          "name": "목록 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200)); pm.test('페이지 구조', () => pm.expect(pm.response.json()).to.have.property('content'));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/defects?page=0&size=10", "host": ["{{baseUrl}}"], "path": ["defects"], "query": [{"key":"page","value":"0"},{"key":"size","value":"10"}] } }
+        },
+        {
+          "name": "결함 생성",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) { pm.environment.set('defectId', String(pm.response.json().id)); console.log('✓ defectId='+pm.response.json().id); }"
+          ]}}],
+          "request": {
+            "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"[스모크테스트] 토큰 만료 오류\",\n  \"description\": \"로그인 후 5분 이내에 토큰이 만료되는 현상\",\n  \"type\": \"기능\",\n  \"severity\": \"높음\",\n  \"status\": \"접수\",\n  \"relatedRefType\": \"WORK_REQUEST\",\n  \"relatedRefId\": {{workRequestId}},\n  \"environment\": \"스테이징\",\n  \"reproductionSteps\": \"[\\\"로그인\\\",\\\"5분 대기\\\",\\\"API 호출\\\",\\\"401 오류 확인\\\"]\",\n  \"expectedBehavior\": \"토큰이 30분간 유지\",\n  \"actualBehavior\": \"5분 후 토큰 만료\",\n  \"deadline\": \"2026-12-31\",\n  \"statusNote\": null,\n  \"reporterId\": {{userId}},\n  \"assigneeId\": null,\n  \"startedAt\": null,\n  \"verifiedAt\": null,\n  \"resolvedAt\": null\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/defects", "host": ["{{baseUrl}}"], "path": ["defects"] }
+          }
+        },
+        {
+          "name": "상세 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200)); pm.test('defectNo 존재', () => pm.expect(pm.response.json()).to.have.property('defectNo'));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/defects/{{defectId}}", "host": ["{{baseUrl}}"], "path": ["defects", "{{defectId}}"] } }
+        },
+        {
+          "name": "수정",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": {
+            "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"[스모크테스트-수정] 토큰 만료 오류\",\n  \"description\": \"수정된 설명\",\n  \"type\": \"기능\",\n  \"severity\": \"보통\",\n  \"status\": \"분석중\",\n  \"relatedRefType\": \"WORK_REQUEST\",\n  \"relatedRefId\": {{workRequestId}},\n  \"environment\": \"개발\",\n  \"reproductionSteps\": \"[\\\"수정된 단계\\\"]\",\n  \"expectedBehavior\": \"수정된 기대동작\",\n  \"actualBehavior\": \"수정된 실제동작\",\n  \"deadline\": \"2026-12-31\",\n  \"statusNote\": null,\n  \"assigneeId\": null,\n  \"startedAt\": null,\n  \"verifiedAt\": null,\n  \"resolvedAt\": null\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/defects/{{defectId}}", "host": ["{{baseUrl}}"], "path": ["defects", "{{defectId}}"] }
+          }
+        },
+        {
+          "name": "상태 변경",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": {
+            "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"분석중\",\n  \"statusNote\": \"원인 분석 시작\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/defects/{{defectId}}/status", "host": ["{{baseUrl}}"], "path": ["defects", "{{defectId}}", "status"] }
+          }
+        },
+        {
+          "name": "삭제",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/defects/{{defectId}}", "host": ["{{baseUrl}}"], "path": ["defects", "{{defectId}}"] } }
+        }
+      ]
+    },
+    {
+      "name": "08. Deployments",
+      "item": [
+        {
+          "name": "목록 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200)); pm.test('페이지 구조', () => pm.expect(pm.response.json()).to.have.property('content'));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/deployments?page=0&size=10", "host": ["{{baseUrl}}"], "path": ["deployments"], "query": [{"key":"page","value":"0"},{"key":"size","value":"10"}] } }
+        },
+        {
+          "name": "배포 생성",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) { pm.environment.set('deploymentId', String(pm.response.json().id)); console.log('✓ deploymentId='+pm.response.json().id); }"
+          ]}}],
+          "request": {
+            "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"[스모크테스트] v1.0 스테이징 배포\",\n  \"overview\": \"JWT 인증 기능 스테이징 배포\",\n  \"rollbackPlan\": \"이전 버전 태그로 롤백\",\n  \"version\": \"v1.0.0-smoke\",\n  \"type\": \"정기배포\",\n  \"environment\": \"스테이징\",\n  \"status\": \"대기\",\n  \"managerId\": {{userId}},\n  \"scheduledAt\": \"2026-12-31\",\n  \"startedAt\": null,\n  \"completedAt\": null,\n  \"failedAt\": null,\n  \"rolledBackAt\": null,\n  \"statusNote\": null,\n  \"deployedAt\": null,\n  \"relatedRefs\": [],\n  \"steps\": [\"DB 마이그레이션\", \"서버 재시작\", \"헬스체크\"]\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/deployments", "host": ["{{baseUrl}}"], "path": ["deployments"] }
+          }
+        },
+        {
+          "name": "상세 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200)); pm.test('deployNo 존재', () => pm.expect(pm.response.json()).to.have.property('deployNo'));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/deployments/{{deploymentId}}", "host": ["{{baseUrl}}"], "path": ["deployments", "{{deploymentId}}"] } }
+        },
+        {
+          "name": "수정",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": {
+            "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"[스모크테스트-수정] v1.0 배포\",\n  \"overview\": \"수정된 개요\",\n  \"rollbackPlan\": \"수정된 롤백 계획\",\n  \"version\": \"v1.0.1-smoke\",\n  \"type\": \"정기배포\",\n  \"environment\": \"스테이징\",\n  \"status\": \"대기\",\n  \"managerId\": {{userId}},\n  \"scheduledAt\": \"2026-12-31\",\n  \"relatedRefs\": []\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/deployments/{{deploymentId}}", "host": ["{{baseUrl}}"], "path": ["deployments", "{{deploymentId}}"] }
+          }
+        },
+        {
+          "name": "연관문서 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/deployments/{{deploymentId}}/related-refs", "host": ["{{baseUrl}}"], "path": ["deployments", "{{deploymentId}}", "related-refs"] } }
+        },
+        {
+          "name": "연관문서 교체",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": {
+            "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"items\": []}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/deployments/{{deploymentId}}/related-refs", "host": ["{{baseUrl}}"], "path": ["deployments", "{{deploymentId}}", "related-refs"] }
+          }
+        },
+        {
+          "name": "Steps 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) { const s = pm.response.json(); if (s.length > 0) pm.environment.set('stepId', String(s[0].id)); }"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/deployments/{{deploymentId}}/steps", "host": ["{{baseUrl}}"], "path": ["deployments", "{{deploymentId}}", "steps"] } }
+        },
+        {
+          "name": "Steps 교체",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": {
+            "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"steps\": [\"교체된 단계1\", \"교체된 단계2\", \"헬스체크\"]}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/deployments/{{deploymentId}}/steps", "host": ["{{baseUrl}}"], "path": ["deployments", "{{deploymentId}}", "steps"] }
+          }
+        },
+        {
+          "name": "Step 상태 변경",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('서버 오류 없음', () => pm.expect(pm.response.code).to.not.equal(500));"]}}],
+          "request": {
+            "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"완료\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/deployments/{{deploymentId}}/steps/{{stepId}}", "host": ["{{baseUrl}}"], "path": ["deployments", "{{deploymentId}}", "steps", "{{stepId}}"] }
+          }
+        },
+        {
+          "name": "상태 변경",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": {
+            "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"진행중\",\n  \"statusNote\": \"배포 시작\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/deployments/{{deploymentId}}/status", "host": ["{{baseUrl}}"], "path": ["deployments", "{{deploymentId}}", "status"] }
+          }
+        },
+        {
+          "name": "삭제",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/deployments/{{deploymentId}}", "host": ["{{baseUrl}}"], "path": ["deployments", "{{deploymentId}}"] } }
+        }
+      ]
+    },
+    {
+      "name": "09. Ideas",
+      "item": [
+        {
+          "name": "목록 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200)); pm.test('페이지 구조', () => pm.expect(pm.response.json()).to.have.property('content'));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/ideas?page=0&size=10", "host": ["{{baseUrl}}"], "path": ["ideas"], "query": [{"key":"page","value":"0"},{"key":"size","value":"10"}] } }
+        },
+        {
+          "name": "아이디어 생성",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) { pm.environment.set('ideaId', String(pm.response.json().id)); console.log('✓ ideaId='+pm.response.json().id); }"
+          ]}}],
+          "request": {
+            "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"[스모크테스트] AI 기반 업무요청 자동 분류\",\n  \"content\": \"업무요청 등록 시 AI가 유형/우선순위를 자동으로 분류\",\n  \"benefits\": [\"PM 업무 30% 절감\", \"오분류율 감소\"],\n  \"category\": \"기능\",\n  \"status\": \"제안됨\",\n  \"statusNote\": null,\n  \"proposedBy\": {{userId}}\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/ideas", "host": ["{{baseUrl}}"], "path": ["ideas"] }
+          }
+        },
+        {
+          "name": "상세 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200)); pm.test('ideaNo 존재', () => pm.expect(pm.response.json()).to.have.property('ideaNo'));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/ideas/{{ideaId}}", "host": ["{{baseUrl}}"], "path": ["ideas", "{{ideaId}}"] } }
+        },
+        {
+          "name": "수정",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": {
+            "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"[스모크테스트-수정] AI 업무요청 분류\",\n  \"content\": \"수정된 내용\",\n  \"benefits\": [\"수정된 효과\"],\n  \"category\": \"기능\",\n  \"status\": \"검토중\",\n  \"statusNote\": null\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/ideas/{{ideaId}}", "host": ["{{baseUrl}}"], "path": ["ideas", "{{ideaId}}"] }
+          }
+        },
+        {
+          "name": "연관문서 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/ideas/{{ideaId}}/related-refs", "host": ["{{baseUrl}}"], "path": ["ideas", "{{ideaId}}", "related-refs"] } }
+        },
+        {
+          "name": "연관문서 교체",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": {
+            "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"items\": []}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/ideas/{{ideaId}}/related-refs", "host": ["{{baseUrl}}"], "path": ["ideas", "{{ideaId}}", "related-refs"] }
+          }
+        },
+        {
+          "name": "상태 변경",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": {
+            "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"검토중\",\n  \"statusNote\": null\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/ideas/{{ideaId}}/status", "host": ["{{baseUrl}}"], "path": ["ideas", "{{ideaId}}", "status"] }
+          }
+        },
+        {
+          "name": "좋아요",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('서버 오류 없음', () => pm.expect(pm.response.code).to.not.equal(500));"]}}],
+          "request": { "method": "POST", "header": [], "url": { "raw": "{{baseUrl}}/ideas/{{ideaId}}/votes", "host": ["{{baseUrl}}"], "path": ["ideas", "{{ideaId}}", "votes"] } }
+        },
+        {
+          "name": "좋아요 취소",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('서버 오류 없음', () => pm.expect(pm.response.code).to.not.equal(500));"]}}],
+          "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/ideas/{{ideaId}}/votes/me", "host": ["{{baseUrl}}"], "path": ["ideas", "{{ideaId}}", "votes", "me"] } }
+        },
+        {
+          "name": "삭제",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/ideas/{{ideaId}}", "host": ["{{baseUrl}}"], "path": ["ideas", "{{ideaId}}"] } }
+        }
+      ]
+    },
+    {
+      "name": "10. Knowledge Base",
+      "item": [
+        {
+          "name": "목록 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200)); pm.test('페이지 구조', () => pm.expect(pm.response.json()).to.have.property('content'));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/knowledge-base?page=0&size=10", "host": ["{{baseUrl}}"], "path": ["knowledge-base"], "query": [{"key":"page","value":"0"},{"key":"size","value":"10"}] } }
+        },
+        {
+          "name": "문서 생성",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) { pm.environment.set('knowledgeBaseId', String(pm.response.json().id)); console.log('✓ knowledgeBaseId='+pm.response.json().id); }"
+          ]}}],
+          "request": {
+            "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"[스모크테스트] JWT 인증 가이드\",\n  \"category\": \"기타\",\n  \"tags\": [\"JWT\", \"인증\", \"보안\"],\n  \"summary\": \"JWT 기반 인증 구현 방법 정리\",\n  \"content\": \"JWT 인증 구현 방법 상세 설명입니다.\",\n  \"teamId\": {{teamId}},\n  \"authorId\": {{userId}}\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/knowledge-base", "host": ["{{baseUrl}}"], "path": ["knowledge-base"] }
+          }
+        },
+        {
+          "name": "상세 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/knowledge-base/{{knowledgeBaseId}}", "host": ["{{baseUrl}}"], "path": ["knowledge-base", "{{knowledgeBaseId}}"] } }
+        },
+        {
+          "name": "수정",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": {
+            "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"[스모크테스트-수정] JWT 인증 가이드\",\n  \"category\": \"기타\",\n  \"tags\": [\"JWT\", \"인증\"],\n  \"summary\": \"수정된 요약\",\n  \"content\": \"수정된 내용\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/knowledge-base/{{knowledgeBaseId}}", "host": ["{{baseUrl}}"], "path": ["knowledge-base", "{{knowledgeBaseId}}"] }
+          }
+        },
+        {
+          "name": "조회수 증가",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('서버 오류 없음', () => pm.expect(pm.response.code).to.not.equal(500));"]}}],
+          "request": { "method": "POST", "header": [], "url": { "raw": "{{baseUrl}}/knowledge-base/{{knowledgeBaseId}}/view", "host": ["{{baseUrl}}"], "path": ["knowledge-base", "{{knowledgeBaseId}}", "view"] } }
+        },
+        {
+          "name": "연관문서 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/knowledge-base/{{knowledgeBaseId}}/related-refs", "host": ["{{baseUrl}}"], "path": ["knowledge-base", "{{knowledgeBaseId}}", "related-refs"] } }
+        },
+        {
+          "name": "연관문서 교체",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": {
+            "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"items\": []}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/knowledge-base/{{knowledgeBaseId}}/related-refs", "host": ["{{baseUrl}}"], "path": ["knowledge-base", "{{knowledgeBaseId}}", "related-refs"] }
+          }
+        },
+        {
+          "name": "삭제",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/knowledge-base/{{knowledgeBaseId}}", "host": ["{{baseUrl}}"], "path": ["knowledge-base", "{{knowledgeBaseId}}"] } }
+        }
+      ]
+    },
+    {
+      "name": "11. Meeting Notes",
+      "item": [
+        {
+          "name": "목록 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200)); pm.test('페이지 구조', () => pm.expect(pm.response.json()).to.have.property('content'));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/meeting-notes?page=0&size=10", "host": ["{{baseUrl}}"], "path": ["meeting-notes"], "query": [{"key":"page","value":"0"},{"key":"size","value":"10"}] } }
+        },
+        {
+          "name": "회의록 생성",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) { pm.environment.set('meetingNoteId', String(pm.response.json().id)); console.log('✓ meetingNoteId='+pm.response.json().id); }"
+          ]}}],
+          "request": {
+            "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"[스모크테스트] 스프린트 회의\",\n  \"meetingDate\": \"2026-03-01\",\n  \"location\": \"회의실 A\",\n  \"facilitatorId\": {{userId}},\n  \"agenda\": [\"진행상황 공유\", \"이슈 논의\"],\n  \"content\": \"스프린트 회의 내용\",\n  \"decisions\": [\"JWT 인증 도입 결정\"],\n  \"teamId\": {{teamId}},\n  \"createdBy\": {{userId}},\n  \"attendeeIds\": [{{userId}}],\n  \"actionItems\": [{\"content\": \"JWT 라이브러리 조사\", \"assigneeId\": {{userId}}, \"dueDate\": \"2026-03-15\", \"isDone\": false}],\n  \"relatedRefs\": []\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/meeting-notes", "host": ["{{baseUrl}}"], "path": ["meeting-notes"] }
+          }
+        },
+        {
+          "name": "상세 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/meeting-notes/{{meetingNoteId}}", "host": ["{{baseUrl}}"], "path": ["meeting-notes", "{{meetingNoteId}}"] } }
+        },
+        {
+          "name": "수정",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": {
+            "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"[스모크테스트-수정] 스프린트 회의\",\n  \"meetingDate\": \"2026-03-02\",\n  \"location\": \"온라인\",\n  \"facilitatorId\": {{userId}},\n  \"agenda\": [\"수정된 안건\"],\n  \"content\": \"수정된 내용\",\n  \"decisions\": [\"수정된 결정사항\"],\n  \"attendeeIds\": [{{userId}}],\n  \"actionItems\": [],\n  \"relatedRefs\": []\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/meeting-notes/{{meetingNoteId}}", "host": ["{{baseUrl}}"], "path": ["meeting-notes", "{{meetingNoteId}}"] }
+          }
+        },
+        {
+          "name": "액션아이템 목록",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) { const items = pm.response.json(); if (items.length > 0) pm.environment.set('actionItemId', String(items[0].id)); }"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/meeting-notes/{{meetingNoteId}}/action-items", "host": ["{{baseUrl}}"], "path": ["meeting-notes", "{{meetingNoteId}}", "action-items"] } }
+        },
+        {
+          "name": "액션아이템 상태 변경",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('서버 오류 없음', () => pm.expect(pm.response.code).to.not.equal(500));"]}}],
+          "request": {
+            "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"isDone\": true\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/meeting-notes/{{meetingNoteId}}/action-items/{{actionItemId}}", "host": ["{{baseUrl}}"], "path": ["meeting-notes", "{{meetingNoteId}}", "action-items", "{{actionItemId}}"] }
+          }
+        },
+        {
+          "name": "참석자 목록",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/meeting-notes/{{meetingNoteId}}/attendees", "host": ["{{baseUrl}}"], "path": ["meeting-notes", "{{meetingNoteId}}", "attendees"] } }
+        },
+        {
+          "name": "연관문서 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/meeting-notes/{{meetingNoteId}}/related-refs", "host": ["{{baseUrl}}"], "path": ["meeting-notes", "{{meetingNoteId}}", "related-refs"] } }
+        },
+        {
+          "name": "삭제",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/meeting-notes/{{meetingNoteId}}", "host": ["{{baseUrl}}"], "path": ["meeting-notes", "{{meetingNoteId}}"] } }
+        }
+      ]
+    },
+    {
+      "name": "12. Resources",
+      "item": [
+        {
+          "name": "목록 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200)); pm.test('페이지 구조', () => pm.expect(pm.response.json()).to.have.property('content'));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/resources?page=0&size=10", "host": ["{{baseUrl}}"], "path": ["resources"], "query": [{"key":"page","value":"0"},{"key":"size","value":"10"}] } }
+        },
+        {
+          "name": "리소스 생성",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) { pm.environment.set('sharedResourceId', String(pm.response.json().id)); console.log('✓ sharedResourceId='+pm.response.json().id); }"
+          ]}}],
+          "request": {
+            "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"[스모크테스트] JWT 공식 문서\",\n  \"url\": \"https://jwt.io\",\n  \"category\": \"기타\",\n  \"description\": \"JWT 공식 문서 링크\",\n  \"teamId\": {{teamId}},\n  \"registeredBy\": {{userId}}\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/resources", "host": ["{{baseUrl}}"], "path": ["resources"] }
+          }
+        },
+        {
+          "name": "상세 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/resources/{{sharedResourceId}}", "host": ["{{baseUrl}}"], "path": ["resources", "{{sharedResourceId}}"] } }
+        },
+        {
+          "name": "수정",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": {
+            "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"[스모크테스트-수정] JWT 문서\",\n  \"url\": \"https://jwt.io/introduction\",\n  \"category\": \"기타\",\n  \"description\": \"수정된 설명\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/resources/{{sharedResourceId}}", "host": ["{{baseUrl}}"], "path": ["resources", "{{sharedResourceId}}"] }
+          }
+        },
+        {
+          "name": "삭제",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/resources/{{sharedResourceId}}", "host": ["{{baseUrl}}"], "path": ["resources", "{{sharedResourceId}}"] } }
+        }
+      ]
+    },
+    {
+      "name": "13. Comments",
+      "item": [
+        {
+          "name": "댓글 작성",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) { pm.environment.set('commentId', String(pm.response.json().id)); console.log('✓ commentId='+pm.response.json().id); }"
+          ]}}],
+          "request": {
+            "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"refType\": \"WORK_REQUEST\",\n  \"refId\": {{workRequestId}},\n  \"content\": \"[스모크테스트] 해당 요청 검토했습니다.\",\n  \"authorId\": {{userId}}\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/comments", "host": ["{{baseUrl}}"], "path": ["comments"] }
+          }
+        },
+        {
+          "name": "댓글 목록 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200)); pm.test('페이지 구조', () => pm.expect(pm.response.json()).to.have.property('content'));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/comments?refType=WORK_REQUEST&refId={{workRequestId}}", "host": ["{{baseUrl}}"], "path": ["comments"], "query": [{"key":"refType","value":"WORK_REQUEST"},{"key":"refId","value":"{{workRequestId}}"}] } }
+        },
+        {
+          "name": "댓글 상세 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/comments/{{commentId}}", "host": ["{{baseUrl}}"], "path": ["comments", "{{commentId}}"] } }
+        },
+        {
+          "name": "댓글 수정",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": {
+            "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"content\": \"[스모크테스트-수정] 댓글 내용 수정\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/comments/{{commentId}}", "host": ["{{baseUrl}}"], "path": ["comments", "{{commentId}}"] }
+          }
+        },
+        {
+          "name": "댓글 삭제",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/comments/{{commentId}}", "host": ["{{baseUrl}}"], "path": ["comments", "{{commentId}}"] } }
+        }
+      ]
+    },
+    {
+      "name": "14. Notifications",
+      "item": [
+        {
+          "name": "목록 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200)); pm.test('페이지 구조', () => pm.expect(pm.response.json()).to.have.property('content'));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/notifications?userId={{userId}}&page=0&size=10", "host": ["{{baseUrl}}"], "path": ["notifications"], "query": [{"key":"userId","value":"{{userId}}"},{"key":"page","value":"0"},{"key":"size","value":"10"}] } }
+        },
+        {
+          "name": "알림 생성",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) { pm.environment.set('notificationId', String(pm.response.json().id)); console.log('✓ notificationId='+pm.response.json().id); }"
+          ]}}],
+          "request": {
+            "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"userId\": {{userId}},\n  \"type\": \"담당자배정\",\n  \"title\": \"[스모크테스트] 알림 테스트\",\n  \"message\": \"스모크 테스트 알림입니다.\",\n  \"refType\": \"WORK_REQUEST\",\n  \"refId\": {{workRequestId}},\n  \"slackSent\": false\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/notifications", "host": ["{{baseUrl}}"], "path": ["notifications"] }
+          }
+        },
+        {
+          "name": "상세 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/notifications/{{notificationId}}", "host": ["{{baseUrl}}"], "path": ["notifications", "{{notificationId}}"] } }
+        },
+        {
+          "name": "읽음 처리",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('서버 오류 없음', () => pm.expect(pm.response.code).to.not.equal(500));"]}}],
+          "request": { "method": "PATCH", "header": [], "url": { "raw": "{{baseUrl}}/notifications/{{notificationId}}/read?read=true", "host": ["{{baseUrl}}"], "path": ["notifications", "{{notificationId}}", "read"], "query": [{"key":"read","value":"true"}] } }
+        },
+        {
+          "name": "전체 읽음 처리",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('서버 오류 없음', () => pm.expect(pm.response.code).to.not.equal(500));"]}}],
+          "request": { "method": "PATCH", "header": [], "url": { "raw": "{{baseUrl}}/notifications/read-all?userId={{userId}}&read=true", "host": ["{{baseUrl}}"], "path": ["notifications", "read-all"], "query": [{"key":"userId","value":"{{userId}}"},{"key":"read","value":"true"}] } }
+        },
+        {
+          "name": "삭제",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/notifications/{{notificationId}}", "host": ["{{baseUrl}}"], "path": ["notifications", "{{notificationId}}"] } }
+        }
+      ]
+    },
+    {
+      "name": "15. Attachments",
+      "item": [
+        {
+          "name": "목록 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/attachments?refType=WORK_REQUEST&refId={{workRequestId}}", "host": ["{{baseUrl}}"], "path": ["attachments"], "query": [{"key":"refType","value":"WORK_REQUEST"},{"key":"refId","value":"{{workRequestId}}"}] } }
+        },
+        {
+          "name": "첨부파일 생성",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) { pm.environment.set('attachmentId', String(pm.response.json().id)); console.log('✓ attachmentId='+pm.response.json().id); }"
+          ]}}],
+          "request": {
+            "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"refType\": \"WORK_REQUEST\",\n  \"refId\": {{workRequestId}},\n  \"originalName\": \"smoke-test.pdf\",\n  \"storedPath\": \"/uploads/smoke-test.pdf\",\n  \"fileSize\": 1024,\n  \"mimeType\": \"application/pdf\",\n  \"uploadedBy\": {{userId}}\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/attachments", "host": ["{{baseUrl}}"], "path": ["attachments"] }
+          }
+        },
+        {
+          "name": "상세 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/attachments/{{attachmentId}}", "host": ["{{baseUrl}}"], "path": ["attachments", "{{attachmentId}}"] } }
+        },
+        {
+          "name": "수정",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('서버 오류 없음', () => pm.expect(pm.response.code).to.not.equal(500));"]}}],
+          "request": {
+            "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"refType\": \"WORK_REQUEST\",\n  \"refId\": {{workRequestId}},\n  \"originalName\": \"smoke-test-updated.pdf\",\n  \"storedPath\": \"/uploads/smoke-test-updated.pdf\",\n  \"fileSize\": 2048,\n  \"mimeType\": \"application/pdf\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/attachments/{{attachmentId}}", "host": ["{{baseUrl}}"], "path": ["attachments", "{{attachmentId}}"] }
+          }
+        },
+        {
+          "name": "삭제",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/attachments/{{attachmentId}}", "host": ["{{baseUrl}}"], "path": ["attachments", "{{attachmentId}}"] } }
+        }
+      ]
+    },
+    {
+      "name": "16. Activity Logs",
+      "item": [
+        {
+          "name": "활동 로그 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/activity-logs?refType=WORK_REQUEST&refId={{workRequestId}}&page=0&size=10", "host": ["{{baseUrl}}"], "path": ["activity-logs"], "query": [{"key":"refType","value":"WORK_REQUEST"},{"key":"refId","value":"{{workRequestId}}"},{"key":"page","value":"0"},{"key":"size","value":"10"}] } }
+        }
+      ]
+    },
+    {
+      "name": "17. Statistics",
+      "item": [
+        {
+          "name": "통계 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/statistics", "host": ["{{baseUrl}}"], "path": ["statistics"] } }
+        }
+      ]
+    },
+    {
+      "name": "18. Document Index",
+      "item": [
+        {
+          "name": "통합 검색",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/document-index/search?q=스모크테스트&page=0&size=10", "host": ["{{baseUrl}}"], "path": ["document-index", "search"], "query": [{"key":"q","value":"스모크테스트"},{"key":"page","value":"0"},{"key":"size","value":"10"}] } }
+        }
+      ]
+    },
+    {
+      "name": "19. Dashboard",
+      "item": [
+        {
+          "name": "대시보드 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/dashboard", "host": ["{{baseUrl}}"], "path": ["dashboard"] } }
+        }
+      ]
+    },
+    {
+      "name": "20. User Settings",
+      "item": [
+        {
+          "name": "내 프로필 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/users/me/profile", "host": ["{{baseUrl}}"], "path": ["users", "me", "profile"] } }
+        },
+        {
+          "name": "프로필 수정",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]}}],
+          "request": {
+            "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"테스트사용자\",\n  \"email\": \"test@gmail.com\",\n  \"role\": \"개발자\",\n  \"avatarColor\": \"indigo\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/users/me/profile", "host": ["{{baseUrl}}"], "path": ["users", "me", "profile"] }
+          }
+        },
+        {
+          "name": "비밀번호 변경",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('서버 오류 없음', () => pm.expect(pm.response.code).to.not.equal(500));"]}}],
+          "request": {
+            "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"currentPassword\": \"{{password}}\",\n  \"newPassword\": \"{{password}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/users/me/password", "host": ["{{baseUrl}}"], "path": ["users", "me", "password"] }
+          }
+        },
+        {
+          "name": "환경설정 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/users/me/preferences", "host": ["{{baseUrl}}"], "path": ["users", "me", "preferences"] } }
+        },
+        {
+          "name": "환경설정 수정",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]}}],
+          "request": {
+            "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"notification\": {\n    \"assign\": true,\n    \"comment\": true,\n    \"deadline\": true,\n    \"status\": false,\n    \"deploy\": true,\n    \"mention\": false\n  },\n  \"display\": {\n    \"landing\": \"/dashboard\",\n    \"rowCount\": 20\n  }\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/users/me/preferences", "host": ["{{baseUrl}}"], "path": ["users", "me", "preferences"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "21. Cleanup - Work Requests",
+      "item": [
+        {
+          "name": "업무요청 삭제",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]}}],
+          "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/work-requests/{{workRequestId}}", "host": ["{{baseUrl}}"], "path": ["work-requests", "{{workRequestId}}"] } }
+        }
+      ]
+    }
+  ]
+}
