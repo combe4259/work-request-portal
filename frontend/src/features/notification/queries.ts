@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
-import { listDashboardNotifications, listNotifications } from './service'
+import { getUnreadCounts, listDashboardNotifications, listNotifications } from './service'
 
 export const notificationQueryKeys = {
   all: ['notifications'] as const,
   dashboard: (userId: number) => [...notificationQueryKeys.all, 'dashboard', userId] as const,
+  unreadCounts: (userId: number) => [...notificationQueryKeys.all, 'unread-counts', userId] as const,
   list: (userId: number, read: boolean | undefined, page: number, size: number) =>
     [...notificationQueryKeys.all, 'list', userId, read ?? 'all', page, size] as const,
 }
@@ -35,6 +36,17 @@ export function useNotificationsQuery(
       ? [...notificationQueryKeys.all, 'list', 'none', options.read ?? 'all', page, size]
       : notificationQueryKeys.list(userId, options.read, page, size),
     queryFn: () => listNotifications(userId as number, { ...options, page, size }),
+    enabled: userId != null,
+    placeholderData: (prev) => prev,
+  })
+}
+
+export function useNotificationUnreadCountsQuery(userId: number | undefined) {
+  return useQuery({
+    queryKey: userId == null
+      ? [...notificationQueryKeys.all, 'unread-counts', 'none']
+      : notificationQueryKeys.unreadCounts(userId),
+    queryFn: () => getUnreadCounts(userId as number),
     enabled: userId != null,
     placeholderData: (prev) => prev,
   })

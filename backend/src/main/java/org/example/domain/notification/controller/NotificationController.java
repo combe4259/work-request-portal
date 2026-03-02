@@ -3,6 +3,7 @@ package org.example.domain.notification.controller;
 import org.example.domain.notification.dto.NotificationCreateRequest;
 import org.example.domain.notification.dto.NotificationDetailResponse;
 import org.example.domain.notification.dto.NotificationListResponse;
+import org.example.domain.notification.dto.NotificationUnreadCountsResponse;
 import org.example.domain.notification.dto.NotificationUpdateRequest;
 import org.example.domain.notification.service.NotificationService;
 import org.example.global.team.TeamRequestContext;
@@ -40,6 +41,20 @@ public class NotificationController {
             @RequestParam(defaultValue = "20") int size
     ) {
         return notificationService.findPage(userId, read, page, size);
+    }
+
+    @GetMapping("/unread-counts")
+    public NotificationUnreadCountsResponse getUnreadCounts(
+            @RequestParam(required = false) Long userId
+    ) {
+        Long currentUserId = userId;
+        if (currentUserId == null || currentUserId <= 0) {
+            currentUserId = TeamRequestContext.getCurrentUserId();
+        }
+        if (currentUserId == null || currentUserId <= 0) {
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증 정보가 없습니다.");
+        }
+        return notificationService.findUnreadCounts(currentUserId);
     }
 
     @GetMapping("/{id}")

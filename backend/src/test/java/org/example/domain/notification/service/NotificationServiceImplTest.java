@@ -2,6 +2,7 @@ package org.example.domain.notification.service;
 
 import org.example.domain.notification.dto.NotificationCreateRequest;
 import org.example.domain.notification.dto.NotificationListResponse;
+import org.example.domain.notification.dto.NotificationUnreadCountsResponse;
 import org.example.domain.notification.dto.NotificationUpdateRequest;
 import org.example.domain.notification.entity.Notification;
 import org.example.domain.notification.repository.NotificationRepository;
@@ -148,6 +149,22 @@ class NotificationServiceImplTest {
         notificationService.updateAllReadState(2L, true);
 
         verify(notificationRepository).updateReadStateByUserId(2L, true);
+    }
+
+    @Test
+    @DisplayName("미읽음 카운트 조회 시 전체/도메인별 카운트를 반환한다")
+    void findUnreadCounts() {
+        when(notificationRepository.countByUserIdAndIsReadFalse(2L)).thenReturn(12L);
+        when(notificationRepository.countByUserIdAndIsReadFalseAndRefType(2L, "WORK_REQUEST")).thenReturn(5L);
+        when(notificationRepository.countByUserIdAndIsReadFalseAndRefType(2L, "TEST_SCENARIO")).thenReturn(3L);
+        when(notificationRepository.countByUserIdAndIsReadFalseAndRefType(2L, "DEFECT")).thenReturn(2L);
+
+        NotificationUnreadCountsResponse response = notificationService.findUnreadCounts(2L);
+
+        assertThat(response.total()).isEqualTo(12L);
+        assertThat(response.workRequest()).isEqualTo(5L);
+        assertThat(response.testScenario()).isEqualTo(3L);
+        assertThat(response.defect()).isEqualTo(2L);
     }
 
     @Test

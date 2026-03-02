@@ -4,13 +4,13 @@ import { useAuthStore } from '@/stores/authStore'
 import { useProfileStore, AVATAR_COLOR_HEX } from '@/stores/profileStore'
 import { ROLE_LABELS } from '@/lib/constants'
 import { logoutFromServer } from '@/features/auth/service'
+import { useNotificationUnreadCountsQuery } from '@/features/notification/queries'
 import shinhanLogo from '@/assets/shinhan-ci.png'
 
 interface NavItem {
   label: string
   path: string
   icon: React.ReactNode
-  badge?: number
 }
 
 interface NavSection {
@@ -23,7 +23,7 @@ const NAV_SECTIONS: NavSection[] = [
     title: '메인',
     items: [
       { label: '대시보드', path: '/dashboard', icon: <DashboardIcon /> },
-      { label: '업무요청', path: '/work-requests', icon: <RequestIcon />, badge: 51 },
+      { label: '업무요청', path: '/work-requests', icon: <RequestIcon /> },
       { label: '기술과제', path: '/tech-tasks', icon: <DevRequestIcon /> },
     ],
   },
@@ -31,8 +31,8 @@ const NAV_SECTIONS: NavSection[] = [
     title: '개발 사이클',
     items: [
       { label: '워크플로우', path: '/workflow', icon: <WorkflowIcon /> },
-      { label: '테스트 시나리오', path: '/test-scenarios', icon: <TestIcon />, badge: 3 },
-      { label: '결함 목록', path: '/defects', icon: <DefectIcon />, badge: 7 },
+      { label: '테스트 시나리오', path: '/test-scenarios', icon: <TestIcon /> },
+      { label: '결함 목록', path: '/defects', icon: <DefectIcon /> },
       { label: '배포 관리', path: '/deployments', icon: <DeployIcon /> },
     ],
   },
@@ -58,9 +58,27 @@ interface SidebarProps {
   onNavigate?: () => void
 }
 
+function resolveBadgeCount(path: string, unreadCounts: { workRequest: number; testScenario: number; defect: number } | undefined): number {
+  if (!unreadCounts) {
+    return 0
+  }
+  if (path === '/work-requests') {
+    return unreadCounts.workRequest
+  }
+  if (path === '/test-scenarios') {
+    return unreadCounts.testScenario
+  }
+  if (path === '/defects') {
+    return unreadCounts.defect
+  }
+  return 0
+}
+
 export default function Sidebar({ className = '', onNavigate }: SidebarProps) {
   const { user, logout } = useAuthStore()
   const { displayName, role, avatarColor, photoUrl } = useProfileStore()
+  const unreadCountsQuery = useNotificationUnreadCountsQuery(user?.id)
+  const unreadCounts = unreadCountsQuery.data
   const navigate = useNavigate()
   const colorHex = AVATAR_COLOR_HEX[avatarColor] ?? AVATAR_COLOR_HEX['brand']
   const initials = (displayName || user?.name)?.slice(0, 1) ?? '?'
@@ -134,22 +152,26 @@ export default function Sidebar({ className = '', onNavigate }: SidebarProps) {
                   }`
                 }
               >
-                {({ isActive }) => (
-                  <>
+                {({ isActive }) => {
+                  const badgeCount = resolveBadgeCount(item.path, unreadCounts)
+
+                  return (
+                    <>
                     <span className={`flex-shrink-0 transition-colors ${isActive ? 'text-white' : 'text-white/40'}`}>
                       {item.icon}
                     </span>
                     <span className="flex-1 truncate">{item.label}</span>
-                    {item.badge !== undefined && (
+                    {badgeCount > 0 && (
                       <span className="ml-auto text-[10px] font-bold bg-brand/80 text-white px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-tight">
-                        {item.badge}
+                        {badgeCount}
                       </span>
                     )}
                     {isActive && (
                       <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-brand rounded-r-full" />
                     )}
-                  </>
-                )}
+                    </>
+                  )
+                }}
               </NavLink>
             ))}
           </div>

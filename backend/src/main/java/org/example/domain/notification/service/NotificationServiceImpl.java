@@ -3,6 +3,7 @@ package org.example.domain.notification.service;
 import org.example.domain.notification.dto.NotificationCreateRequest;
 import org.example.domain.notification.dto.NotificationDetailResponse;
 import org.example.domain.notification.dto.NotificationListResponse;
+import org.example.domain.notification.dto.NotificationUnreadCountsResponse;
 import org.example.domain.notification.dto.NotificationUpdateRequest;
 import org.example.domain.notification.entity.Notification;
 import org.example.domain.notification.mapper.NotificationMapper;
@@ -112,6 +113,20 @@ public class NotificationServiceImpl implements NotificationService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "userId는 필수입니다.");
         }
         notificationRepository.updateReadStateByUserId(userId, isRead);
+    }
+
+    @Override
+    public NotificationUnreadCountsResponse findUnreadCounts(Long userId) {
+        if (userId == null || userId <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "userId는 필수입니다.");
+        }
+
+        long total = notificationRepository.countByUserIdAndIsReadFalse(userId);
+        long workRequest = notificationRepository.countByUserIdAndIsReadFalseAndRefType(userId, "WORK_REQUEST");
+        long testScenario = notificationRepository.countByUserIdAndIsReadFalseAndRefType(userId, "TEST_SCENARIO");
+        long defect = notificationRepository.countByUserIdAndIsReadFalseAndRefType(userId, "DEFECT");
+
+        return new NotificationUnreadCountsResponse(total, workRequest, testScenario, defect);
     }
 
     @Override

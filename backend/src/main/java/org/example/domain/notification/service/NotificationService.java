@@ -3,6 +3,7 @@ package org.example.domain.notification.service;
 import org.example.domain.notification.dto.NotificationCreateRequest;
 import org.example.domain.notification.dto.NotificationDetailResponse;
 import org.example.domain.notification.dto.NotificationListResponse;
+import org.example.domain.notification.dto.NotificationUnreadCountsResponse;
 import org.example.domain.notification.dto.NotificationUpdateRequest;
 import org.springframework.data.domain.Page;
 
@@ -19,6 +20,8 @@ public interface NotificationService {
     void updateReadState(Long id, boolean isRead);
 
     void updateAllReadState(Long userId, boolean isRead);
+
+    NotificationUnreadCountsResponse findUnreadCounts(Long userId);
 
     void delete(Long id);
 }

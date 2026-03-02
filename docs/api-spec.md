@@ -211,6 +211,7 @@ Workflow 동시편집 규약(낙관적 락):
 | Method | Path | 핵심 Query/Body | Response | 구현 |
 |---|---|---|---|---|
 | GET | `/notifications` | `userId?,read?,page,size` | `Page<NotificationListResponse>` | [x] |
+| GET | `/notifications/unread-counts` | `userId?` | `{total,workRequest,testScenario,defect}` | [x] |
 | GET | `/notifications/{id}` | - | `NotificationDetailResponse` | [x] |
 | POST | `/notifications` | `NotificationCreateRequest` | `{id}` | [x] |
 | PUT | `/notifications/{id}` | `NotificationUpdateRequest` | `204` | [x] |

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.domain.notification.dto.NotificationCreateRequest;
 import org.example.domain.notification.dto.NotificationDetailResponse;
 import org.example.domain.notification.dto.NotificationListResponse;
+import org.example.domain.notification.dto.NotificationUnreadCountsResponse;
 import org.example.domain.notification.dto.NotificationUpdateRequest;
 import org.example.domain.notification.service.NotificationService;
 import org.example.global.team.TeamRequestContext;
@@ -88,6 +89,23 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.size").value(5));
 
         verify(notificationService).findPage(2L, false, 1, 5);
+    }
+
+    @Test
+    @DisplayName("미읽음 카운트 조회는 인증 사용자 기준으로 반환한다")
+    void getUnreadCountsByContextUser() throws Exception {
+        TeamRequestContext.set(2L, 10L);
+        when(notificationService.findUnreadCounts(2L))
+                .thenReturn(new NotificationUnreadCountsResponse(8L, 3L, 2L, 1L));
+
+        mockMvc.perform(get("/api/notifications/unread-counts"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(8))
+                .andExpect(jsonPath("$.workRequest").value(3))
+                .andExpect(jsonPath("$.testScenario").value(2))
+                .andExpect(jsonPath("$.defect").value(1));
+
+        verify(notificationService).findUnreadCounts(2L);
     }
 
     @Test

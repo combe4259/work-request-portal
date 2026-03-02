@@ -16,6 +16,10 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 
     Page<Notification> findByIsReadOrderByIdDesc(Boolean isRead, Pageable pageable);
 
+    long countByUserIdAndIsReadFalse(Long userId);
+
+    long countByUserIdAndIsReadFalseAndRefType(Long userId, String refType);
+
     @Modifying
     @Query("update Notification n set n.isRead = :isRead where n.userId = :userId")
     int updateReadStateByUserId(@Param("userId") Long userId, @Param("isRead") boolean isRead);

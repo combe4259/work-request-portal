@@ -43,6 +43,13 @@ export interface NotificationListResult {
   size: number
 }
 
+export interface NotificationUnreadCounts {
+  total: number
+  workRequest: number
+  testScenario: number
+  defect: number
+}
+
 function mapType(rawType: string): DashboardNotification['type'] {
   const value = rawType.trim()
 
@@ -154,6 +161,13 @@ export async function listNotifications(
 export async function listDashboardNotifications(userId: number, size = 6): Promise<DashboardNotification[]> {
   const result = await listNotifications(userId, { page: 0, size })
   return result.items
+}
+
+export async function getUnreadCounts(userId: number): Promise<NotificationUnreadCounts> {
+  const { data } = await api.get<NotificationUnreadCounts>('/notifications/unread-counts', {
+    params: { userId },
+  })
+  return data
 }
 
 export async function updateNotificationReadState(id: number, read = true): Promise<void> {
