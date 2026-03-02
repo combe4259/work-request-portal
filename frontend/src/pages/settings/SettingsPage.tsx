@@ -13,6 +13,7 @@ import {
   type SettingsRole,
   type UserPreferencesResponse,
 } from '@/features/settings/service'
+import { resolveErrorMessage } from '@/lib/resolveErrorMessage'
 
 // ── 탭 정의 ───────────────────────────────────────────
 type TabKey = 'profile' | 'notification' | 'security' | 'display'
@@ -133,21 +134,6 @@ function normalizeRole(value: string | null | undefined): Role {
     return '개발자'
   }
   return ROLE_SET.has(value as Role) ? (value as Role) : '개발자'
-}
-
-function resolveErrorMessage(error: unknown, fallback: string): string {
-  if (typeof error === 'object' && error !== null) {
-    const responseMessage = (error as { response?: { data?: { message?: unknown } } }).response?.data?.message
-    if (typeof responseMessage === 'string' && responseMessage.trim().length > 0) {
-      return responseMessage
-    }
-  }
-
-  if (error instanceof Error && error.message.trim().length > 0) {
-    return error.message
-  }
-
-  return fallback
 }
 
 // ── 메인 ─────────────────────────────────────────────

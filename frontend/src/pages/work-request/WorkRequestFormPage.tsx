@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { ErrorState, LoadingState } from '@/components/common/AsyncState'
+import { SpinnerIcon } from '@/components/common/Icons'
 import { FormField } from '@/components/common/FormField'
 import { inputCls, selectCls, textareaCls } from '@/lib/formStyles'
 import { useTeamMembersQuery } from '@/features/auth/queries'
@@ -412,7 +413,7 @@ export default function WorkRequestFormPage() {
             >
               {isMutating ? (
                 <>
-                  <SpinnerIcon />
+                  <SpinnerIcon className="h-3.5 w-3.5" />
                   {isEdit ? '수정 중...' : '등록 중...'}
                 </>
               ) : isEdit ? '수정 완료' : '등록하기'}
@@ -463,11 +464,3 @@ function CloseIcon() {
   )
 }
 
-function SpinnerIcon() {
-  return (
-    <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-    </svg>
-  )
-}

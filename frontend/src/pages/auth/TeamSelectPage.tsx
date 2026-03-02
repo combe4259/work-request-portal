@@ -3,7 +3,6 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useNavigate } from 'react-router-dom'
-import axios from 'axios'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,6 +11,8 @@ import InviteCodeCard from '@/components/team/InviteCodeCard'
 import { useCreateTeamMutation, useJoinTeamMutation } from '@/features/auth/mutations'
 import { useAuthStore } from '@/stores/authStore'
 import type { Team } from '@/types/auth'
+import { SpinnerIcon } from '@/components/common/Icons'
+import { resolveErrorMessage } from '@/lib/resolveErrorMessage'
 
 type Mode = 'create' | 'join' | null
 
@@ -339,16 +340,6 @@ function JoinTeamForm({ onSuccess }: { onSuccess: (team: Team) => void }) {
   )
 }
 
-function resolveErrorMessage(error: unknown, fallback: string) {
-  if (axios.isAxiosError(error)) {
-    const message = error.response?.data?.message
-    if (typeof message === 'string' && message.trim()) {
-      return message
-    }
-  }
-  return fallback
-}
-
 // ── SVG 아이콘 ────────────────────────────────────────
 function CreateTeamIcon({ active }: { active: boolean }) {
   const color = active ? '#0046ff' : '#9CA3AF'
@@ -375,11 +366,3 @@ function JoinTeamIcon({ active }: { active: boolean }) {
   )
 }
 
-function SpinnerIcon() {
-  return (
-    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-    </svg>
-  )
-}

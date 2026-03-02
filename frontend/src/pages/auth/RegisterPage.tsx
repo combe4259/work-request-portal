@@ -3,7 +3,6 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useNavigate } from 'react-router-dom'
-import axios from 'axios'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -17,6 +16,8 @@ import {
 import AuthLayout from '@/components/layout/AuthLayout'
 import { useLoginMutation, useSignupMutation } from '@/features/auth/mutations'
 import { useAuthStore } from '@/stores/authStore'
+import { SpinnerIcon } from '@/components/common/Icons'
+import { resolveErrorMessage } from '@/lib/resolveErrorMessage'
 
 const registerSchema = z
   .object({
@@ -257,16 +258,6 @@ export default function RegisterPage() {
   )
 }
 
-function resolveErrorMessage(error: unknown, fallback: string) {
-  if (axios.isAxiosError(error)) {
-    const message = error.response?.data?.message
-    if (typeof message === 'string' && message.trim()) {
-      return message
-    }
-  }
-  return fallback
-}
-
 function getPasswordStrength(password: string) {
   let score = 0
   if (password.length >= 8) score++
@@ -280,11 +271,3 @@ function getPasswordStrength(password: string) {
   return { score: 4, color: 'bg-green-500', textColor: 'text-green-600', label: '매우 강함' }
 }
 
-function SpinnerIcon() {
-  return (
-    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-    </svg>
-  )
-}

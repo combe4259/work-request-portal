@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import axios from 'axios'
 import { EmptyState, ErrorState, LoadingState } from '@/components/common/AsyncState'
+import { resolveErrorMessage } from '@/lib/resolveErrorMessage'
 import InviteCodeCard from '@/components/team/InviteCodeCard'
 import { useRemoveTeamMemberMutation, useUpdateTeamMemberRoleMutation } from '@/features/auth/mutations'
 import { useTeamMembersQuery } from '@/features/auth/queries'
@@ -230,16 +230,6 @@ function RoleBadge({ role }: { role: string }) {
       {ROLE_LABEL[role] ?? role}
     </span>
   )
-}
-
-function resolveErrorMessage(error: unknown, fallback: string) {
-  if (axios.isAxiosError(error)) {
-    const message = error.response?.data?.message
-    if (typeof message === 'string' && message.trim()) {
-      return message
-    }
-  }
-  return fallback
 }
 
 function stringToColor(str: string) {
