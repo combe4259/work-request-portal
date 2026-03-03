@@ -23,9 +23,11 @@ interface ApiDashboardResponse {
     assignee: string
     deadline: string | null
   }>
+  totalWorkItems: number
   calendarEvents: Array<{
-    date: string
-    day: number
+    id: number
+    startDate: string
+    endDate: string
     domain: DashboardDomain
     docNo: string
     title: string
@@ -51,9 +53,11 @@ export interface DashboardSummary {
     assignee: string
     deadline: string
   }>
+  totalWorkItems: number
   calendarEvents: Array<{
-    date: string
-    day: number
+    id: number
+    startDate: string
+    endDate: string
     domain: DashboardDomain
     docNo: string
     title: string
@@ -65,17 +69,22 @@ export async function getDashboardSummary(params: {
   teamId: number
   scope: DashboardScope
   domain: DashboardDomainFilter
+  page: number
+  size: number
 }): Promise<DashboardSummary> {
   const { data } = await api.get<ApiDashboardResponse>('/dashboard', {
     params: {
       teamId: params.teamId,
       scope: params.scope,
       domain: params.domain,
+      page: params.page,
+      size: params.size,
     },
   })
 
   return {
     kpi: data.kpi,
+    totalWorkItems: data.totalWorkItems,
     workRequests: data.workRequests.map((item) => ({
       id: item.id,
       domain: item.domain,
@@ -88,8 +97,9 @@ export async function getDashboardSummary(params: {
       deadline: item.deadline ?? '',
     })),
     calendarEvents: data.calendarEvents.map((item) => ({
-      date: item.date,
-      day: item.day,
+      id: item.id,
+      startDate: item.startDate,
+      endDate: item.endDate,
       domain: item.domain,
       docNo: item.docNo,
       title: item.title,

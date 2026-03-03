@@ -21,6 +21,8 @@ public interface NotificationService {
 
     void updateAllReadState(Long userId, boolean isRead);
 
+    void updateReadStateByRef(Long userId, String refType, Long refId, boolean isRead);
+
     NotificationUnreadCountsResponse findUnreadCounts(Long userId);
 
     void delete(Long id);

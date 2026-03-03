@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import KpiCard from '@/components/dashboard/KpiCard'
 import { PriorityBadge, TypeBadge, StatusBadge } from '@/components/work-request/Badges'
-import { SortTh, type SortDir } from '@/components/common/TableControls'
+import { SortTh, Pagination, type SortDir } from '@/components/common/TableControls'
 import { EmptyState } from '@/components/common/AsyncState'
 import ShowMoreButton from '@/components/common/ShowMoreButton'
 import { TechTypeBadge } from '@/components/tech-task/Badges'
@@ -11,7 +12,8 @@ import { DefectTypeBadge, DefectStatusBadge } from '@/components/defect/Badges'
 import { DeployTypeBadge, DeployStatusBadge } from '@/components/deployment/Badges'
 import { useDashboardSummaryQuery } from '@/features/dashboard/queries'
 import type { DashboardDomain, DashboardDomainFilter, DashboardScope } from '@/features/dashboard/service'
-import { useDashboardNotificationsQuery } from '@/features/notification/queries'
+import { notificationQueryKeys, useDashboardNotificationsQuery } from '@/features/notification/queries'
+import { updateNotificationReadState } from '@/features/notification/service'
 import { getNotificationRoute } from '@/features/notification/routes'
 import { useExpandableList } from '@/hooks/useExpandableList'
 import { useAuthStore } from '@/stores/authStore'
@@ -22,12 +24,16 @@ import type { DefectType, DefectStatus } from '@/types/defect'
 import type { DeployType, DeployStatus } from '@/types/deployment'
 
 type CalEvent = {
-  date: string
+  id: number
+  endDate: string
   docNo: string
   title: string
   priority: Priority | '-'
   domainLabel: string
+  domainKey: DomainKey
 }
+
+const PAGE_SIZE = 20
 
 type ActionScope = DashboardScope
 type KpiKey = 'todo' | 'inProgress' | 'done' | 'urgent'
@@ -186,8 +192,10 @@ export default function DashboardPage() {
   const [domainFilter, setDomainFilter] = useState<DomainFilter>('ALL')
   const [activeKpi, setActiveKpi] = useState<KpiKey | null>(null)
   const [sort, setSort] = useState<{ key: DashSortKey; dir: SortDir }>({ key: 'deadline', dir: 'asc' })
+  const [page, setPage] = useState(1)
 
-  const dashboardSummaryQuery = useDashboardSummaryQuery(currentTeamId, actionScope, domainFilter)
+  const queryClient = useQueryClient()
+  const dashboardSummaryQuery = useDashboardSummaryQuery(currentTeamId, actionScope, domainFilter, page - 1, PAGE_SIZE)
   const notificationsQuery = useDashboardNotificationsQuery(currentUserId)
   const notifications = notificationsQuery.data ?? []
   const visibleNotifications = useExpandableList(notifications, 10)
@@ -196,8 +204,13 @@ export default function DashboardPage() {
     return mapDashboardItems(dashboardSummaryQuery.data?.workRequests ?? [])
   }, [dashboardSummaryQuery.data?.workRequests])
 
-  const handleNotificationNavigate = (refType: string | null, refId: number | null) => {
+  const handleNotificationNavigate = (notifId: number, isRead: boolean, refType: string | null, refId: number | null) => {
     const route = getNotificationRoute(refType, refId)
+    if (!isRead) {
+      updateNotificationReadState(notifId, true).then(() => {
+        void queryClient.invalidateQueries({ queryKey: notificationQueryKeys.all })
+      }).catch(() => {})
+    }
     if (route) {
       navigate(route)
     }
@@ -230,11 +243,13 @@ export default function DashboardPage() {
 
   const calendarEvents = useMemo<CalEvent[]>(() => {
     return (dashboardSummaryQuery.data?.calendarEvents ?? []).map((item) => ({
-      date: item.date,
+      id: item.id,
+      endDate: item.endDate,
       docNo: item.docNo,
       title: item.title,
       priority: item.priority,
       domainLabel: toDomainLabel(item.domain),
+      domainKey: item.domain,
     }))
   }, [dashboardSummaryQuery.data?.calendarEvents])
 
@@ -311,7 +326,7 @@ export default function DashboardPage() {
             <button
               key={option.key}
               type="button"
-              onClick={() => setDomainFilter(option.key)}
+              onClick={() => { setDomainFilter(option.key); setPage(1) }}
               className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${
                 domainFilter === option.key
                   ? 'bg-brand text-white'
@@ -330,7 +345,7 @@ export default function DashboardPage() {
             <div className="flex items-center gap-1 p-1 rounded-lg bg-gray-50">
               <button
                 type="button"
-                onClick={() => setActionScope('mine')}
+                onClick={() => { setActionScope('mine'); setPage(1) }}
                 className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
                   actionScope === 'mine' ? 'bg-white text-brand shadow-sm' : 'text-gray-500 hover:text-gray-700'
                 }`}
@@ -339,7 +354,7 @@ export default function DashboardPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setActionScope('team')}
+                onClick={() => { setActionScope('team'); setPage(1) }}
                 className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
                   actionScope === 'team' ? 'bg-white text-brand shadow-sm' : 'text-gray-500 hover:text-gray-700'
                 }`}
@@ -347,7 +362,7 @@ export default function DashboardPage() {
                 팀 전체
               </button>
             </div>
-            <span className="text-xs text-gray-400">총 {sortedItems.length}건</span>
+            <span className="text-xs text-gray-400">총 {dashboardSummaryQuery.data?.totalWorkItems ?? 0}건</span>
           </div>
 
           <div className="overflow-x-auto">
@@ -440,10 +455,19 @@ export default function DashboardPage() {
               </tbody>
             </table>
           </div>
+          <Pagination
+            page={page}
+            totalPages={Math.ceil((dashboardSummaryQuery.data?.totalWorkItems ?? 0) / PAGE_SIZE)}
+            onPageChange={setPage}
+          />
         </div>
 
-        <div className="w-full xl:w-[268px] flex-shrink-0 space-y-4">
-          <MiniCalendar events={calendarEvents} />
+        <div className="w-full xl:w-[340px] flex-shrink-0 space-y-4">
+          <MiniCalendar
+            events={calendarEvents}
+            onNavigate={(domainKey, id) => navigate(toDetailRoute(domainKey, id))}
+            onViewAll={() => navigate('/calendar')}
+          />
 
           <div className="bg-white rounded-xl shadow-[0_2px_12px_rgba(30,58,138,0.07)] border border-blue-50 p-4">
             <p className="text-[12px] font-semibold text-gray-700 mb-3">최근 알림</p>
@@ -472,7 +496,7 @@ export default function DashboardPage() {
                     <button
                       type="button"
                       onClick={() => {
-                        handleNotificationNavigate(n.refType, n.refId)
+                        handleNotificationNavigate(n.id, n.isRead, n.refType, n.refId)
                       }}
                       disabled={!route}
                       className={`flex-1 min-w-0 text-left ${route ? 'cursor-pointer' : 'cursor-default'} disabled:opacity-100`}
@@ -498,140 +522,236 @@ export default function DashboardPage() {
   )
 }
 
-const PRIORITY_DOT: Record<Priority | '-', string> = {
-  '긴급': 'bg-red-500',
-  '높음': 'bg-orange-400',
-  '보통': 'bg-blue-400',
-  '낮음': 'bg-gray-300',
-  '-': 'bg-gray-300',
+const DOMAIN_COLOR: Record<string, { bar: string; badge: string; label: string }> = {
+  '업무요청':        { bar: 'bg-blue-400',   badge: 'bg-blue-50 text-blue-700',    label: '업무' },
+  '기술과제':        { bar: 'bg-indigo-400', badge: 'bg-indigo-50 text-indigo-700', label: '기술' },
+  '테스트 시나리오':  { bar: 'bg-violet-400', badge: 'bg-violet-50 text-violet-700', label: 'TS' },
+  '결함':            { bar: 'bg-rose-400',   badge: 'bg-rose-50 text-rose-700',    label: '결함' },
+  '배포':            { bar: 'bg-amber-400',  badge: 'bg-amber-50 text-amber-700',  label: '배포' },
 }
 
-function MiniCalendar({ events }: { events: CalEvent[] }) {
+type CalCell = { day: number; kind: 'prev' | 'current' | 'next' }
+
+function MiniCalendar({ events, onNavigate, onViewAll }: { events: CalEvent[]; onNavigate: (domainKey: DomainKey, id: number) => void; onViewAll: () => void }) {
+  const today = useMemo(() => {
+    const d = new Date()
+    d.setHours(0, 0, 0, 0)
+    return d
+  }, [])
+
+  const [view, setView] = useState({ year: today.getFullYear(), month: today.getMonth() })
   const [selectedDay, setSelectedDay] = useState<number | null>(null)
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const year = today.getFullYear()
-  const month = today.getMonth()
-  const firstDay = new Date(year, month, 1).getDay()
+  const { year, month } = view
+
+  const goToPrev = () => {
+    setSelectedDay(null)
+    setView((v) => v.month === 0 ? { year: v.year - 1, month: 11 } : { year: v.year, month: v.month - 1 })
+  }
+  const goToNext = () => {
+    setSelectedDay(null)
+    setView((v) => v.month === 11 ? { year: v.year + 1, month: 0 } : { year: v.year, month: v.month + 1 })
+  }
+
+  const firstDayOfMonth = new Date(year, month, 1).getDay()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const daysInPrevMonth = new Date(year, month, 0).getDate()
+  const isCurrentMonthView = year === today.getFullYear() && month === today.getMonth()
 
-  const monthEvents = events.filter((event) => {
-    const date = parseDateOnly(event.date)
-    return date && date.getFullYear() === year && date.getMonth() === month
-  })
+  const byDay = useMemo<Record<number, CalEvent[]>>(() => {
+    const map: Record<number, CalEvent[]> = {}
+    events.forEach((event) => {
+      const d = parseDateOnly(event.endDate)
+      if (d && d.getFullYear() === year && d.getMonth() === month) {
+        const day = d.getDate()
+        if (!map[day]) map[day] = []
+        map[day].push(event)
+      }
+    })
+    return map
+  }, [events, year, month])
 
-  const byDay: Record<number, CalEvent[]> = {}
-  monthEvents.forEach((event) => {
-    const date = parseDateOnly(event.date)
-    if (!date) {
-      return
+  const cells = useMemo<CalCell[]>(() => {
+    const result: CalCell[] = []
+    for (let i = firstDayOfMonth - 1; i >= 0; i--) {
+      result.push({ day: daysInPrevMonth - i, kind: 'prev' })
     }
-    const day = date.getDate()
-    if (!byDay[day]) {
-      byDay[day] = []
+    for (let d = 1; d <= daysInMonth; d++) {
+      result.push({ day: d, kind: 'current' })
     }
-    byDay[day].push(event)
-  })
+    const remaining = (7 - (result.length % 7)) % 7
+    for (let d = 1; d <= remaining; d++) {
+      result.push({ day: d, kind: 'next' })
+    }
+    return result
+  }, [firstDayOfMonth, daysInMonth, daysInPrevMonth])
 
-  const cells: (number | null)[] = [
-    ...Array(firstDay).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, index) => index + 1),
-  ]
+  const selectedEvents = selectedDay != null ? (byDay[selectedDay] ?? []) : []
 
-  const selectedEvents = selectedDay ? (byDay[selectedDay] ?? []) : []
-
-  const upcoming = events
-    .map((event) => ({ event, parsed: parseDateOnly(event.date) }))
-    .filter((item) => item.parsed != null && item.parsed >= today)
-    .sort((a, b) => (a.parsed!.getTime() - b.parsed!.getTime()))
-    .slice(0, 6)
+  const upcoming = useMemo(() => {
+    return events
+      .map((event) => ({ event, parsed: parseDateOnly(event.endDate) }))
+      .filter((item) => item.parsed != null && item.parsed >= today)
+      .sort((a, b) => a.parsed!.getTime() - b.parsed!.getTime())
+      .slice(0, 5)
+  }, [events, today])
 
   return (
     <div className="bg-white rounded-xl shadow-[0_2px_12px_rgba(30,58,138,0.07)] border border-blue-50 p-4">
+      {/* 헤더 + 월 이동 */}
       <div className="flex items-center justify-between mb-3">
-        <p className="text-[12px] font-semibold text-gray-700">{year}년 {month + 1}월</p>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={goToPrev}
+            aria-label="이전 달"
+            className="w-6 h-6 flex items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+          >
+            <CalChevronLeftIcon />
+          </button>
+          <p className="text-[12px] font-semibold text-gray-700">{year}년 {month + 1}월</p>
+          <button
+            type="button"
+            onClick={goToNext}
+            aria-label="다음 달"
+            className="w-6 h-6 flex items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+          >
+            <CalChevronRightIcon />
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={onViewAll}
+          aria-label="전체 달력 보기"
+          className="w-6 h-6 flex items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-brand transition-colors"
+          title="전체 달력"
+        >
+          <FullCalendarIcon />
+        </button>
       </div>
 
-      <div className="grid grid-cols-7 mb-1">
-        {['일', '월', '화', '수', '목', '금', '토'].map((dayLabel, index) => (
-          <div key={dayLabel} className={`text-center text-[10px] font-semibold py-1 ${index === 0 ? 'text-red-400' : index === 6 ? 'text-blue-400' : 'text-gray-400'}`}>
-            {dayLabel}
+      {/* 요일 헤더 */}
+      <div className="grid grid-cols-7 mb-0.5">
+        {['일', '월', '화', '수', '목', '금', '토'].map((label, i) => (
+          <div key={label} className={`text-center text-[10px] font-semibold py-1 ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-gray-400'}`}>
+            {label}
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-7 gap-y-0.5">
-        {cells.map((day, idx) => {
-          if (!day) {
-            return <div key={`empty-${idx}`} />
+      {/* 달력 그리드 */}
+      <div className="grid grid-cols-7">
+        {cells.map((cell, idx) => {
+          if (cell.kind !== 'current') {
+            return (
+              <div key={`${cell.kind}-${idx}`} className="flex items-center justify-center h-10">
+                <span className="text-[11px] text-gray-300">{cell.day}</span>
+              </div>
+            )
           }
-          const isToday = day === today.getDate()
+          const { day } = cell
+          const isToday = isCurrentMonthView && day === today.getDate()
           const isSelected = day === selectedDay
           const dayEvents = byDay[day] ?? []
           const col = idx % 7
           const isSun = col === 0
           const isSat = col === 6
+          const domains = [...new Set(dayEvents.map((e) => e.domainLabel))]
 
           return (
-            <div key={day} className="flex flex-col items-center py-0.5">
-              <button
-                onClick={() => setSelectedDay(isSelected ? null : day)}
-                className={`w-6 h-6 rounded-full text-[11px] font-medium flex items-center justify-center transition-colors ${
-                  isToday
-                    ? 'bg-brand text-white font-bold'
-                    : isSelected
-                    ? 'bg-brand/10 text-brand font-semibold ring-1 ring-brand/30'
-                    : 'hover:bg-gray-100 ' + (isSun ? 'text-red-400' : isSat ? 'text-blue-500' : 'text-gray-700')
-                }`}
-              >
+            <button
+              key={day}
+              type="button"
+              onClick={() => setSelectedDay(isSelected ? null : day)}
+              className={`flex flex-col items-center justify-start pt-1 h-10 rounded-md transition-colors ${
+                isSelected ? 'bg-brand/8' : 'hover:bg-gray-50'
+              }`}
+            >
+              <span className={`w-7 h-7 rounded-full text-[12px] font-medium flex items-center justify-center flex-shrink-0 ${
+                isToday
+                  ? 'bg-brand text-white font-bold'
+                  : isSelected
+                  ? 'text-brand font-semibold'
+                  : isSun
+                  ? 'text-red-400'
+                  : isSat
+                  ? 'text-blue-500'
+                  : 'text-gray-700'
+              }`}>
                 {day}
-              </button>
-              {dayEvents.length > 0 && (
-                <div className="flex gap-0.5 mt-0.5">
-                  {dayEvents.slice(0, 3).map((event, index) => (
-                    <span key={`${event.docNo}-${index}`} className={`w-1.5 h-1.5 rounded-full ${isToday ? 'bg-white/70' : PRIORITY_DOT[event.priority]}`} />
+              </span>
+              {domains.length > 0 && (
+                <div className="flex gap-px mt-0.5 w-6">
+                  {domains.slice(0, 3).map((domain) => (
+                    <span
+                      key={domain}
+                      className={`flex-1 h-[3px] rounded-full ${DOMAIN_COLOR[domain]?.bar ?? 'bg-gray-300'}`}
+                    />
                   ))}
                 </div>
               )}
-            </div>
+            </button>
           )
         })}
       </div>
 
-      <div className="mt-3 pt-3 border-t border-gray-100 min-h-[88px]">
-        {selectedDay && selectedEvents.length > 0 ? (
+      {/* 이벤트 패널 */}
+      <div className="mt-3 pt-3 border-t border-gray-100 min-h-[96px]">
+        {selectedDay != null && selectedEvents.length > 0 ? (
           <>
-            <p className="text-[10px] font-semibold text-gray-400 mb-2">{month + 1}/{selectedDay} 마감</p>
-            <div className="space-y-1.5">
-              {selectedEvents.map((event) => (
-                <div key={`${event.docNo}-${event.domainLabel}`} className="flex items-center gap-2">
-                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${PRIORITY_DOT[event.priority]}`} />
-                  <span className="font-mono text-[10px] text-gray-400 flex-shrink-0">{event.docNo}</span>
-                  <span className="text-[11px] text-gray-600 truncate">{event.title}</span>
-                </div>
-              ))}
+            <p className="text-[10px] font-semibold text-gray-400 mb-2">{month + 1}/{selectedDay} 마감 {selectedEvents.length}건</p>
+            <div className="space-y-1.5 max-h-[140px] overflow-y-auto pr-0.5">
+              {selectedEvents.map((event, i) => {
+                const dc = DOMAIN_COLOR[event.domainLabel]
+                return (
+                  <button
+                    key={`${event.docNo}-${i}`}
+                    type="button"
+                    onClick={() => onNavigate(event.domainKey, event.id)}
+                    className="w-full flex items-center gap-1.5 rounded-md hover:bg-blue-50/50 px-1 py-0.5 transition-colors text-left group"
+                  >
+                    <span className={`px-1 py-0.5 rounded text-[9px] font-bold flex-shrink-0 ${dc?.badge ?? 'bg-gray-100 text-gray-500'}`}>
+                      {dc?.label ?? event.domainLabel.slice(0, 2)}
+                    </span>
+                    <span className="font-mono text-[10px] text-gray-400 flex-shrink-0">{event.docNo}</span>
+                    <span className="text-[11px] text-gray-600 truncate flex-1 group-hover:text-brand transition-colors">{event.title}</span>
+                    <PriorityPip priority={event.priority} />
+                  </button>
+                )
+              })}
             </div>
           </>
-        ) : selectedDay && selectedEvents.length === 0 ? (
-          <p className="text-[11px] text-gray-400 text-center py-1">{month + 1}/{selectedDay}에 마감 일정이 없습니다</p>
+        ) : selectedDay != null ? (
+          <div className="flex items-center justify-center h-16">
+            <p className="text-[11px] text-gray-400">{month + 1}/{selectedDay}에 마감 일정이 없습니다</p>
+          </div>
         ) : (
           <>
             <p className="text-[10px] font-semibold text-gray-400 mb-2">다가오는 마감</p>
-            <div className="space-y-1.5">
-              {upcoming.length === 0 ? (
-                <p className="text-[11px] text-gray-400">예정된 마감이 없습니다.</p>
-              ) : (
-                upcoming.map(({ event, parsed }) => (
-                  <div key={`${event.docNo}-${event.domainLabel}`} className="flex items-center gap-2">
-                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${PRIORITY_DOT[event.priority]}`} />
-                    <span className="text-[10px] text-gray-400 flex-shrink-0 font-medium">
-                      {parsed!.getMonth() + 1}/{parsed!.getDate()}
-                    </span>
-                    <span className="text-[11px] text-gray-600 truncate">{event.title}</span>
-                  </div>
-                ))
-              )}
-            </div>
+            {upcoming.length === 0 ? (
+              <p className="text-[11px] text-gray-400">예정된 마감이 없습니다.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {upcoming.map(({ event, parsed }, i) => {
+                  const dc = DOMAIN_COLOR[event.domainLabel]
+                  return (
+                    <button
+                      key={`${event.docNo}-${i}`}
+                      type="button"
+                      onClick={() => onNavigate(event.domainKey, event.id)}
+                      className="w-full flex items-center gap-1.5 rounded-md hover:bg-blue-50/50 px-1 py-0.5 transition-colors text-left group"
+                    >
+                      <span className={`px-1 py-0.5 rounded text-[9px] font-bold flex-shrink-0 ${dc?.badge ?? 'bg-gray-100 text-gray-500'}`}>
+                        {dc?.label ?? event.domainLabel.slice(0, 2)}
+                      </span>
+                      <span className="text-[10px] text-gray-500 flex-shrink-0 font-medium tabular-nums">
+                        {parsed!.getMonth() + 1}/{parsed!.getDate()}
+                      </span>
+                      <span className="text-[11px] text-gray-600 truncate flex-1 group-hover:text-brand transition-colors">{event.title}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
           </>
         )}
       </div>
@@ -706,6 +826,45 @@ function DeadlineBadge({ date }: { date: string }) {
   }
 
   return <span className={`text-[12px] ${cls}`}>{date.slice(5)}</span>
+}
+
+function PriorityPip({ priority }: { priority: Priority | '-' }) {
+  const cls =
+    priority === '긴급' ? 'bg-red-500' :
+    priority === '높음' ? 'bg-orange-400' :
+    priority === '보통' ? 'bg-blue-400' :
+    'bg-gray-300'
+  return <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cls}`} />
+}
+
+function FullCalendarIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+      <rect x="1" y="2" width="11" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M1 5.5H12" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      <path d="M4 1V3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      <path d="M9 1V3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      <circle cx="4" cy="8.5" r="0.7" fill="currentColor" />
+      <circle cx="6.5" cy="8.5" r="0.7" fill="currentColor" />
+      <circle cx="9" cy="8.5" r="0.7" fill="currentColor" />
+    </svg>
+  )
+}
+
+function CalChevronLeftIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+      <path d="M7.5 3L4.5 6L7.5 9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function CalChevronRightIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+      <path d="M4.5 3L7.5 6L4.5 9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
 }
 
 function NotifIcon({ type }: { type: string }) {

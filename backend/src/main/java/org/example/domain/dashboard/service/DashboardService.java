@@ -4,5 +4,5 @@ import org.example.domain.dashboard.dto.DashboardResponse;
 
 public interface DashboardService {
 
-    DashboardResponse getDashboard(Long teamId, String scope, String domain, String authorizationHeader);
+    DashboardResponse getDashboard(Long teamId, String scope, String domain, String authorizationHeader, int page, int size);
 }

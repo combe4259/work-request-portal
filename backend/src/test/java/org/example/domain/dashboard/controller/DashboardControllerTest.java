@@ -45,9 +45,11 @@ class DashboardControllerTest {
                         "김개발",
                         LocalDate.of(2026, 3, 3)
                 )),
+                1,
                 List.of(new DashboardResponse.DashboardCalendarEvent(
+                        1L,
+                        "2026-03-01",
                         "2026-03-03",
-                        3,
                         "WORK_REQUEST",
                         "WR-001",
                         "업무요청",
@@ -55,7 +57,7 @@ class DashboardControllerTest {
                 ))
         );
 
-        when(dashboardService.getDashboard(10L, "mine", "WORK_REQUEST", "Bearer test-token")).thenReturn(response);
+        when(dashboardService.getDashboard(10L, "mine", "WORK_REQUEST", "Bearer test-token", 0, 20)).thenReturn(response);
 
         mockMvc.perform(get("/api/dashboard")
                         .param("teamId", "10")
@@ -66,8 +68,9 @@ class DashboardControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.kpi.todoCount").value(3))
                 .andExpect(jsonPath("$.workRequests[0].docNo").value("WR-001"))
-                .andExpect(jsonPath("$.calendarEvents[0].day").value(3));
+                .andExpect(jsonPath("$.totalWorkItems").value(1))
+                .andExpect(jsonPath("$.calendarEvents[0].endDate").value("2026-03-03"));
 
-        verify(dashboardService).getDashboard(10L, "mine", "WORK_REQUEST", "Bearer test-token");
+        verify(dashboardService).getDashboard(10L, "mine", "WORK_REQUEST", "Bearer test-token", 0, 20);
     }
 }

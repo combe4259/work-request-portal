@@ -116,6 +116,21 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     @Override
+    @Transactional
+    public void updateReadStateByRef(Long userId, String refType, Long refId, boolean isRead) {
+        if (userId == null || userId <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "userId는 필수입니다.");
+        }
+        if (refType == null || refType.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "refType은 필수입니다.");
+        }
+        if (refId == null || refId <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "refId는 필수입니다.");
+        }
+        notificationRepository.updateReadStateByUserIdAndRefTypeAndRefId(userId, refType, refId, isRead);
+    }
+
+    @Override
     public NotificationUnreadCountsResponse findUnreadCounts(Long userId) {
         if (userId == null || userId <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "userId는 필수입니다.");
@@ -123,10 +138,13 @@ public class NotificationServiceImpl implements NotificationService {
 
         long total = notificationRepository.countByUserIdAndIsReadFalse(userId);
         long workRequest = notificationRepository.countByUserIdAndIsReadFalseAndRefType(userId, "WORK_REQUEST");
+        long techTask = notificationRepository.countByUserIdAndIsReadFalseAndRefType(userId, "TECH_TASK");
         long testScenario = notificationRepository.countByUserIdAndIsReadFalseAndRefType(userId, "TEST_SCENARIO");
         long defect = notificationRepository.countByUserIdAndIsReadFalseAndRefType(userId, "DEFECT");
+        long deployment = notificationRepository.countByUserIdAndIsReadFalseAndRefType(userId, "DEPLOYMENT");
+        long idea = notificationRepository.countByUserIdAndIsReadFalseAndRefType(userId, "PROJECT_IDEA");
 
-        return new NotificationUnreadCountsResponse(total, workRequest, testScenario, defect);
+        return new NotificationUnreadCountsResponse(total, workRequest, techTask, testScenario, defect, deployment, idea);
     }
 
     @Override

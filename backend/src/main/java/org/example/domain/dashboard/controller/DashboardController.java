@@ -24,8 +24,10 @@ public class DashboardController {
             @RequestParam(required = false) Long teamId,
             @RequestParam(defaultValue = "team") String scope,
             @RequestParam(defaultValue = "ALL") String domain,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
             @RequestHeader(name = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader
     ) {
-        return dashboardService.getDashboard(teamId, scope, domain, authorizationHeader);
+        return dashboardService.getDashboard(teamId, scope, domain, authorizationHeader, page, size);
     }
 }

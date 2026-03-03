@@ -5,6 +5,7 @@ import Topbar from './Topbar'
 
 export default function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [collapsed, setCollapsed] = useState(false)
 
   useEffect(() => {
     if (!sidebarOpen) return
@@ -17,7 +18,7 @@ export default function AppLayout() {
 
   return (
     <div className="flex h-screen bg-[#F0F4FF] overflow-hidden">
-      <Sidebar className="hidden lg:flex" />
+      <Sidebar className="hidden lg:flex" collapsed={collapsed} onToggleCollapse={() => setCollapsed(c => !c)} />
 
       <div className={`fixed inset-0 z-50 lg:hidden ${sidebarOpen ? '' : 'pointer-events-none'}`} aria-hidden={!sidebarOpen}>
         <button

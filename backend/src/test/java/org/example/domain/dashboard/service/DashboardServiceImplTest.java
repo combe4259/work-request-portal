@@ -90,7 +90,7 @@ class DashboardServiceImplTest {
         when(portalUserRepository.findAllById(List.of(2L, 3L, 4L)))
                 .thenReturn(List.of(user(2L, "김개발"), user(3L, "이설계"), user(4L, "박배포")));
 
-        DashboardResponse response = dashboardService.getDashboard(10L, "team", "ALL", null);
+        DashboardResponse response = dashboardService.getDashboard(10L, "team", "ALL", null, 0, 20);
 
         assertThat(response.kpi().todoCount()).isEqualTo(2);
         assertThat(response.kpi().inProgressCount()).isEqualTo(3);
@@ -128,7 +128,7 @@ class DashboardServiceImplTest {
         when(portalUserRepository.findAllById(List.of(2L)))
                 .thenReturn(List.of(user(2L, "김개발")));
 
-        DashboardResponse response = dashboardService.getDashboard(10L, "mine", "ALL", null);
+        DashboardResponse response = dashboardService.getDashboard(10L, "mine", "ALL", null, 0, 20);
 
         assertThat(response.kpi().todoCount()).isEqualTo(1);
         assertThat(response.kpi().inProgressCount()).isEqualTo(1);
@@ -141,7 +141,7 @@ class DashboardServiceImplTest {
     @Test
     @DisplayName("유효하지 않은 domain 값이면 400을 반환한다")
     void getDashboardInvalidDomain() {
-        assertThatThrownBy(() -> dashboardService.getDashboard(10L, "team", "INVALID", null))
+        assertThatThrownBy(() -> dashboardService.getDashboard(10L, "team", "INVALID", null, 0, 20))
                 .isInstanceOfSatisfying(ResponseStatusException.class, ex ->
                         assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST)
                 );
@@ -167,7 +167,7 @@ class DashboardServiceImplTest {
         when(portalUserRepository.findAllById(List.of(2L)))
                 .thenReturn(List.of(user(2L, "김개발")));
 
-        DashboardResponse response = dashboardService.getDashboard(10L, "mine", "ALL", "Bearer sample-token");
+        DashboardResponse response = dashboardService.getDashboard(10L, "mine", "ALL", "Bearer sample-token", 0, 20);
 
         assertThat(response.kpi().todoCount()).isEqualTo(1);
         assertThat(response.workRequests()).hasSize(1);

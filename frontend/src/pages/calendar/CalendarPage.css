@@ -1,0 +1,128 @@
+/* ── FullCalendar 디자인 오버라이드 ── */
+
+.fc-wrapper .fc-theme-standard td,
+.fc-wrapper .fc-theme-standard th {
+  border-color: #f3f4f6;
+}
+
+.fc-wrapper .fc-scrollgrid {
+  border: none !important;
+}
+
+.fc-wrapper .fc-scrollgrid-section-header th {
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb !important;
+}
+
+/* 요일 헤더 */
+.fc-wrapper .fc-col-header-cell-cushion {
+  padding: 10px 0;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #9ca3af;
+  text-decoration: none !important;
+}
+
+/* 일요일/토요일 요일 헤더 색상 */
+.fc-wrapper .fc-day-sun .fc-col-header-cell-cushion { color: #fb7185; }
+.fc-wrapper .fc-day-sat .fc-col-header-cell-cushion { color: #60a5fa; }
+
+/* 날짜 숫자 */
+.fc-wrapper .fc-daygrid-day-number {
+  font-size: 12px;
+  font-weight: 600;
+  color: #4b5563;
+  padding: 6px 8px;
+  text-decoration: none !important;
+}
+
+/* 오늘 셀 */
+.fc-wrapper .fc-day-today {
+  background: rgb(239 246 255 / 0.5) !important;
+}
+
+.fc-wrapper .fc-day-today .fc-daygrid-day-number {
+  background: #0046ff;
+  color: white;
+  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin: 5px;
+  box-shadow: 0 2px 8px rgba(0, 70, 255, 0.35);
+}
+
+/* 다른 달 날짜 */
+.fc-wrapper .fc-day-other {
+  background: rgb(249 250 251 / 0.6);
+}
+.fc-wrapper .fc-day-other .fc-daygrid-day-number {
+  color: #d1d5db;
+}
+
+/* 일요일 날짜 색상 */
+.fc-wrapper .fc-day-sun .fc-daygrid-day-number { color: #fb7185; }
+.fc-wrapper .fc-day-sat .fc-daygrid-day-number { color: #60a5fa; }
+
+/* 셀 최소 높이 */
+.fc-wrapper .fc-daygrid-day-frame {
+  min-height: 110px;
+}
+
+/* 이벤트 기본 스타일 초기화 — eventContent로 완전 커스텀 */
+.fc-wrapper .fc-daygrid-event {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 2px;
+  margin: 1px 0 !important;
+}
+
+.fc-wrapper .fc-event-main {
+  padding: 0;
+}
+
+/* +N개 더보기 링크 */
+.fc-wrapper .fc-daygrid-more-link {
+  font-size: 10px;
+  font-weight: 600;
+  color: #9ca3af;
+  padding: 1px 6px;
+  margin: 1px 2px;
+}
+.fc-wrapper .fc-daygrid-more-link:hover {
+  color: #0046ff;
+  background: transparent;
+}
+
+/* 팝오버 */
+.fc-wrapper .fc-popover {
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+}
+.fc-wrapper .fc-popover-header {
+  background: #f9fafb;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 12px;
+}
+.fc-wrapper .fc-popover-body {
+  padding: 6px 8px;
+}
+
+/* 이벤트 hover 시 배경 제거 */
+.fc-wrapper .fc-daygrid-event-harness:hover {
+  background: transparent;
+}
+
+/* 행 구분선 */
+.fc-wrapper .fc-scrollgrid-section-body td {
+  border-bottom-color: #f3f4f6 !important;
+}

@@ -41,13 +41,11 @@ export function useNotificationsQuery(
   })
 }
 
-export function useNotificationUnreadCountsQuery(userId: number | undefined) {
+export function useNotificationUnreadCountsQuery(enabled: boolean) {
   return useQuery({
-    queryKey: userId == null
-      ? [...notificationQueryKeys.all, 'unread-counts', 'none']
-      : notificationQueryKeys.unreadCounts(userId),
-    queryFn: () => getUnreadCounts(userId as number),
-    enabled: userId != null,
+    queryKey: [...notificationQueryKeys.all, 'unread-counts'],
+    queryFn: () => getUnreadCounts(),
+    enabled,
     placeholderData: (prev) => prev,
   })
 }

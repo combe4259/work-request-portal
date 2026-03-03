@@ -1,8 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { Separator } from '@/components/ui/separator'
 import { useAuthStore } from '@/stores/authStore'
-import { useProfileStore, AVATAR_COLOR_HEX } from '@/stores/profileStore'
-import { ROLE_LABELS } from '@/lib/constants'
 import { logoutFromServer } from '@/features/auth/service'
 import { useNotificationUnreadCountsQuery } from '@/features/notification/queries'
 import shinhanLogo from '@/assets/shinhan-ci.png'
@@ -23,14 +21,15 @@ const NAV_SECTIONS: NavSection[] = [
     title: '메인',
     items: [
       { label: '대시보드', path: '/dashboard', icon: <DashboardIcon /> },
-      { label: '업무요청', path: '/work-requests', icon: <RequestIcon /> },
-      { label: '기술과제', path: '/tech-tasks', icon: <DevRequestIcon /> },
+      { label: '달력', path: '/calendar', icon: <CalendarNavIcon /> },
+      { label: '워크플로우', path: '/workflow', icon: <WorkflowIcon /> },
     ],
   },
   {
     title: '개발 사이클',
     items: [
-      { label: '워크플로우', path: '/workflow', icon: <WorkflowIcon /> },
+      { label: '업무요청', path: '/work-requests', icon: <RequestIcon /> },
+      { label: '기술과제', path: '/tech-tasks', icon: <DevRequestIcon /> },
       { label: '테스트 시나리오', path: '/test-scenarios', icon: <TestIcon /> },
       { label: '결함 목록', path: '/defects', icon: <DefectIcon /> },
       { label: '배포 관리', path: '/deployments', icon: <DeployIcon /> },
@@ -56,32 +55,26 @@ const NAV_SECTIONS: NavSection[] = [
 interface SidebarProps {
   className?: string
   onNavigate?: () => void
+  collapsed?: boolean
+  onToggleCollapse?: () => void
 }
 
-function resolveBadgeCount(path: string, unreadCounts: { workRequest: number; testScenario: number; defect: number } | undefined): number {
-  if (!unreadCounts) {
-    return 0
-  }
-  if (path === '/work-requests') {
-    return unreadCounts.workRequest
-  }
-  if (path === '/test-scenarios') {
-    return unreadCounts.testScenario
-  }
-  if (path === '/defects') {
-    return unreadCounts.defect
-  }
+function resolveBadgeCount(path: string, unreadCounts: { workRequest: number; techTask: number; testScenario: number; defect: number; deployment: number; idea: number } | undefined): number {
+  if (!unreadCounts) return 0
+  if (path === '/work-requests') return unreadCounts.workRequest
+  if (path === '/tech-tasks') return unreadCounts.techTask
+  if (path === '/test-scenarios') return unreadCounts.testScenario
+  if (path === '/defects') return unreadCounts.defect
+  if (path === '/deployments') return unreadCounts.deployment
+  if (path === '/ideas') return unreadCounts.idea
   return 0
 }
 
-export default function Sidebar({ className = '', onNavigate }: SidebarProps) {
-  const { user, logout } = useAuthStore()
-  const { displayName, role, avatarColor, photoUrl } = useProfileStore()
-  const unreadCountsQuery = useNotificationUnreadCountsQuery(user?.id)
+export default function Sidebar({ className = '', onNavigate, collapsed = false, onToggleCollapse }: SidebarProps) {
+  const { user, currentTeam, logout } = useAuthStore()
+  const unreadCountsQuery = useNotificationUnreadCountsQuery(!!user && !!currentTeam)
   const unreadCounts = unreadCountsQuery.data
   const navigate = useNavigate()
-  const colorHex = AVATAR_COLOR_HEX[avatarColor] ?? AVATAR_COLOR_HEX['brand']
-  const initials = (displayName || user?.name)?.slice(0, 1) ?? '?'
 
   const handleLogout = async () => {
     try {
@@ -94,58 +87,70 @@ export default function Sidebar({ className = '', onNavigate }: SidebarProps) {
     navigate('/login')
   }
 
-
   return (
-    <aside className={`w-[240px] min-w-[240px] h-screen bg-brand-sidebar flex flex-col overflow-hidden relative ${className}`}>
+    <aside
+      className={`${collapsed ? 'w-[60px] min-w-[60px]' : 'w-[240px] min-w-[240px]'} h-screen bg-brand-sidebar flex flex-col overflow-hidden relative transition-all duration-200 ${className}`}
+    >
       {/* 배경 장식 */}
       <div className="absolute -top-16 -right-16 w-56 h-56 rounded-full bg-white/[0.03] pointer-events-none" />
       <div className="absolute bottom-20 -left-12 w-40 h-40 rounded-full bg-white/[0.03] pointer-events-none" />
 
-      {/* 로고 */}
-      <div className="px-5 pt-5 pb-4 relative z-10">
-        <div className="flex items-center gap-3">
-          <img src={shinhanLogo} alt="신한투자증권" className="w-9 h-9 rounded-lg flex-shrink-0" />
-          <div>
-            <p className="text-[11px] font-semibold text-white/60 leading-none mb-1">
-              신한투자증권 PDA
-            </p>
-            <p className="text-[13px] font-bold text-white leading-none">IT 업무요청 포털</p>
-          </div>
-        </div>
-      </div>
-
-      {/* 팀/유저 카드 */}
-      <div className="mx-3 mb-3 px-3 py-2.5 bg-white/[0.07] border border-white/[0.08] rounded-lg relative z-10 flex items-center gap-2.5">
-        <div className="w-8 h-8 rounded-lg flex-shrink-0 overflow-hidden">
-          {photoUrl ? (
-            <img src={photoUrl} alt="프로필" className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-white text-[13px] font-bold" style={{ backgroundColor: colorHex }}>
-              {initials}
+      {/* 로고 + 접기 버튼 */}
+      {!collapsed && (
+        <div className="pt-5 pb-4 relative z-10 flex items-center justify-between px-4">
+          <div className="flex items-center gap-3">
+            <img src={shinhanLogo} alt="신한투자증권" className="w-9 h-9 rounded-lg flex-shrink-0" />
+            <div>
+              <p className="text-[11px] font-semibold text-white/60 leading-none mb-1">신한투자증권 PDA</p>
+              <p className="text-[13px] font-bold text-white leading-none">IT 업무요청 포털</p>
             </div>
+          </div>
+          {onToggleCollapse && (
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              aria-label="사이드바 접기"
+              className="w-7 h-7 flex items-center justify-center rounded-md text-white/30 hover:bg-white/[0.1] hover:text-white/70 transition-all flex-shrink-0"
+            >
+              <CollapseIcon />
+            </button>
           )}
         </div>
-        <div className="min-w-0">
-          <p className="text-white text-[13px] font-semibold truncate">{displayName || user?.name || '사용자'}</p>
-          <p className="text-white/50 text-[11px] truncate">{role || ROLE_LABELS[user?.role ?? 'DEVELOPER']}</p>
-        </div>
-      </div>
+      )}
 
       {/* 네비게이션 */}
       <nav className="flex-1 overflow-y-auto px-3 space-y-1 py-1 relative z-10 scrollbar-hide">
+        {/* collapsed 상태: 펼치기 버튼을 nav 상단에 배치 */}
+        {collapsed && onToggleCollapse && (
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            aria-label="사이드바 펼치기"
+            title="펼치기"
+            className="w-full flex justify-center items-center py-2.5 mb-1 rounded-lg text-white/30 hover:bg-white/[0.07] hover:text-white/70 transition-all"
+          >
+            <ExpandIcon />
+          </button>
+        )}
         {NAV_SECTIONS.map((section, idx) => (
           <div key={section.title}>
             {idx > 0 && <Separator className="my-2 bg-white/[0.08]" />}
-            <p className="text-[10px] font-semibold text-white/30 tracking-widest uppercase px-2 py-1.5">
-              {section.title}
-            </p>
+            {!collapsed && (
+              <p className="text-[10px] font-semibold text-white/30 tracking-widest uppercase px-2 py-1.5">
+                {section.title}
+              </p>
+            )}
+            {collapsed && idx > 0 && <div className="h-1" />}
             {section.items.map((item) => (
               <NavLink
                 key={item.path}
                 to={item.path}
                 onClick={onNavigate}
+                title={collapsed ? item.label : undefined}
                 className={({ isActive }) =>
-                  `flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] font-medium transition-all mb-0.5 ${
+                  `relative flex items-center gap-2.5 rounded-lg text-[13px] font-medium transition-all mb-0.5 ${
+                    collapsed ? 'justify-center px-0 py-2.5' : 'px-2.5 py-2'
+                  } ${
                     isActive
                       ? 'bg-white/[0.12] text-white'
                       : 'text-white/55 hover:bg-white/[0.07] hover:text-white/90'
@@ -154,21 +159,23 @@ export default function Sidebar({ className = '', onNavigate }: SidebarProps) {
               >
                 {({ isActive }) => {
                   const badgeCount = resolveBadgeCount(item.path, unreadCounts)
-
                   return (
                     <>
-                    <span className={`flex-shrink-0 transition-colors ${isActive ? 'text-white' : 'text-white/40'}`}>
-                      {item.icon}
-                    </span>
-                    <span className="flex-1 truncate">{item.label}</span>
-                    {badgeCount > 0 && (
-                      <span className="ml-auto text-[10px] font-bold bg-brand/80 text-white px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-tight">
-                        {badgeCount}
+                      <span className={`flex-shrink-0 transition-colors ${isActive ? 'text-white' : 'text-white/40'}`}>
+                        {item.icon}
                       </span>
-                    )}
-                    {isActive && (
-                      <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-brand rounded-r-full" />
-                    )}
+                      {!collapsed && <span className="flex-1 truncate">{item.label}</span>}
+                      {!collapsed && badgeCount > 0 && (
+                        <span className="ml-auto text-[10px] font-bold bg-brand/80 text-white px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-tight">
+                          {badgeCount}
+                        </span>
+                      )}
+                      {collapsed && badgeCount > 0 && (
+                        <span className="absolute top-1 right-1 w-2 h-2 bg-brand rounded-full" />
+                      )}
+                      {isActive && !collapsed && (
+                        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-brand rounded-r-full" />
+                      )}
                     </>
                   )
                 }}
@@ -179,29 +186,33 @@ export default function Sidebar({ className = '', onNavigate }: SidebarProps) {
       </nav>
 
       {/* 하단 */}
-      <div className="px-3 pb-4 pt-2 border-t border-white/[0.08] relative z-10 space-y-0.5">
+      <div className={`pb-4 pt-2 border-t border-white/[0.08] relative z-10 space-y-0.5 ${collapsed ? 'px-3' : 'px-3'}`}>
         <NavLink
           to="/settings"
           onClick={onNavigate}
+          title={collapsed ? '설정' : undefined}
           className={({ isActive }) =>
-            `flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] transition-all ${
+            `flex items-center rounded-lg text-[13px] transition-all ${
+              collapsed ? 'justify-center px-0 py-2.5' : 'gap-2.5 px-2.5 py-2'
+            } ${
               isActive ? 'bg-white/[0.12] text-white' : 'text-white/40 hover:bg-white/[0.07] hover:text-white/70'
             }`
           }
         >
           <SettingsIcon />
-          <span>설정</span>
+          {!collapsed && <span>설정</span>}
         </NavLink>
         <button
           type="button"
-          onClick={() => {
-            void handleLogout()
-          }}
+          onClick={() => { void handleLogout() }}
           aria-label="로그아웃"
-          className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] text-white/40 hover:bg-white/[0.07] hover:text-white/70 transition-all"
+          title={collapsed ? '로그아웃' : undefined}
+          className={`w-full flex items-center rounded-lg text-[13px] text-white/40 hover:bg-white/[0.07] hover:text-white/70 transition-all ${
+            collapsed ? 'justify-center px-0 py-2.5' : 'gap-2.5 px-2.5 py-2'
+          }`}
         >
           <LogoutIcon />
-          <span>로그아웃</span>
+          {!collapsed && <span>로그아웃</span>}
         </button>
       </div>
     </aside>
@@ -209,6 +220,38 @@ export default function Sidebar({ className = '', onNavigate }: SidebarProps) {
 }
 
 // ── SVG 아이콘 ────────────────────────────────────────
+function CollapseIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+      <path d="M9 3L5 7.5L9 12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M13 3L9 7.5L13 12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function ExpandIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+      <path d="M6 3L10 7.5L6 12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M2 3L6 7.5L2 12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function CalendarNavIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <rect x="1.5" y="2.5" width="13" height="12" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M1.5 6.5H14.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      <path d="M5 1.5V3.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      <path d="M11 1.5V3.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      <circle cx="5" cy="10" r="0.8" fill="currentColor" />
+      <circle cx="8" cy="10" r="0.8" fill="currentColor" />
+      <circle cx="11" cy="10" r="0.8" fill="currentColor" />
+    </svg>
+  )
+}
+
 function DashboardIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">

@@ -30,6 +30,7 @@ import IdeaDetailPage from '@/pages/idea/IdeaDetailPage'
 import MeetingNotesPage from '@/pages/meeting-note/MeetingNotesPage'
 import MeetingNoteFormPage from '@/pages/meeting-note/MeetingNoteFormPage'
 import MeetingNoteDetailPage from '@/pages/meeting-note/MeetingNoteDetailPage'
+import CalendarPage from '@/pages/calendar/CalendarPage'
 import StatisticsPage from '@/pages/statistics/StatisticsPage'
 import ResourcesPage from '@/pages/resource/ResourcesPage'
 import ResourceFormPage from '@/pages/resource/ResourceFormPage'
@@ -110,6 +111,7 @@ const router = createBrowserRouter([
       { path: '/ideas/new', element: <IdeaFormPage /> },
       { path: '/ideas/:id/edit', element: <IdeaFormPage /> },
       { path: '/ideas/:id', element: <IdeaDetailPage /> },
+      { path: '/calendar', element: <CalendarPage /> },
       { path: '/statistics', element: <StatisticsPage /> },
       { path: '/resources', element: <ResourcesPage /> },
       { path: '/resources/new', element: <ResourceFormPage /> },

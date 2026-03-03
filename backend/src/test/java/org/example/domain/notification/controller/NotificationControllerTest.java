@@ -7,6 +7,7 @@ import org.example.domain.notification.dto.NotificationListResponse;
 import org.example.domain.notification.dto.NotificationUnreadCountsResponse;
 import org.example.domain.notification.dto.NotificationUpdateRequest;
 import org.example.domain.notification.service.NotificationService;
+import org.example.global.security.JwtTokenProvider;
 import org.example.global.team.TeamRequestContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -44,6 +45,9 @@ class NotificationControllerTest {
 
     @MockBean
     private NotificationService notificationService;
+
+    @MockBean
+    private JwtTokenProvider jwtTokenProvider;
 
     @AfterEach
     void tearDown() {
@@ -94,11 +98,12 @@ class NotificationControllerTest {
     @Test
     @DisplayName("미읽음 카운트 조회는 인증 사용자 기준으로 반환한다")
     void getUnreadCountsByContextUser() throws Exception {
-        TeamRequestContext.set(2L, 10L);
+        when(jwtTokenProvider.extractUserId("valid-token")).thenReturn(2L);
         when(notificationService.findUnreadCounts(2L))
-                .thenReturn(new NotificationUnreadCountsResponse(8L, 3L, 2L, 1L));
+                .thenReturn(new NotificationUnreadCountsResponse(8L, 3L, 1L, 2L, 1L, 0L, 1L));
 
-        mockMvc.perform(get("/api/notifications/unread-counts"))
+        mockMvc.perform(get("/api/notifications/unread-counts")
+                        .header("Authorization", "Bearer valid-token"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.total").value(8))
                 .andExpect(jsonPath("$.workRequest").value(3))
@@ -178,9 +183,10 @@ class NotificationControllerTest {
     @Test
     @DisplayName("알림 전체 읽음 처리 성공 시 204를 반환한다")
     void updateAllReadStateSuccess() throws Exception {
-        TeamRequestContext.set(2L, 10L);
+        when(jwtTokenProvider.extractUserId("valid-token")).thenReturn(2L);
 
-        mockMvc.perform(patch("/api/notifications/read-all"))
+        mockMvc.perform(patch("/api/notifications/read-all")
+                        .header("Authorization", "Bearer valid-token"))
                 .andExpect(status().isNoContent());
 
         verify(notificationService).updateAllReadState(2L, true);

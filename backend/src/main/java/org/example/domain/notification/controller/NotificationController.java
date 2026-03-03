@@ -1,12 +1,13 @@
 package org.example.domain.notification.controller;
 
+import jakarta.servlet.http.HttpServletRequest;
 import org.example.domain.notification.dto.NotificationCreateRequest;
 import org.example.domain.notification.dto.NotificationDetailResponse;
 import org.example.domain.notification.dto.NotificationListResponse;
 import org.example.domain.notification.dto.NotificationUnreadCountsResponse;
 import org.example.domain.notification.dto.NotificationUpdateRequest;
 import org.example.domain.notification.service.NotificationService;
-import org.example.global.team.TeamRequestContext;
+import org.example.global.security.JwtTokenProvider;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Map;
 
@@ -28,9 +30,11 @@ import java.util.Map;
 public class NotificationController {
 
     private final NotificationService notificationService;
+    private final JwtTokenProvider jwtTokenProvider;
 
-    public NotificationController(NotificationService notificationService) {
+    public NotificationController(NotificationService notificationService, JwtTokenProvider jwtTokenProvider) {
         this.notificationService = notificationService;
+        this.jwtTokenProvider = jwtTokenProvider;
     }
 
     @GetMapping
@@ -44,17 +48,9 @@ public class NotificationController {
     }
 
     @GetMapping("/unread-counts")
-    public NotificationUnreadCountsResponse getUnreadCounts(
-            @RequestParam(required = false) Long userId
-    ) {
-        Long currentUserId = userId;
-        if (currentUserId == null || currentUserId <= 0) {
-            currentUserId = TeamRequestContext.getCurrentUserId();
-        }
-        if (currentUserId == null || currentUserId <= 0) {
-            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증 정보가 없습니다.");
-        }
-        return notificationService.findUnreadCounts(currentUserId);
+    public NotificationUnreadCountsResponse getUnreadCounts(HttpServletRequest request) {
+        Long userId = extractUserIdFromToken(request);
+        return notificationService.findUnreadCounts(userId);
     }
 
     @GetMapping("/{id}")
@@ -89,16 +85,22 @@ public class NotificationController {
     @PatchMapping("/read-all")
     public ResponseEntity<Void> updateAllReadState(
             @RequestParam(defaultValue = "true") boolean read,
-            @RequestParam(required = false) Long userId
+            HttpServletRequest request
     ) {
-        Long currentUserId = userId;
-        if (currentUserId == null || currentUserId <= 0) {
-            currentUserId = TeamRequestContext.getCurrentUserId();
-        }
-        if (currentUserId == null || currentUserId <= 0) {
-            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증 정보가 없습니다.");
-        }
-        notificationService.updateAllReadState(currentUserId, read);
+        Long userId = extractUserIdFromToken(request);
+        notificationService.updateAllReadState(userId, read);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/read-by-ref")
+    public ResponseEntity<Void> updateReadStateByRef(
+            @RequestParam String refType,
+            @RequestParam Long refId,
+            @RequestParam(defaultValue = "true") boolean read,
+            HttpServletRequest request
+    ) {
+        Long userId = extractUserIdFromToken(request);
+        notificationService.updateReadStateByRef(userId, refType, refId, read);
         return ResponseEntity.noContent().build();
     }
 
@@ -106,5 +108,13 @@ public class NotificationController {
     public ResponseEntity<Void> deleteNotification(@PathVariable Long id) {
         notificationService.delete(id);
         return ResponseEntity.noContent().build();
+    }
+
+    private Long extractUserIdFromToken(HttpServletRequest request) {
+        String authorization = request.getHeader("Authorization");
+        if (authorization == null || !authorization.startsWith("Bearer ")) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authorization 헤더가 필요합니다.");
+        }
+        return jwtTokenProvider.extractUserId(authorization.substring(7).trim());
     }
 }

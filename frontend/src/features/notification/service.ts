@@ -46,8 +46,11 @@ export interface NotificationListResult {
 export interface NotificationUnreadCounts {
   total: number
   workRequest: number
+  techTask: number
   testScenario: number
   defect: number
+  deployment: number
+  idea: number
 }
 
 function mapType(rawType: string): DashboardNotification['type'] {
@@ -163,10 +166,8 @@ export async function listDashboardNotifications(userId: number, size = 6): Prom
   return result.items
 }
 
-export async function getUnreadCounts(userId: number): Promise<NotificationUnreadCounts> {
-  const { data } = await api.get<NotificationUnreadCounts>('/notifications/unread-counts', {
-    params: { userId },
-  })
+export async function getUnreadCounts(): Promise<NotificationUnreadCounts> {
+  const { data } = await api.get<NotificationUnreadCounts>('/notifications/unread-counts')
   return data
 }
 
@@ -182,5 +183,11 @@ export async function updateAllNotificationsReadState(read = true, userId?: numb
       read,
       userId,
     },
+  })
+}
+
+export async function updateNotificationReadStateByRef(refType: string, refId: number, read = true): Promise<void> {
+  await api.patch('/notifications/read-by-ref', null, {
+    params: { refType, refId, read },
   })
 }

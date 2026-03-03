@@ -156,15 +156,21 @@ class NotificationServiceImplTest {
     void findUnreadCounts() {
         when(notificationRepository.countByUserIdAndIsReadFalse(2L)).thenReturn(12L);
         when(notificationRepository.countByUserIdAndIsReadFalseAndRefType(2L, "WORK_REQUEST")).thenReturn(5L);
+        when(notificationRepository.countByUserIdAndIsReadFalseAndRefType(2L, "TECH_TASK")).thenReturn(1L);
         when(notificationRepository.countByUserIdAndIsReadFalseAndRefType(2L, "TEST_SCENARIO")).thenReturn(3L);
         when(notificationRepository.countByUserIdAndIsReadFalseAndRefType(2L, "DEFECT")).thenReturn(2L);
+        when(notificationRepository.countByUserIdAndIsReadFalseAndRefType(2L, "DEPLOYMENT")).thenReturn(1L);
+        when(notificationRepository.countByUserIdAndIsReadFalseAndRefType(2L, "PROJECT_IDEA")).thenReturn(0L);
 
         NotificationUnreadCountsResponse response = notificationService.findUnreadCounts(2L);
 
         assertThat(response.total()).isEqualTo(12L);
         assertThat(response.workRequest()).isEqualTo(5L);
+        assertThat(response.techTask()).isEqualTo(1L);
         assertThat(response.testScenario()).isEqualTo(3L);
         assertThat(response.defect()).isEqualTo(2L);
+        assertThat(response.deployment()).isEqualTo(1L);
+        assertThat(response.idea()).isEqualTo(0L);
     }
 
     @Test

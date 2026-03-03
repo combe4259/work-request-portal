@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/authStore'
 import { useProfileStore, AVATAR_COLOR_HEX } from '@/stores/profileStore'
 import { ROLE_LABELS } from '@/lib/constants'
 import { logoutFromServer } from '@/features/auth/service'
-import { useDashboardNotificationsQuery } from '@/features/notification/queries'
+import { notificationQueryKeys, useDashboardNotificationsQuery } from '@/features/notification/queries'
 import { updateAllNotificationsReadState, updateNotificationReadState } from '@/features/notification/service'
 import { getNotificationRoute } from '@/features/notification/routes'
 import {
@@ -44,6 +45,7 @@ export default function Topbar({ onOpenSidebar }: TopbarProps) {
   const navigate = useNavigate()
   const { user, currentTeam, logout, setCurrentTeam } = useAuthStore()
   const { displayName, role, avatarColor, photoUrl } = useProfileStore()
+  const queryClient = useQueryClient()
   const notificationsQuery = useDashboardNotificationsQuery(user?.id, 10)
   const notifications = notificationsQuery.data ?? []
   const [notifOpen, setNotifOpen] = useState(false)
@@ -73,7 +75,7 @@ export default function Topbar({ onOpenSidebar }: TopbarProps) {
       return
     }
     await updateAllNotificationsReadState(true, user.id)
-    await notificationsQuery.refetch()
+    await queryClient.invalidateQueries({ queryKey: notificationQueryKeys.all })
   }
 
   const handleNotificationClick = async (notification: {
@@ -84,7 +86,7 @@ export default function Topbar({ onOpenSidebar }: TopbarProps) {
   }) => {
     if (!notification.isRead) {
       await updateNotificationReadState(notification.id, true)
-      await notificationsQuery.refetch()
+      await queryClient.invalidateQueries({ queryKey: notificationQueryKeys.all })
     }
 
     const route = getNotificationRoute(notification.refType, notification.refId)

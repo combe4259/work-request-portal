@@ -74,7 +74,7 @@ public class DashboardServiceImpl implements DashboardService {
     }
 
     @Override
-    public DashboardResponse getDashboard(Long teamId, String scope, String domain, String authorizationHeader) {
+    public DashboardResponse getDashboard(Long teamId, String scope, String domain, String authorizationHeader, int page, int size) {
         Long scopedTeamId = resolveTeamScope(teamId);
         ScopeType scopeType = resolveScope(scope);
         DomainType domainType = resolveDomain(domain);
@@ -109,7 +109,15 @@ public class DashboardServiceImpl implements DashboardService {
                         .thenComparing(UnifiedDashboardItem::id, Comparator.reverseOrder()))
                 .toList();
 
-        List<DashboardResponse.DashboardWorkItem> workItems = sortedItems.stream()
+        int totalWorkItems = sortedItems.size();
+        int pageSize = size > 0 ? size : 20;
+        int fromIndex = page * pageSize;
+        int toIndex = Math.min(fromIndex + pageSize, totalWorkItems);
+        List<UnifiedDashboardItem> pagedItems = fromIndex >= totalWorkItems
+                ? List.of()
+                : sortedItems.subList(fromIndex, toIndex);
+
+        List<DashboardResponse.DashboardWorkItem> workItems = pagedItems.stream()
                 .map(item -> new DashboardResponse.DashboardWorkItem(
                         item.id(),
                         item.domain().name(),
@@ -126,8 +134,9 @@ public class DashboardServiceImpl implements DashboardService {
         List<DashboardResponse.DashboardCalendarEvent> calendarEvents = sortedItems.stream()
                 .filter(item -> item.deadline() != null)
                 .map(item -> new DashboardResponse.DashboardCalendarEvent(
+                        item.id(),
+                        item.startDate() != null ? item.startDate().toString() : item.deadline().toString(),
                         item.deadline().toString(),
-                        item.deadline().getDayOfMonth(),
                         item.domain().name(),
                         item.docNo(),
                         item.title(),
@@ -138,6 +147,7 @@ public class DashboardServiceImpl implements DashboardService {
         return new DashboardResponse(
                 new DashboardResponse.KpiSummary(todoCount, inProgressCount, doneCount, urgentCount),
                 workItems,
+                totalWorkItems,
                 calendarEvents
         );
     }
@@ -167,6 +177,7 @@ public class DashboardServiceImpl implements DashboardService {
                         defaultIfBlank(row.getPriority(), "-"),
                         defaultIfBlank(row.getStatus(), "-"),
                         row.getAssigneeId(),
+                        row.getCreatedAt() != null ? row.getCreatedAt().toLocalDate() : row.getDeadline(),
                         row.getDeadline()
                 ))
                 .toList();
@@ -187,6 +198,7 @@ public class DashboardServiceImpl implements DashboardService {
                         defaultIfBlank(row.getPriority(), "-"),
                         defaultIfBlank(row.getStatus(), "-"),
                         row.getAssigneeId(),
+                        row.getCreatedAt() != null ? row.getCreatedAt().toLocalDate() : row.getDeadline(),
                         row.getDeadline()
                 ))
                 .toList();
@@ -207,6 +219,7 @@ public class DashboardServiceImpl implements DashboardService {
                         defaultIfBlank(row.getPriority(), "-"),
                         defaultIfBlank(row.getStatus(), "-"),
                         row.getAssigneeId(),
+                        row.getCreatedAt() != null ? row.getCreatedAt().toLocalDate() : row.getDeadline(),
                         row.getDeadline()
                 ))
                 .toList();
@@ -227,6 +240,7 @@ public class DashboardServiceImpl implements DashboardService {
                         "치명적".equals(row.getSeverity()) ? "긴급" : defaultIfBlank(row.getSeverity(), "-"),
                         defaultIfBlank(row.getStatus(), "-"),
                         row.getAssigneeId(),
+                        row.getCreatedAt() != null ? row.getCreatedAt().toLocalDate() : row.getDeadline(),
                         row.getDeadline()
                 ))
                 .toList();
@@ -247,6 +261,7 @@ public class DashboardServiceImpl implements DashboardService {
                         "-",
                         defaultIfBlank(row.getStatus(), "-"),
                         row.getManagerId(),
+                        row.getScheduledAt(),
                         row.getScheduledAt()
                 ))
                 .toList();
@@ -413,6 +428,7 @@ public class DashboardServiceImpl implements DashboardService {
             String priority,
             String status,
             Long assigneeId,
+            LocalDate startDate,
             LocalDate deadline
     ) {
     }

@@ -6,6 +6,7 @@ import java.util.List;
 public record DashboardResponse(
         KpiSummary kpi,
         List<DashboardWorkItem> workRequests,
+        int totalWorkItems,
         List<DashboardCalendarEvent> calendarEvents
 ) {
 
@@ -31,8 +32,9 @@ public record DashboardResponse(
     }
 
     public record DashboardCalendarEvent(
-            String date,
-            int day,
+            Long id,
+            String startDate,
+            String endDate,
             String domain,
             String docNo,
             String title,
