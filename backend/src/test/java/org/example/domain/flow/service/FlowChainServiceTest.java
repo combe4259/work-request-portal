@@ -1,23 +1,30 @@
 package org.example.domain.flow.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.example.domain.defect.entity.Defect;
+import org.example.domain.defect.repository.DefectRepository;
 import org.example.domain.deployment.entity.Deployment;
 import org.example.domain.deployment.repository.DeploymentRelatedRefRepository;
 import org.example.domain.deployment.repository.DeploymentRepository;
+import org.example.domain.flow.dto.FlowChainResponse;
 import org.example.domain.flow.dto.FlowItemCreateRequest;
 import org.example.domain.flow.dto.FlowItemCreateResponse;
 import org.example.domain.flow.dto.FlowUiStateRequest;
 import org.example.domain.flow.entity.FlowUiState;
 import org.example.domain.flow.realtime.FlowUiRealtimeService;
 import org.example.domain.flow.repository.FlowUiStateRepository;
+import org.example.domain.knowledgeBase.repository.KnowledgeBaseArticleRepository;
+import org.example.domain.knowledgeBase.repository.KnowledgeBaseRelatedRefRepository;
 import org.example.domain.techTask.entity.TechTask;
 import org.example.domain.techTask.repository.TechTaskRelatedRefRepository;
 import org.example.domain.techTask.repository.TechTaskRepository;
 import org.example.domain.testScenario.entity.TestScenario;
+import org.example.domain.testScenario.entity.TestScenarioRelatedRef;
 import org.example.domain.testScenario.repository.TestScenarioRelatedRefRepository;
 import org.example.domain.testScenario.repository.TestScenarioRepository;
 import org.example.domain.user.repository.PortalUserRepository;
 import org.example.domain.workRequest.entity.WorkRequest;
+import org.example.domain.workRequest.entity.WorkRequestRelatedRef;
 import org.example.domain.workRequest.repository.WorkRequestRelatedRefRepository;
 import org.example.domain.workRequest.repository.WorkRequestRepository;
 import org.example.global.security.JwtTokenProvider;
@@ -41,6 +48,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -70,6 +78,15 @@ class FlowChainServiceTest {
 
     @Mock
     private DeploymentRelatedRefRepository deploymentRelatedRefRepository;
+
+    @Mock
+    private DefectRepository defectRepository;
+
+    @Mock
+    private KnowledgeBaseArticleRepository knowledgeBaseArticleRepository;
+
+    @Mock
+    private KnowledgeBaseRelatedRefRepository knowledgeBaseRelatedRefRepository;
 
     @Mock
     private FlowUiStateRepository flowUiStateRepository;
@@ -268,6 +285,65 @@ class FlowChainServiceTest {
     }
 
     @Test
+    @DisplayName("직접 연결된 결함은 기존 노드가 있어도 WR 엣지가 포함된다")
+    void getFlowChainIncludesDirectDefectEdgeEvenWhenNodeAlreadyExists() {
+        WorkRequest workRequest = sampleWorkRequest(15L);
+        workRequest.setRequestNo("WR-015");
+        workRequest.setTitle("로그인 개선 요청");
+        workRequest.setStatus("요청");
+        workRequest.setPriority("보통");
+        when(workRequestRepository.findById(15L)).thenReturn(Optional.of(workRequest));
+
+        WorkRequestRelatedRef tsRef = new WorkRequestRelatedRef();
+        tsRef.setWorkRequestId(15L);
+        tsRef.setRefType("TEST_SCENARIO");
+        tsRef.setRefId(1L);
+        tsRef.setSortOrder(0);
+
+        WorkRequestRelatedRef directDefectRef = new WorkRequestRelatedRef();
+        directDefectRef.setWorkRequestId(15L);
+        directDefectRef.setRefType("DEFECT");
+        directDefectRef.setRefId(101L);
+        directDefectRef.setSortOrder(1);
+        when(workRequestRelatedRefRepository.findByWorkRequestIdOrderBySortOrderAscIdAsc(15L))
+                .thenReturn(List.of(tsRef, directDefectRef));
+
+        TestScenario testScenario = new TestScenario();
+        testScenario.setId(1L);
+        testScenario.setScenarioNo("TS-001");
+        testScenario.setTitle("로그인 실패 시나리오");
+        testScenario.setStatus("작성중");
+        testScenario.setPriority("보통");
+        when(testScenarioRepository.findAllById(any())).thenReturn(List.of(testScenario));
+
+        TestScenarioRelatedRef tsDefectRef = new TestScenarioRelatedRef();
+        tsDefectRef.setTestScenarioId(1L);
+        tsDefectRef.setRefType("DEFECT");
+        tsDefectRef.setRefId(101L);
+        when(testScenarioRelatedRefRepository.findByTestScenarioIdOrderByIdAsc(1L))
+                .thenReturn(List.of(tsDefectRef));
+
+        Defect defect = new Defect();
+        defect.setId(101L);
+        defect.setDefectNo("DF-101");
+        defect.setTitle("로그인 실패 결함");
+        defect.setStatus("접수");
+        defect.setSeverity("보통");
+        when(defectRepository.findAllById(any())).thenReturn(List.of(defect));
+
+        when(techTaskRepository.findAllById(any())).thenReturn(List.of());
+        when(deploymentRepository.findAllById(any())).thenReturn(List.of());
+        when(knowledgeBaseArticleRepository.findAllById(any())).thenReturn(List.of());
+        when(portalUserRepository.findAllById(any())).thenReturn(List.of());
+
+        FlowChainResponse response = flowChainService.getFlowChain(15L);
+
+        assertThat(response.edges())
+                .extracting(edge -> edge.source() + "->" + edge.target())
+                .contains("TS-1->DF-101", "WR-15->DF-101");
+    }
+
+    @Test
     @DisplayName("Flow UI 저장은 expectedVersion이 다르면 409")
     void saveFlowUiStateRejectsVersionConflict() {
         TeamRequestContext.set(2L, 10L);
@@ -312,11 +388,38 @@ class FlowChainServiceTest {
         existing.setStateJson("{}");
         when(flowUiStateRepository.findByWorkRequestIdAndUserId(15L, 2L)).thenReturn(Optional.of(existing));
         when(objectMapper.writeValueAsString(any())).thenReturn("{\"positions\":{}}");
+        when(flowUiStateRepository.updateStateWithVersion(
+                15L, 2L, 10L, "{\"positions\":{}}", 0L, 1L
+        )).thenReturn(1);
 
         FlowUiStateRequest request = new FlowUiStateRequest(
                 0L,
                 Map.of("WR-15", new FlowUiStateRequest.FlowUiPosition(12.5, 33.0)),
                 List.of(new FlowUiStateRequest.FlowUiEdge("edge-a", "WR-15", "TT-1")),
+                List.of()
+        );
+
+        flowChainService.saveFlowUiState(15L, request);
+
+        verify(flowUiStateRepository).updateStateWithVersion(
+                15L, 2L, 10L, "{\"positions\":{}}", 0L, 1L
+        );
+        verify(flowUiStateRepository, never()).save(any(FlowUiState.class));
+        verify(flowUiRealtimeService).publishUpdated(15L, 2L);
+    }
+
+    @Test
+    @DisplayName("Flow UI 저장 시 기존 레코드가 없으면 version=1로 신규 저장한다")
+    void saveFlowUiStateCreatesRowWhenMissing() throws Exception {
+        TeamRequestContext.set(2L, 10L);
+        when(workRequestRepository.findById(15L)).thenReturn(Optional.of(sampleWorkRequest(15L)));
+        when(flowUiStateRepository.findByWorkRequestIdAndUserId(15L, 2L)).thenReturn(Optional.empty());
+        when(objectMapper.writeValueAsString(any())).thenReturn("{\"positions\":{}}");
+
+        FlowUiStateRequest request = new FlowUiStateRequest(
+                0L,
+                Map.of("WR-15", new FlowUiStateRequest.FlowUiPosition(10, 20)),
+                List.of(),
                 List.of()
         );
 
@@ -330,6 +433,41 @@ class FlowChainServiceTest {
         assertThat(saved.getUserId()).isEqualTo(2L);
         assertThat(saved.getTeamId()).isEqualTo(10L);
         verify(flowUiRealtimeService).publishUpdated(15L, 2L);
+    }
+
+    @Test
+    @DisplayName("Flow UI 저장 시 조건부 업데이트 실패는 409를 반환한다")
+    void saveFlowUiStateRejectsWhenConditionalUpdateFails() throws Exception {
+        TeamRequestContext.set(2L, 10L);
+        when(workRequestRepository.findById(15L)).thenReturn(Optional.of(sampleWorkRequest(15L)));
+
+        FlowUiState existing = new FlowUiState();
+        existing.setId(1L);
+        existing.setWorkRequestId(15L);
+        existing.setUserId(2L);
+        existing.setTeamId(10L);
+        existing.setVersion(0L);
+        existing.setStateJson("{}");
+        when(flowUiStateRepository.findByWorkRequestIdAndUserId(15L, 2L)).thenReturn(Optional.of(existing));
+        when(objectMapper.writeValueAsString(any())).thenReturn("{\"positions\":{}}");
+        when(flowUiStateRepository.updateStateWithVersion(
+                15L, 2L, 10L, "{\"positions\":{}}", 0L, 1L
+        )).thenReturn(0);
+
+        FlowUiStateRequest request = new FlowUiStateRequest(
+                0L,
+                Map.of("WR-15", new FlowUiStateRequest.FlowUiPosition(10, 20)),
+                List.of(),
+                List.of()
+        );
+
+        assertThatThrownBy(() -> flowChainService.saveFlowUiState(15L, request))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(ex -> {
+                    ResponseStatusException statusEx = (ResponseStatusException) ex;
+                    assertThat(statusEx.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+                });
+        verify(flowUiRealtimeService, never()).publishUpdated(any(), any());
     }
 
     private WorkRequest sampleWorkRequest(Long id) {

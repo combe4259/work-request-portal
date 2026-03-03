@@ -41,8 +41,8 @@ import { DefectTypeBadge, SeverityBadge, DefectStatusBadge } from '@/components/
 import { DeployTypeBadge, DeployEnvBadge, DeployStatusBadge } from '@/components/deployment/Badges'
 import { listAttachments } from '@/features/attachment/service'
 import { getFlowChain, getFlowUiState, createFlowItem, saveFlowUiState } from '@/features/flow/service'
-import { createDefect, getDefect } from '@/features/defect/service'
-import { createKnowledgeBaseArticle, getKnowledgeBaseArticle } from '@/features/knowledge-base/service'
+import { getDefect } from '@/features/defect/service'
+import { getKnowledgeBaseArticle } from '@/features/knowledge-base/service'
 import { getWorkRequest, listWorkRequestRelatedRefs } from '@/features/work-request/service'
 import { getTechTask, listTechTaskPrLinks, listTechTaskRelatedRefs } from '@/features/tech-task/service'
 import { getTestScenario, listTestScenarioRelatedRefs } from '@/features/test-scenario/service'
@@ -59,6 +59,7 @@ import type {
   FlowNode,
   FlowNodeType,
   FlowItemType,
+  FlowParentType,
   FlowUiState,
   FlowUiCustomNode,
   FlowUiStateSaveRequest,
@@ -120,14 +121,94 @@ type FlowNodeCardData = FlowNode & Record<string, unknown> & {
   draftError?: string
   onDraftTitleChange?: (id: string, value: string) => void
   onDraftTitleCommit?: (id: string) => void
+  draftParentNodeId?: string
+  draftParentType?: string
+  draftParentEntityId?: number
 }
 
-const PALETTE_ITEMS: Array<{ type: PaletteNodeType; label: string; colorClass: string }> = [
-  { type: 'TECH_TASK', label: '기술과제', colorClass: 'border-indigo-200 text-indigo-700 hover:bg-indigo-50' },
-  { type: 'TEST_SCENARIO', label: '테스트 시나리오', colorClass: 'border-emerald-200 text-emerald-700 hover:bg-emerald-50' },
-  { type: 'DEFECT', label: '결함 목록', colorClass: 'border-rose-200 text-rose-700 hover:bg-rose-50' },
-  { type: 'DEPLOYMENT', label: '배포 관리', colorClass: 'border-orange-200 text-orange-700 hover:bg-orange-50' },
-  { type: 'KNOWLEDGE_BASE', label: '지식 베이스', colorClass: 'border-cyan-200 text-cyan-700 hover:bg-cyan-50' },
+const PALETTE_ITEMS: Array<{
+  type: PaletteNodeType
+  label: string
+  desc: string
+  bg: string
+  border: string
+  iconBg: string
+  textColor: string
+  icon: React.ReactNode
+}> = [
+  {
+    type: 'TECH_TASK',
+    label: '기술과제',
+    desc: 'TECH',
+    bg: 'bg-indigo-50/50 hover:bg-indigo-50',
+    border: 'border-indigo-200',
+    iconBg: 'bg-indigo-100',
+    textColor: 'text-indigo-700',
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M2 4.5L6.5 2l4.5 2.5M2 4.5v5L6.5 12l4.5-2.5V4.5M2 4.5L6.5 7l4.5-2.5M6.5 7v5" stroke="#6366F1" strokeWidth="1.4" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  {
+    type: 'TEST_SCENARIO',
+    label: '테스트 시나리오',
+    desc: 'TEST',
+    bg: 'bg-emerald-50/50 hover:bg-emerald-50',
+    border: 'border-emerald-200',
+    iconBg: 'bg-emerald-100',
+    textColor: 'text-emerald-700',
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <circle cx="7" cy="7" r="5" stroke="#10B981" strokeWidth="1.4" />
+        <path d="M4.5 7l2 2 3-3.5" stroke="#10B981" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  {
+    type: 'DEFECT',
+    label: '결함',
+    desc: 'DEFECT',
+    bg: 'bg-rose-50/50 hover:bg-rose-50',
+    border: 'border-rose-200',
+    iconBg: 'bg-rose-100',
+    textColor: 'text-rose-700',
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M7 2.2l3.7 2.1v4.2L7 10.6 3.3 8.5V4.3L7 2.2z" stroke="#E11D48" strokeWidth="1.3" />
+        <path d="M7 4.8v2.1M7 8.6h.01" stroke="#E11D48" strokeWidth="1.3" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
+    type: 'DEPLOYMENT',
+    label: '배포 관리',
+    desc: 'DEPLOY',
+    bg: 'bg-orange-50/50 hover:bg-orange-50',
+    border: 'border-orange-200',
+    iconBg: 'bg-orange-100',
+    textColor: 'text-orange-700',
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M7 1.5v7M4.5 6L7 8.5 9.5 6" stroke="#F97316" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M2 10.5h10" stroke="#F97316" strokeWidth="1.4" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
+    type: 'KNOWLEDGE_BASE',
+    label: '지식 베이스',
+    desc: 'KB',
+    bg: 'bg-cyan-50/50 hover:bg-cyan-50',
+    border: 'border-cyan-200',
+    iconBg: 'bg-cyan-100',
+    textColor: 'text-cyan-700',
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M3 2.5h6.5a1 1 0 011 1V11l-2-1.2L6.5 11 4.5 9.8 3 11V2.5z" stroke="#0891B2" strokeWidth="1.3" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
 ]
 
 function parseWorkRequestId(search: string): number | null {
@@ -232,12 +313,20 @@ function canLinkNode(sourceType: FlowNodeType, targetType: FlowNodeType): boolea
       || targetType === 'KNOWLEDGE_BASE'
     )
   }
+  if (sourceType === 'TEST_SCENARIO') {
+    return targetType === 'DEFECT' || targetType === 'KNOWLEDGE_BASE'
+  }
   return false
 }
 
-function isFlowItemType(type: FlowNodeType): type is FlowItemType {
-  return type === 'TECH_TASK' || type === 'TEST_SCENARIO' || type === 'DEPLOYMENT'
+const PREFERRED_PARENT: Record<PaletteNodeType, FlowNodeType[]> = {
+  TECH_TASK:      ['WORK_REQUEST'],
+  TEST_SCENARIO:  ['TECH_TASK', 'WORK_REQUEST'],
+  DEFECT:         ['TEST_SCENARIO', 'TECH_TASK', 'WORK_REQUEST'],
+  DEPLOYMENT:     ['TECH_TASK', 'WORK_REQUEST'],
+  KNOWLEDGE_BASE: ['TEST_SCENARIO', 'TECH_TASK', 'WORK_REQUEST'],
 }
+
 
 function isPaletteNodeType(value: string): value is PaletteNodeType {
   return value === 'TECH_TASK'
@@ -247,11 +336,6 @@ function isPaletteNodeType(value: string): value is PaletteNodeType {
     || value === 'KNOWLEDGE_BASE'
 }
 
-function getDateAfterDays(days: number): string {
-  const date = new Date()
-  date.setDate(date.getDate() + days)
-  return date.toISOString().slice(0, 10)
-}
 
 function extractApiErrorMessage(error: unknown, fallback: string): string {
   if (typeof error !== 'object' || error == null) {
@@ -523,10 +607,14 @@ export default function WorkRequestFlowPage() {
   const hasUnsavedDraftRef = useRef(false)
   const leaveConfirmIntentRef = useRef<'leave' | null>(null)
   const selectedNodeIdRef = useRef<string | null>(null)
+  const selectedWorkRequestIdRef = useRef<number | null>(selectedWorkRequestId)
+  selectedWorkRequestIdRef.current = selectedWorkRequestId
   const stompClientRef = useRef<Client | null>(null)
   const drawerResizeStartRef = useRef<{ clientX: number; width: number } | null>(null)
   const draftCommitHandlerRef = useRef<(draftNodeId: string) => void>(() => undefined)
   const currentUser = useAuthStore((state) => state.user)
+  const accessToken = useAuthStore((state) => state.token)
+  const currentTeam = useAuthStore((state) => state.currentTeam)
 
   const workRequestListQuery = useWorkRequestsQuery(FLOW_LIST_PARAMS)
   const workRequests = useMemo(() => workRequestListQuery.data?.items ?? [], [workRequestListQuery.data])
@@ -684,10 +772,10 @@ export default function WorkRequestFlowPage() {
 
   useEffect(() => {
     const queryId = parseWorkRequestId(location.search)
-    if (queryId && queryId !== selectedWorkRequestId) {
+    if (queryId && queryId !== selectedWorkRequestIdRef.current) {
       setSelectedWorkRequestId(queryId)
     }
-  }, [location.search, selectedWorkRequestId])
+  }, [location.search])
 
   useEffect(() => {
     if (workRequests.length === 0) {
@@ -748,6 +836,8 @@ export default function WorkRequestFlowPage() {
     }
 
     setIsLoadingFlow(true)
+    setNodes([])
+    setEdges([])
     setFlowError('')
     let cancelled = false
 
@@ -790,10 +880,17 @@ export default function WorkRequestFlowPage() {
     if (!selectedWorkRequestId) {
       return
     }
+    if (!accessToken || !currentTeam?.id) {
+      return
+    }
 
     let cancelled = false
     const client = new Client({
       webSocketFactory: () => new SockJS(WS_ENDPOINT),
+      connectHeaders: {
+        Authorization: `Bearer ${accessToken}`,
+        'X-Team-Id': String(currentTeam.id),
+      },
       reconnectDelay: 3000,
       debug: () => undefined,
     })
@@ -862,7 +959,7 @@ export default function WorkRequestFlowPage() {
         stompClientRef.current = null
       }
     }
-  }, [closeDrawer, currentUser, selectedWorkRequestId, setFlowFromApiData])
+  }, [accessToken, closeDrawer, currentTeam?.id, currentUser, selectedWorkRequestId, setFlowFromApiData])
 
   useEffect(() => {
     if (!selectedEdgeId) {
@@ -1125,12 +1222,27 @@ export default function WorkRequestFlowPage() {
     }
 
     const rootId = `WR-${selectedWorkRequestId}`
-    const rootPosition = positionsRef.current[rootId] ?? { x: 0, y: 0 }
     const id = `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 
+    // 선택된 노드가 이 타입의 적합한 부모면 그 아래에, 아니면 루트(업무요청) 아래에 연결
+    const selectedData = selectedNodeId ? nodeDataById.get(selectedNodeId) : null
+    const preferredParents = PREFERRED_PARENT[paletteType]
+    const useSelectedAsParent = Boolean(
+      selectedData
+      && selectedNodeId !== rootId
+      && preferredParents[0] !== 'WORK_REQUEST'  // WR preferred → skip selected shortcut
+      && canLinkNode(selectedData.nodeType, paletteType)
+    )
+    const parentId = useSelectedAsParent ? selectedNodeId! : rootId
+    const parentNodeType = useSelectedAsParent ? selectedData!.nodeType : 'WORK_REQUEST'
+    const parentEntityId: number = useSelectedAsParent
+      ? (selectedData!.entityId ?? selectedWorkRequestId)
+      : selectedWorkRequestId
+    const parentPos = positionsRef.current[parentId] ?? { x: 0, y: 0 }
+
     const nextPosition = position ?? {
-      x: rootPosition.x + 320 + Math.floor(Math.random() * 70),
-      y: rootPosition.y + 100 + Math.floor(Math.random() * 90),
+      x: parentPos.x + 280 + Math.floor(Math.random() * 60),
+      y: parentPos.y + 90 + Math.floor(Math.random() * 60),
     }
 
     const draftFlowNode: FlowNode = {
@@ -1157,6 +1269,9 @@ export default function WorkRequestFlowPage() {
           draftTitle: '',
           draftError: '',
           isSavingDraft: false,
+          draftParentNodeId: parentId,
+          draftParentType: parentNodeType,
+          draftParentEntityId: parentEntityId,
           onDraftTitleChange: handleDraftTitleChange,
           onDraftTitleCommit: (draftNodeId: string) => {
             draftCommitHandlerRef.current(draftNodeId)
@@ -1165,17 +1280,21 @@ export default function WorkRequestFlowPage() {
       },
     ]))
 
-    if (nodeDataById.has(rootId) && canLinkNode('WORK_REQUEST', paletteType)) {
-      const edgeId = `edge-draft-${rootId}-${id}`
-      setEdges((prev) => [...prev, toFlowEdge(edgeId, rootId, id)])
+    if (nodeDataById.has(parentId) && canLinkNode(parentNodeType, paletteType)) {
+      const edgeId = `edge-draft-${parentId}-${id}`
+      setEdges((prev) => [...prev, toFlowEdge(edgeId, parentId, id)])
     }
 
     positionsRef.current[id] = nextPosition
     setSelectedNodeId(id)
     setSelectedEdgeId(null)
     closeDrawer()
-    setNotice('카드가 추가되었습니다. 제목을 입력해 저장하세요.')
-  }, [buildCardData, closeDrawer, handleDraftTitleChange, nodeDataById, selectedWorkRequestId, setEdges, setNodes])
+
+    const parentLabel = useSelectedAsParent
+      ? (selectedData?.title || selectedData?.docNo || '선택된 카드')
+      : '업무요청'
+    setNotice(`"${parentLabel}" 아래에 카드가 추가됐습니다. 제목을 입력해 저장하세요.`)
+  }, [buildCardData, closeDrawer, handleDraftTitleChange, nodeDataById, selectedNodeId, selectedWorkRequestId, setEdges, setNodes])
 
   const handleDraftTitleCommit = useCallback(async (draftNodeId: string) => {
     if (!selectedWorkRequestId) {
@@ -1209,82 +1328,27 @@ export default function WorkRequestFlowPage() {
     )))
 
     try {
-      let createdFlowNode: FlowNode
-      let createdNodeId: string
+      const parentType = (draftData.draftParentType ?? 'WORK_REQUEST') as FlowParentType
+      const parentEntityId = draftData.draftParentEntityId ?? selectedWorkRequestId
 
-      if (isFlowItemType(draftData.nodeType)) {
-        const result = await createFlowItem(selectedWorkRequestId, {
-          parentType: 'WORK_REQUEST',
-          parentId: selectedWorkRequestId,
-          itemType: draftData.nodeType,
-          title,
-        })
+      const result = await createFlowItem(selectedWorkRequestId, {
+        parentType,
+        parentId: parentEntityId,
+        itemType: draftData.nodeType as FlowItemType,
+        title,
+      })
 
-        createdNodeId = result.nodeId
-        createdFlowNode = {
-          id: result.nodeId,
-          entityId: result.entityId,
-          nodeType: result.nodeType,
-          docNo: result.docNo,
-          title: result.title,
-          status: result.status,
-          priority: null,
-          assigneeName: null,
-          version: null,
-        }
-      } else if (draftData.nodeType === 'DEFECT') {
-        const defect = await createDefect({
-          title,
-          type: '기능',
-          severity: '보통',
-          deadline: getDateAfterDays(7),
-          expectedBehavior: '기대 동작을 입력하세요.',
-          actualBehavior: '실제 동작을 입력하세요.',
-          relatedDoc: `WR-${selectedWorkRequestId}`,
-          reproductionSteps: [],
-        })
-
-        createdNodeId = `DF-${defect.id}`
-        createdFlowNode = {
-          id: createdNodeId,
-          entityId: Number(defect.id),
-          nodeType: 'DEFECT',
-          docNo: defect.docNo,
-          title: defect.title,
-          status: defect.status,
-          priority: null,
-          assigneeName: defect.assignee,
-          version: null,
-        }
-      } else {
-        const auth = useAuthStore.getState()
-        if (!auth.user) {
-          throw new Error('로그인 사용자 정보를 찾을 수 없습니다.')
-        }
-
-        const created = await createKnowledgeBaseArticle({
-          title,
-          category: '기타',
-          tags: [],
-          summary: title,
-          content: `# ${title}\n\n초안 문서입니다.`,
-          authorId: auth.user.id,
-          relatedDocs: [`WR-${selectedWorkRequestId}`],
-        })
-        const detail = await getKnowledgeBaseArticle(created.id)
-
-        createdNodeId = `KB-${detail.id}`
-        createdFlowNode = {
-          id: createdNodeId,
-          entityId: Number(detail.id),
-          nodeType: 'KNOWLEDGE_BASE',
-          docNo: detail.docNo,
-          title: detail.title,
-          status: '완료',
-          priority: null,
-          assigneeName: detail.author,
-          version: null,
-        }
+      const createdNodeId: string = result.nodeId
+      const createdFlowNode: FlowNode = {
+        id: result.nodeId,
+        entityId: result.entityId,
+        nodeType: result.nodeType,
+        docNo: result.docNo,
+        title: result.title,
+        status: result.status,
+        priority: null,
+        assigneeName: null,
+        version: null,
       }
 
       const createdPosition = draftNode.position
@@ -1591,7 +1655,7 @@ export default function WorkRequestFlowPage() {
 
   return (
     <div className="p-5 space-y-4">
-      <div className="bg-white rounded-2xl border border-blue-100 shadow-[0_4px_24px_rgba(30,58,138,0.08)] px-4 py-3 flex items-start gap-3">
+      <div className="bg-white rounded-2xl border border-blue-100 shadow-[0_4px_24px_rgba(30,58,138,0.08)] px-4 py-3 flex items-center gap-3">
         <div className="min-w-[300px]">
           <p className="text-[11px] text-gray-500 font-semibold mb-1">기준 업무요청</p>
           <select
@@ -1605,23 +1669,7 @@ export default function WorkRequestFlowPage() {
           </select>
         </div>
 
-        <div className="flex-1">
-          <p className="text-[11px] text-gray-500 font-semibold mb-1 text-center">카드 팔레트 (클릭 또는 드래그)</p>
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            {PALETTE_ITEMS.map((item) => (
-              <button
-                key={item.type}
-                type="button"
-                draggable
-                onDragStart={(event) => handlePaletteDragStart(event, item.type)}
-                onClick={() => createDraftNode(item.type)}
-                className={`h-8 px-3 rounded-lg border text-[12px] font-semibold transition-colors ${item.colorClass}`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        <div className="flex-1" />
 
         <div className="flex items-center gap-2">
           <button
@@ -1647,20 +1695,44 @@ export default function WorkRequestFlowPage() {
         </div>
       </div>
 
-      <section className="bg-white rounded-2xl border border-blue-100 shadow-[0_4px_24px_rgba(30,58,138,0.08)] overflow-hidden min-h-[760px]">
-        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-          <div>
+      <section className="bg-white rounded-2xl border border-blue-100 shadow-[0_4px_24px_rgba(30,58,138,0.08)] overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-4">
+          <div className="min-w-0">
             <p className="text-[14px] font-semibold text-gray-800">워크플로우 다이어그램</p>
-            <p className="text-[11px] text-gray-500 mt-0.5">카드 제목을 인라인으로 입력해 문서를 생성하고, 카드 클릭 시 우측 상세 패널에서 내용을 확인할 수 있습니다.</p>
-            <p className="text-[10px] text-blue-500 mt-0.5">저장되지 않은 초안이 있으면 페이지 이탈 시 경고됩니다.</p>
+            <p className="text-[11px] text-gray-500 mt-0.5">카드를 클릭해 우측 패널에서 확인하거나, 아래 팔레트에서 드래그/클릭으로 문서를 추가하세요.</p>
           </div>
-          <div className="flex items-center gap-2 text-[10px] text-gray-400">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-300 inline-block" />업무요청</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-300 inline-block" />기술과제</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-300 inline-block" />테스트</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-300 inline-block" />결함</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-300 inline-block" />배포</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-cyan-300 inline-block" />지식</span>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap mr-0.5">추가</span>
+            {PALETTE_ITEMS.map((item) => (
+              <button
+                key={item.type}
+                type="button"
+                draggable
+                onDragStart={(event) => handlePaletteDragStart(event, item.type)}
+                onClick={() => createDraftNode(item.type)}
+                title={`${item.label} 추가`}
+                className={`group w-[96px] flex items-center gap-1.5 px-2 py-1.5 rounded-lg border transition-all cursor-grab active:cursor-grabbing hover:shadow-sm active:scale-95 ${item.bg} ${item.border}`}
+              >
+                <div className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 ${item.iconBg}`}>
+                  {item.icon}
+                </div>
+                <span className={`text-[10px] font-semibold flex-1 truncate ${item.textColor}`}>{item.label}</span>
+                <div className="flex flex-col gap-[2px] opacity-25 group-hover:opacity-50 transition-opacity flex-shrink-0">
+                  <div className="flex gap-[2px]">
+                    <div className="w-[2.5px] h-[2.5px] rounded-full bg-gray-500" />
+                    <div className="w-[2.5px] h-[2.5px] rounded-full bg-gray-500" />
+                  </div>
+                  <div className="flex gap-[2px]">
+                    <div className="w-[2.5px] h-[2.5px] rounded-full bg-gray-500" />
+                    <div className="w-[2.5px] h-[2.5px] rounded-full bg-gray-500" />
+                  </div>
+                  <div className="flex gap-[2px]">
+                    <div className="w-[2.5px] h-[2.5px] rounded-full bg-gray-500" />
+                    <div className="w-[2.5px] h-[2.5px] rounded-full bg-gray-500" />
+                  </div>
+                </div>
+              </button>
+            ))}
           </div>
         </div>
 
@@ -1670,7 +1742,7 @@ export default function WorkRequestFlowPage() {
           </div>
         ) : null}
 
-        <div className="h-[690px]">
+        <div className="h-[520px]">
           {isLoadingFlow ? (
             <div className="h-full flex items-center justify-center text-[13px] text-gray-400">플로우를 불러오는 중...</div>
           ) : flowError ? (

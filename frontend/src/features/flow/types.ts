@@ -5,8 +5,8 @@ export type FlowNodeType =
   | 'DEPLOYMENT'
   | 'DEFECT'
   | 'KNOWLEDGE_BASE'
-export type FlowParentType = 'WORK_REQUEST' | 'TECH_TASK'
-export type FlowItemType = 'TECH_TASK' | 'TEST_SCENARIO' | 'DEPLOYMENT'
+export type FlowParentType = 'WORK_REQUEST' | 'TECH_TASK' | 'TEST_SCENARIO'
+export type FlowItemType = 'TECH_TASK' | 'TEST_SCENARIO' | 'DEPLOYMENT' | 'DEFECT' | 'KNOWLEDGE_BASE'
 export type FlowUiCustomNodeType = 'DEFECT' | 'KNOWLEDGE_BASE'
 
 export interface FlowNode {

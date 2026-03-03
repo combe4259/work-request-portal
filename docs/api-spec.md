@@ -79,6 +79,8 @@ Auth/Team 응답 필드:
 Workflow 실시간 동기화(STOMP):
 - `SUBSCRIBE /topic/work-requests/{workRequestId}/flow-ui`
 - `PUT /work-requests/{workRequestId}/flow-ui` 성공 시 변경 이벤트가 브로드캐스트된다.
+- `CONNECT` 시 헤더 `Authorization: Bearer <token>`, `X-Team-Id: <teamId>`를 전달해야 한다.
+- `SUBSCRIBE` 시 구독 대상 업무요청의 `teamId`와 연결 헤더의 팀 정보가 다르면 거부된다.
 
 Workflow 동시편집 규약(낙관적 락):
 - 클라이언트는 `GET flow-ui` 응답의 `version`을 보관한다.

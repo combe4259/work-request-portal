@@ -5,6 +5,8 @@ import org.example.domain.defect.repository.DefectRepository;
 import org.example.domain.deployment.entity.Deployment;
 import org.example.domain.deployment.repository.DeploymentRepository;
 import org.example.domain.statistics.dto.StatisticsResponse;
+import org.example.domain.techTask.repository.TechTaskRepository;
+import org.example.domain.testScenario.repository.TestScenarioRepository;
 import org.example.domain.user.entity.PortalUser;
 import org.example.domain.user.repository.PortalUserRepository;
 import org.example.domain.workRequest.entity.WorkRequest;
@@ -30,6 +32,12 @@ class StatisticsServiceImplTest {
     private WorkRequestRepository workRequestRepository;
 
     @Mock
+    private TechTaskRepository techTaskRepository;
+
+    @Mock
+    private TestScenarioRepository testScenarioRepository;
+
+    @Mock
     private DefectRepository defectRepository;
 
     @Mock
@@ -42,7 +50,7 @@ class StatisticsServiceImplTest {
     private StatisticsServiceImpl statisticsService;
 
     @Test
-    @DisplayName("통계 조회 시 KPI/분포/상태 집계를 반환한다")
+    @DisplayName("통계 조회 시 KPI/번다운/상태스냅샷/심각도/팀원통계를 반환한다")
     void getStatistics() {
         WorkRequest inProgress = workRequest(1L, 10L, "기능개선", "개발중", 2L, LocalDateTime.now().minusDays(1), null, null);
         WorkRequest done = workRequest(2L, 10L, "신규개발", "완료", 3L, LocalDateTime.now().minusDays(6), LocalDateTime.now().minusDays(5), LocalDateTime.now().minusDays(2));
@@ -50,46 +58,47 @@ class StatisticsServiceImplTest {
 
         Defect openDefect = defect(1L, 10L, "치명적", "분석중", LocalDateTime.now().minusDays(2));
         Defect doneDefect = defect(2L, 10L, "낮음", "완료", LocalDateTime.now().minusDays(1));
-        Defect otherTeamDefect = defect(3L, 20L, "높음", "분석중", LocalDateTime.now().minusDays(1));
+        Defect otherTeamDefect = defect(3L, 20L, "높음", "분析중", LocalDateTime.now().minusDays(1));
 
         Deployment deploy = deployment(1L, 10L, LocalDateTime.now().minusDays(3));
         Deployment otherTeamDeploy = deployment(2L, 20L, LocalDateTime.now().minusDays(3));
 
         when(workRequestRepository.findAll()).thenReturn(List.of(inProgress, done, otherTeam));
+        when(techTaskRepository.findAll()).thenReturn(List.of());
+        when(testScenarioRepository.findAll()).thenReturn(List.of());
         when(defectRepository.findAll()).thenReturn(List.of(openDefect, doneDefect, otherTeamDefect));
         when(deploymentRepository.findAll()).thenReturn(List.of(deploy, otherTeamDeploy));
         when(portalUserRepository.findAllById(List.of(2L, 3L))).thenReturn(List.of(user(2L, "김개발"), user(3L, "이설계")));
 
-        StatisticsResponse response = statisticsService.getStatistics(10L);
+        StatisticsResponse response = statisticsService.getStatistics(10L, 30);
 
-        assertThat(response.kpi().totalRequests()).isEqualTo(2);
-        assertThat(response.kpi().completionRate()).isEqualTo(50);
-        assertThat(response.kpi().averageProcessingDays()).isEqualTo(3.0);
-        assertThat(response.kpi().unresolvedDefects()).isEqualTo(1);
+        // KPI: teamId=10 items — inProgress(WR), openDefect, deploy = 3 incomplete
+        assertThat(response.kpi().incompleteCount()).isEqualTo(3);
+        assertThat(response.kpi().overdueCount()).isEqualTo(0);
+        // done(WR, completedAt=now-2d) + doneDefect(resolvedAt=null→today) = 2 this month
+        assertThat(response.kpi().completedThisMonth()).isEqualTo(2);
+        // done: 4 days, doneDefect: 1 day → avg 2.5
+        assertThat(response.kpi().averageProcessingDays()).isEqualTo(2.5);
 
-        assertThat(response.weeklyTrend()).hasSize(8);
-        assertThat(response.weeklyTrend().stream().mapToInt(StatisticsResponse.WeeklyTrendItem::wr).sum()).isEqualTo(2);
-        assertThat(response.weeklyTrend().stream().mapToInt(StatisticsResponse.WeeklyTrendItem::defect).sum()).isEqualTo(2);
-        assertThat(response.weeklyTrend().stream().mapToInt(StatisticsResponse.WeeklyTrendItem::deploy).sum()).isEqualTo(1);
+        // burndown: 30 daily data points
+        assertThat(response.burndown()).hasSize(30);
 
-        assertThat(response.typeDistribution()).contains(
-                new StatisticsResponse.TypeDistributionItem("신규개발", 1),
-                new StatisticsResponse.TypeDistributionItem("기능개선", 1)
-        );
-
+        // defectSeverity: 치명적=1 (openDefect), 낮음=1 (doneDefect) for teamId=10
         assertThat(response.defectSeverity()).contains(
                 new StatisticsResponse.DefectSeverityItem("치명적", 1),
                 new StatisticsResponse.DefectSeverityItem("낮음", 1)
         );
 
+        // memberStats: 김개발(id=2) — inProgress WR=in-progress; 이설계(id=3) — done WR=done
         assertThat(response.memberStats()).contains(
                 new StatisticsResponse.MemberStatItem("김개발", 0, 1),
                 new StatisticsResponse.MemberStatItem("이설계", 1, 0)
         );
 
-        assertThat(response.statusFlow()).contains(
-                new StatisticsResponse.StatusFlowItem("개발중", 1),
-                new StatisticsResponse.StatusFlowItem("완료", 1)
+        // statusSnapshot: 개발중=2 (inProgress WR + openDefect), 완료=2 (done WR + doneDefect)
+        assertThat(response.statusSnapshot()).contains(
+                new StatisticsResponse.StatusSnapshotItem("개발중", 2),
+                new StatisticsResponse.StatusSnapshotItem("완료", 2)
         );
     }
 
