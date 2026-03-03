@@ -546,14 +546,16 @@ public class TestScenarioServiceImpl implements TestScenarioService {
             return;
         }
 
-        notificationEventService.create(
-                entity.getCreatedBy(),
-                "상태변경",
-                "테스트 시나리오 상태 변경",
-                entity.getScenarioNo() + " 상태가 '" + currentStatus + "'(으)로 변경되었습니다.",
-                REF_TYPE_TEST_SCENARIO,
-                entity.getId()
-        );
+        String message = entity.getScenarioNo() + " 상태가 '" + currentStatus + "'(으)로 변경되었습니다.";
+
+        // 작성자 알림
+        notificationEventService.create(entity.getCreatedBy(), "상태변경", "테스트 시나리오 상태 변경", message, REF_TYPE_TEST_SCENARIO, entity.getId());
+
+        // 담당자가 작성자와 다를 경우 추가 알림
+        Long assigneeId = entity.getAssigneeId();
+        if (assigneeId != null && !assigneeId.equals(entity.getCreatedBy())) {
+            notificationEventService.create(assigneeId, "상태변경", "테스트 시나리오 상태 변경", message, REF_TYPE_TEST_SCENARIO, entity.getId());
+        }
     }
 
     private void recordCreated(TestScenario entity) {

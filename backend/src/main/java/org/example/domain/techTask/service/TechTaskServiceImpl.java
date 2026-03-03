@@ -457,14 +457,16 @@ public class TechTaskServiceImpl implements TechTaskService {
             return;
         }
 
-        notificationEventService.create(
-                entity.getRegistrantId(),
-                "상태변경",
-                "기술과제 상태 변경",
-                entity.getTaskNo() + " 상태가 '" + currentStatus + "'(으)로 변경되었습니다.",
-                REF_TYPE_TECH_TASK,
-                entity.getId()
-        );
+        String message = entity.getTaskNo() + " 상태가 '" + currentStatus + "'(으)로 변경되었습니다.";
+
+        // 등록자 알림
+        notificationEventService.create(entity.getRegistrantId(), "상태변경", "기술과제 상태 변경", message, REF_TYPE_TECH_TASK, entity.getId());
+
+        // 담당자가 등록자와 다를 경우 추가 알림
+        Long assigneeId = entity.getAssigneeId();
+        if (assigneeId != null && !assigneeId.equals(entity.getRegistrantId())) {
+            notificationEventService.create(assigneeId, "상태변경", "기술과제 상태 변경", message, REF_TYPE_TECH_TASK, entity.getId());
+        }
     }
 
     private void recordCreated(TechTask entity) {

@@ -127,7 +127,7 @@ public class SlackNotificationService {
             case "TEST_SCENARIO" -> "/test-scenarios/";
             case "DEFECT"        -> "/defects/";
             case "DEPLOYMENT"    -> "/deployments/";
-            case "IDEA"          -> "/ideas/";
+            case "PROJECT_IDEA"  -> "/ideas/";
             case "MEETING_NOTE"  -> "/meeting-notes/";
             default              -> null;
         };

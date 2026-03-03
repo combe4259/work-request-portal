@@ -348,14 +348,16 @@ public class DefectServiceImpl implements DefectService {
             return;
         }
 
-        notificationEventService.create(
-                entity.getReporterId(),
-                "상태변경",
-                "결함 상태 변경",
-                entity.getDefectNo() + " 상태가 '" + currentStatus + "'(으)로 변경되었습니다.",
-                REF_TYPE_DEFECT,
-                entity.getId()
-        );
+        String message = entity.getDefectNo() + " 상태가 '" + currentStatus + "'(으)로 변경되었습니다.";
+
+        // 보고자 알림
+        notificationEventService.create(entity.getReporterId(), "상태변경", "결함 상태 변경", message, REF_TYPE_DEFECT, entity.getId());
+
+        // 담당자가 보고자와 다를 경우 추가 알림
+        Long assigneeId = entity.getAssigneeId();
+        if (assigneeId != null && !assigneeId.equals(entity.getReporterId())) {
+            notificationEventService.create(assigneeId, "상태변경", "결함 상태 변경", message, REF_TYPE_DEFECT, entity.getId());
+        }
     }
 
     private void recordCreated(Defect entity) {

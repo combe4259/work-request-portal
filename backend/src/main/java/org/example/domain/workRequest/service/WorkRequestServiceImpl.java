@@ -411,14 +411,16 @@ public class WorkRequestServiceImpl implements WorkRequestService {
             return;
         }
 
-        notificationEventService.create(
-                entity.getRequesterId(),
-                "상태변경",
-                "업무요청 상태 변경",
-                entity.getRequestNo() + " 상태가 '" + currentStatus + "'(으)로 변경되었습니다.",
-                REF_TYPE_WORK_REQUEST,
-                entity.getId()
-        );
+        String message = entity.getRequestNo() + " 상태가 '" + currentStatus + "'(으)로 변경되었습니다.";
+
+        // 요청자 알림
+        notificationEventService.create(entity.getRequesterId(), "상태변경", "업무요청 상태 변경", message, REF_TYPE_WORK_REQUEST, entity.getId());
+
+        // 담당자가 요청자와 다를 경우 추가 알림
+        Long assigneeId = entity.getAssigneeId();
+        if (assigneeId != null && !assigneeId.equals(entity.getRequesterId())) {
+            notificationEventService.create(assigneeId, "상태변경", "업무요청 상태 변경", message, REF_TYPE_WORK_REQUEST, entity.getId());
+        }
     }
 
     private void recordCreated(WorkRequest entity) {
