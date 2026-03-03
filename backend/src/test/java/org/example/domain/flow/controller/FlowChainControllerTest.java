@@ -22,6 +22,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -119,5 +120,30 @@ class FlowChainControllerTest {
                 .andExpect(status().isNoContent());
 
         verify(flowChainService).saveFlowUiState(eq(15L), any());
+    }
+
+    @Test
+    @DisplayName("워크플로우 실선 삭제 API는 204를 반환한다")
+    void deleteFlowEdge() throws Exception {
+        mockMvc.perform(delete("/api/work-requests/15/flow-edges")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "sourceNodeId": "TT-22",
+                                  "targetNodeId": "TS-41"
+                                }
+                                """))
+                .andExpect(status().isNoContent());
+
+        verify(flowChainService).deleteFlowEdge(eq(15L), any());
+    }
+
+    @Test
+    @DisplayName("워크플로우 카드 삭제 API는 204를 반환한다")
+    void deleteFlowItem() throws Exception {
+        mockMvc.perform(delete("/api/work-requests/15/flow-items/DF-101"))
+                .andExpect(status().isNoContent());
+
+        verify(flowChainService).deleteFlowItem(15L, "DF-101");
     }
 }

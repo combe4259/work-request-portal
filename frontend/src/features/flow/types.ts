@@ -5,7 +5,7 @@ export type FlowNodeType =
   | 'DEPLOYMENT'
   | 'DEFECT'
   | 'KNOWLEDGE_BASE'
-export type FlowParentType = 'WORK_REQUEST' | 'TECH_TASK' | 'TEST_SCENARIO'
+export type FlowParentType = 'WORK_REQUEST' | 'TECH_TASK' | 'TEST_SCENARIO' | 'DEPLOYMENT' | 'DEFECT'
 export type FlowItemType = 'TECH_TASK' | 'TEST_SCENARIO' | 'DEPLOYMENT' | 'DEFECT' | 'KNOWLEDGE_BASE'
 export type FlowUiCustomNodeType = 'DEFECT' | 'KNOWLEDGE_BASE'
 
@@ -37,6 +37,11 @@ export interface FlowItemCreateRequest {
   parentId: number
   itemType: FlowItemType
   title: string
+}
+
+export interface FlowEdgeDeleteRequest {
+  sourceNodeId: string
+  targetNodeId: string
 }
 
 export interface FlowItemCreateResponse {

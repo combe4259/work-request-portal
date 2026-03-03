@@ -10,5 +10,11 @@ public interface TestScenarioRelatedRefRepository extends JpaRepository<TestScen
 
     List<TestScenarioRelatedRef> findByRefTypeAndRefId(String refType, Long refId);
 
+    boolean existsByTestScenarioIdAndRefTypeAndRefId(Long testScenarioId, String refType, Long refId);
+
+    void deleteByTestScenarioIdAndRefTypeAndRefId(Long testScenarioId, String refType, Long refId);
+
+    void deleteByRefTypeAndRefId(String refType, Long refId);
+
     void deleteByTestScenarioId(Long testScenarioId);
 }

@@ -10,6 +10,7 @@ import org.example.domain.deployment.entity.DeploymentRelatedRef;
 import org.example.domain.deployment.repository.DeploymentRelatedRefRepository;
 import org.example.domain.deployment.repository.DeploymentRepository;
 import org.example.domain.flow.dto.FlowChainResponse;
+import org.example.domain.flow.dto.FlowEdgeDeleteRequest;
 import org.example.domain.flow.dto.FlowItemCreateRequest;
 import org.example.domain.flow.dto.FlowItemCreateResponse;
 import org.example.domain.flow.dto.FlowUiStateRequest;
@@ -65,11 +66,14 @@ public class FlowChainService {
     private static final String PARENT_TYPE_WORK_REQUEST  = "WORK_REQUEST";
     private static final String PARENT_TYPE_TECH_TASK      = "TECH_TASK";
     private static final String PARENT_TYPE_TEST_SCENARIO  = "TEST_SCENARIO";
+    private static final String PARENT_TYPE_DEPLOYMENT     = "DEPLOYMENT";
+    private static final String PARENT_TYPE_DEFECT         = "DEFECT";
     private static final String ITEM_TYPE_TECH_TASK        = "TECH_TASK";
     private static final String ITEM_TYPE_TEST_SCENARIO    = "TEST_SCENARIO";
     private static final String ITEM_TYPE_DEPLOYMENT       = "DEPLOYMENT";
     private static final String ITEM_TYPE_DEFECT           = "DEFECT";
     private static final String ITEM_TYPE_KNOWLEDGE_BASE   = "KNOWLEDGE_BASE";
+    private static final String ITEM_TYPE_WORK_REQUEST     = "WORK_REQUEST";
     private static final String UI_NODE_TYPE_DEFECT        = "DEFECT";
     private static final String UI_NODE_TYPE_KNOWLEDGE_BASE = "KNOWLEDGE_BASE";
     private static final int MAX_CREATE_TITLE_LENGTH = 200;
@@ -168,9 +172,18 @@ public class FlowChainService {
                     .map(TechTaskRelatedRef::getRefId).toList());
             ttToDfIds.put(ttId, refs.stream().filter(r -> ITEM_TYPE_DEFECT.equals(r.getRefType()))
                     .map(TechTaskRelatedRef::getRefId).toList());
-            ttToKbIds.put(ttId, refs.stream().filter(r -> ITEM_TYPE_KNOWLEDGE_BASE.equals(r.getRefType()))
-                    .map(TechTaskRelatedRef::getRefId).toList());
+            ttToKbIds.put(ttId, Optional.ofNullable(knowledgeBaseRelatedRefRepository.findByRefTypeAndRefId(ITEM_TYPE_TECH_TASK, ttId))
+                    .orElse(List.of()).stream()
+                    .map(KnowledgeBaseRelatedRef::getArticleId).toList());
         }
+        Set<Long> tsIdsViaTechTask = new HashSet<>();
+        ttToTsIds.values().forEach(tsIdsViaTechTask::addAll);
+        Set<Long> dpIdsViaTechTask = new HashSet<>();
+        ttToDpIds.values().forEach(dpIdsViaTechTask::addAll);
+        Set<Long> dfIdsViaTechTask = new HashSet<>();
+        ttToDfIds.values().forEach(dfIdsViaTechTask::addAll);
+        Set<Long> kbIdsViaTechTask = new HashSet<>();
+        ttToKbIds.values().forEach(kbIdsViaTechTask::addAll);
 
         // 3. Collect & batch-load all TS and DP entities
         Set<Long> allTsIds = new HashSet<>(directTsIds);
@@ -190,9 +203,51 @@ public class FlowChainService {
             List<TestScenarioRelatedRef> tsRefs = testScenarioRelatedRefRepository.findByTestScenarioIdOrderByIdAsc(tsId);
             tsToDfIds.put(tsId, tsRefs.stream().filter(r -> ITEM_TYPE_DEFECT.equals(r.getRefType()))
                     .map(TestScenarioRelatedRef::getRefId).toList());
-            tsToKbIds.put(tsId, tsRefs.stream().filter(r -> ITEM_TYPE_KNOWLEDGE_BASE.equals(r.getRefType()))
-                    .map(TestScenarioRelatedRef::getRefId).toList());
+            tsToKbIds.put(tsId, Optional.ofNullable(knowledgeBaseRelatedRefRepository.findByRefTypeAndRefId(ITEM_TYPE_TEST_SCENARIO, tsId))
+                    .orElse(List.of()).stream()
+                    .map(KnowledgeBaseRelatedRef::getArticleId).toList());
         }
+        Set<Long> dfIdsViaTestScenario = new HashSet<>();
+        tsToDfIds.values().forEach(dfIdsViaTestScenario::addAll);
+        Set<Long> kbIdsViaTestScenario = new HashSet<>();
+        tsToKbIds.values().forEach(kbIdsViaTestScenario::addAll);
+
+        Map<Long, List<Long>> dpToKbIds = new HashMap<>();
+        for (Long dpId : allDpIds) {
+            dpToKbIds.put(dpId, Optional.ofNullable(knowledgeBaseRelatedRefRepository.findByRefTypeAndRefId(PARENT_TYPE_DEPLOYMENT, dpId))
+                    .orElse(List.of()).stream()
+                    .map(KnowledgeBaseRelatedRef::getArticleId).toList());
+        }
+        Set<Long> kbIdsViaDeployment = new HashSet<>();
+        dpToKbIds.values().forEach(kbIdsViaDeployment::addAll);
+
+        Set<Long> defectParentIds = new HashSet<>(directDfIds);
+        ttToDfIds.values().forEach(defectParentIds::addAll);
+        tsToDfIds.values().forEach(defectParentIds::addAll);
+        Map<Long, List<Long>> dfToKbIds = new HashMap<>();
+        for (Long dfId : defectParentIds) {
+            dfToKbIds.put(dfId, Optional.ofNullable(knowledgeBaseRelatedRefRepository.findByRefTypeAndRefId(PARENT_TYPE_DEFECT, dfId))
+                    .orElse(List.of()).stream()
+                    .map(KnowledgeBaseRelatedRef::getArticleId).toList());
+        }
+        Set<Long> kbIdsViaDefect = new HashSet<>();
+        dfToKbIds.values().forEach(kbIdsViaDefect::addAll);
+
+        List<Long> filteredDirectTsIds = directTsIds.stream()
+                .filter(tsId -> !tsIdsViaTechTask.contains(tsId))
+                .toList();
+        List<Long> filteredDirectDpIds = directDpIds.stream()
+                .filter(dpId -> !dpIdsViaTechTask.contains(dpId))
+                .toList();
+        List<Long> filteredDirectDfIds = directDfIds.stream()
+                .filter(dfId -> !dfIdsViaTechTask.contains(dfId) && !dfIdsViaTestScenario.contains(dfId))
+                .toList();
+        List<Long> filteredDirectKbIds = directKbIds.stream()
+                .filter(kbId -> !kbIdsViaTechTask.contains(kbId)
+                        && !kbIdsViaTestScenario.contains(kbId)
+                        && !kbIdsViaDeployment.contains(kbId)
+                        && !kbIdsViaDefect.contains(kbId))
+                .toList();
 
         // 3c. Collect all DEFECT and KB ids
         Set<Long> allDfIds = new HashSet<>(directDfIds);
@@ -201,6 +256,8 @@ public class FlowChainService {
         Set<Long> allKbIds = new HashSet<>(directKbIds);
         ttToKbIds.values().forEach(allKbIds::addAll);
         tsToKbIds.values().forEach(allKbIds::addAll);
+        dpToKbIds.values().forEach(allKbIds::addAll);
+        dfToKbIds.values().forEach(allKbIds::addAll);
 
         Map<Long, Defect> dfMap = new HashMap<>();
         defectRepository.findAllById(allDfIds).forEach(df -> dfMap.put(df.getId(), df));
@@ -275,7 +332,7 @@ public class FlowChainService {
         }
 
         // Direct TS nodes (WR → TS without TT)
-        for (Long tsId : directTsIds) {
+        for (Long tsId : filteredDirectTsIds) {
             TestScenario ts = tsMap.get(tsId);
             if (ts == null) continue;
             String tsNodeId = "TS-" + ts.getId();
@@ -290,7 +347,7 @@ public class FlowChainService {
         }
 
         // Direct DP nodes (WR → DP without TT)
-        for (Long dpId : directDpIds) {
+        for (Long dpId : filteredDirectDpIds) {
             Deployment dp = dpMap.get(dpId);
             if (dp == null) continue;
             String dpNodeId = "DP-" + dp.getId();
@@ -341,7 +398,7 @@ public class FlowChainService {
         }
 
         // Direct DEFECT nodes (WR → DEFECT)
-        for (Long dfId : directDfIds) {
+        for (Long dfId : filteredDirectDfIds) {
             Defect df = dfMap.get(dfId);
             if (df == null) continue;
             String dfNodeId = "DF-" + df.getId();
@@ -391,8 +448,50 @@ public class FlowChainService {
             }
         }
 
+        // KB nodes under each DEPLOYMENT
+        for (Long dpId : allDpIds) {
+            String dpNodeId = "DP-" + dpId;
+            if (!addedNodeIds.contains(dpNodeId)) {
+                continue;
+            }
+            for (Long kbId : dpToKbIds.getOrDefault(dpId, List.of())) {
+                KnowledgeBaseArticle kb = kbMap.get(kbId);
+                if (kb == null) continue;
+                String kbNodeId = "KB-" + kb.getId();
+                if (!addedNodeIds.contains(kbNodeId)) {
+                    nodes.add(new FlowChainResponse.FlowNode(
+                            kbNodeId, kb.getId(), ITEM_TYPE_KNOWLEDGE_BASE,
+                            kb.getArticleNo(), kb.getTitle(), "완료",
+                            null, null, null));
+                    addedNodeIds.add(kbNodeId);
+                }
+                edges.add(new FlowChainResponse.FlowEdge("edge-" + dpNodeId + "-" + kbNodeId, dpNodeId, kbNodeId));
+            }
+        }
+
+        // KB nodes under each DEFECT
+        for (Long dfId : allDfIds) {
+            String dfNodeId = "DF-" + dfId;
+            if (!addedNodeIds.contains(dfNodeId)) {
+                continue;
+            }
+            for (Long kbId : dfToKbIds.getOrDefault(dfId, List.of())) {
+                KnowledgeBaseArticle kb = kbMap.get(kbId);
+                if (kb == null) continue;
+                String kbNodeId = "KB-" + kb.getId();
+                if (!addedNodeIds.contains(kbNodeId)) {
+                    nodes.add(new FlowChainResponse.FlowNode(
+                            kbNodeId, kb.getId(), ITEM_TYPE_KNOWLEDGE_BASE,
+                            kb.getArticleNo(), kb.getTitle(), "완료",
+                            null, null, null));
+                    addedNodeIds.add(kbNodeId);
+                }
+                edges.add(new FlowChainResponse.FlowEdge("edge-" + dfNodeId + "-" + kbNodeId, dfNodeId, kbNodeId));
+            }
+        }
+
         // Direct KB nodes (WR → KB)
-        for (Long kbId : directKbIds) {
+        for (Long kbId : filteredDirectKbIds) {
             KnowledgeBaseArticle kb = kbMap.get(kbId);
             if (kb == null) continue;
             String kbNodeId = "KB-" + kb.getId();
@@ -499,16 +598,87 @@ public class FlowChainService {
         validateCreateRequest(wr, normalizedRequest);
 
         Long teamId = wr.getTeamId();
-        Long registrantId = wr.getRequesterId() != null ? wr.getRequesterId() : 1L;
+        Long registrantId = resolveRegistrantId(wr);
 
-        return switch (normalizedRequest.itemType()) {
-            case ITEM_TYPE_TECH_TASK      -> createTechTask(wr, teamId, registrantId, normalizedRequest);
-            case ITEM_TYPE_TEST_SCENARIO  -> createTestScenario(wr, teamId, registrantId, normalizedRequest);
-            case ITEM_TYPE_DEPLOYMENT     -> createDeployment(wr, teamId, registrantId, normalizedRequest);
-            case ITEM_TYPE_DEFECT         -> createDefectItem(wr, teamId, registrantId, normalizedRequest);
-            case ITEM_TYPE_KNOWLEDGE_BASE -> createKnowledgeBaseItem(wr, teamId, registrantId, normalizedRequest);
-            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported itemType: " + normalizedRequest.itemType());
-        };
+        try {
+            return switch (normalizedRequest.itemType()) {
+                case ITEM_TYPE_TECH_TASK      -> createTechTask(wr, teamId, registrantId, normalizedRequest);
+                case ITEM_TYPE_TEST_SCENARIO  -> createTestScenario(wr, teamId, registrantId, normalizedRequest);
+                case ITEM_TYPE_DEPLOYMENT     -> createDeployment(wr, teamId, registrantId, normalizedRequest);
+                case ITEM_TYPE_DEFECT         -> createDefectItem(wr, teamId, registrantId, normalizedRequest);
+                case ITEM_TYPE_KNOWLEDGE_BASE -> createKnowledgeBaseItem(wr, teamId, registrantId, normalizedRequest);
+                default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported itemType: " + normalizedRequest.itemType());
+            };
+        } catch (DataIntegrityViolationException ex) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "문서 생성에 실패했습니다. 작성자/연관관계 정보를 확인해 주세요."
+            );
+        }
+    }
+
+    private Long resolveRegistrantId(WorkRequest workRequest) {
+        if (workRequest.getRequesterId() != null) {
+            return workRequest.getRequesterId();
+        }
+
+        Long currentUserId = TeamRequestContext.getCurrentUserId();
+        if (currentUserId == null) {
+            currentUserId = resolveUserIdFromAuthorizationHeader();
+        }
+        if (currentUserId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "문서 작성자 정보를 확인할 수 없습니다.");
+        }
+        return currentUserId;
+    }
+
+    @Transactional
+    public void deleteFlowEdge(Long workRequestId, FlowEdgeDeleteRequest request) {
+        WorkRequest workRequest = getAccessibleWorkRequest(workRequestId);
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Request body is required");
+        }
+
+        NodeRef source = parseNodeRef(request.sourceNodeId());
+        NodeRef target = parseNodeRef(request.targetNodeId());
+        if (source == null || target == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "sourceNodeId/targetNodeId 형식이 올바르지 않습니다.");
+        }
+        if (source.id().equals(target.id()) && source.type().equals(target.type())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "동일 노드 간 연결은 삭제할 수 없습니다.");
+        }
+
+        validateParentChildRule(source.type(), target.type());
+        validateParentBelongsToWorkRequest(workRequest, source.type(), source.id());
+        ensureEntityAccessible(workRequest, target.type(), target.id());
+
+        boolean removed = removeParentChildRelation(workRequest.getId(), source.type(), source.id(), target.type(), target.id());
+        if (!removed) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "해당 연결을 찾을 수 없습니다.");
+        }
+
+        removeReverseReference(workRequest.getId(), source.type(), source.id(), target.type(), target.id());
+        pruneEdgeFromFlowUiStates(workRequestId, source.nodeId(), target.nodeId());
+    }
+
+    @Transactional
+    public void deleteFlowItem(Long workRequestId, String nodeId) {
+        WorkRequest workRequest = getAccessibleWorkRequest(workRequestId);
+        NodeRef nodeRef = parseNodeRef(nodeId);
+        if (nodeRef == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "nodeId 형식이 올바르지 않습니다.");
+        }
+        if (ITEM_TYPE_WORK_REQUEST.equals(nodeRef.type())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "기준 업무요청 카드는 삭제할 수 없습니다.");
+        }
+
+        if (!isNodeConnectedToWorkRequest(workRequest.getId(), nodeRef.type(), nodeRef.id())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "해당 문서는 현재 워크플로우와 연결되어 있지 않습니다.");
+        }
+
+        deleteNodeDocument(workRequest, nodeRef.type(), nodeRef.id());
+        deleteNodeReferences(nodeRef.type(), nodeRef.id());
+        pruneNodeFromFlowUiStates(workRequestId, nodeRef.nodeId());
     }
 
     private FlowItemCreateRequest normalizeCreateRequest(FlowItemCreateRequest request) {
@@ -548,63 +718,7 @@ public class FlowChainService {
 
     private void validateCreateRequest(WorkRequest workRequest, FlowItemCreateRequest request) {
         validateParentChildRule(request.parentType(), request.itemType());
-
-        switch (request.parentType()) {
-            case PARENT_TYPE_WORK_REQUEST -> {
-                if (!workRequest.getId().equals(request.parentId())) {
-                    throw new ResponseStatusException(
-                            HttpStatus.BAD_REQUEST,
-                            "For WORK_REQUEST parentType, parentId must match path workRequestId"
-                    );
-                }
-            }
-            case PARENT_TYPE_TECH_TASK -> {
-                TechTask parentTechTask = techTaskRepository.findById(request.parentId())
-                        .orElseThrow(() -> new ResponseStatusException(
-                                HttpStatus.NOT_FOUND,
-                                "TechTask parent not found: " + request.parentId()
-                        ));
-                TeamScopeUtil.ensureAccessible(parentTechTask.getTeamId());
-
-                if (!Objects.equals(parentTechTask.getTeamId(), workRequest.getTeamId())) {
-                    throw new ResponseStatusException(
-                            HttpStatus.BAD_REQUEST,
-                            "Parent tech task is not in the same team as target work request"
-                    );
-                }
-
-                boolean linkedToWorkRequest = workRequestRelatedRefRepository
-                        .existsByWorkRequestIdAndRefTypeAndRefId(workRequest.getId(), ITEM_TYPE_TECH_TASK, parentTechTask.getId())
-                        || techTaskRelatedRefRepository
-                        .existsByTechTaskIdAndRefTypeAndRefId(parentTechTask.getId(), PARENT_TYPE_WORK_REQUEST, workRequest.getId());
-                if (!linkedToWorkRequest) {
-                    throw new ResponseStatusException(
-                            HttpStatus.BAD_REQUEST,
-                            "Parent tech task is not connected to target work request"
-                    );
-                }
-            }
-            case PARENT_TYPE_TEST_SCENARIO -> {
-                TestScenario parentTs = testScenarioRepository.findById(request.parentId())
-                        .orElseThrow(() -> new ResponseStatusException(
-                                HttpStatus.NOT_FOUND, "TestScenario parent not found: " + request.parentId()));
-                TeamScopeUtil.ensureAccessible(parentTs.getTeamId());
-                if (!Objects.equals(parentTs.getTeamId(), workRequest.getTeamId())) {
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                            "Parent test scenario is not in the same team as target work request");
-                }
-                boolean linkedToWr = workRequestRelatedRefRepository
-                        .existsByWorkRequestIdAndRefTypeAndRefId(workRequest.getId(), ITEM_TYPE_TEST_SCENARIO, parentTs.getId());
-                if (!linkedToWr) {
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                            "Parent test scenario is not connected to target work request");
-                }
-            }
-            default -> throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Unsupported parentType: " + request.parentType()
-            );
-        }
+        validateParentBelongsToWorkRequest(workRequest, request.parentType(), request.parentId());
     }
 
     private FlowItemCreateResponse createTechTask(WorkRequest wr, Long teamId, Long registrantId, FlowItemCreateRequest req) {
@@ -732,8 +846,7 @@ public class FlowChainService {
     /**
      * 양방향 RelatedRef 연결:
      * - 부모 → 새 항목
-     * - 새 항목 → 부모
-     * - TechTask가 부모인 경우 WR ↔ 새 항목도 추가
+     * - 새 항목 → 부모 (지원 도메인에 한함)
      */
     private void linkRelatedRefs(Long workRequestId, FlowItemCreateRequest req, Long newItemId, String newItemType) {
         if (PARENT_TYPE_WORK_REQUEST.equals(req.parentType())) {
@@ -742,26 +855,20 @@ public class FlowChainService {
         } else if (PARENT_TYPE_TECH_TASK.equals(req.parentType())) {
             addTechTaskRef(req.parentId(), newItemType, newItemId);
             addChildRef(newItemType, newItemId, PARENT_TYPE_TECH_TASK, req.parentId());
-            addWorkRequestRef(workRequestId, newItemType, newItemId);
-            addChildRef(newItemType, newItemId, PARENT_TYPE_WORK_REQUEST, workRequestId);
         } else if (PARENT_TYPE_TEST_SCENARIO.equals(req.parentType())) {
             addTestScenarioRef(req.parentId(), newItemType, newItemId);
             addChildRef(newItemType, newItemId, PARENT_TYPE_TEST_SCENARIO, req.parentId());
-            addWorkRequestRef(workRequestId, newItemType, newItemId);
-            addChildRef(newItemType, newItemId, PARENT_TYPE_WORK_REQUEST, workRequestId);
         }
     }
 
-    // DEFECT: relatedRefType/relatedRefId already set on entity; only add parent→DF and WR→DF refs
+    // DEFECT: relatedRefType/relatedRefId already set on entity; only add parent→DF refs
     private void linkRelatedRefsForDefect(Long workRequestId, FlowItemCreateRequest req, Long defectId) {
         if (PARENT_TYPE_WORK_REQUEST.equals(req.parentType())) {
             addWorkRequestRef(workRequestId, ITEM_TYPE_DEFECT, defectId);
         } else if (PARENT_TYPE_TECH_TASK.equals(req.parentType())) {
             addTechTaskRef(req.parentId(), ITEM_TYPE_DEFECT, defectId);
-            addWorkRequestRef(workRequestId, ITEM_TYPE_DEFECT, defectId);
         } else if (PARENT_TYPE_TEST_SCENARIO.equals(req.parentType())) {
             addTestScenarioRef(req.parentId(), ITEM_TYPE_DEFECT, defectId);
-            addWorkRequestRef(workRequestId, ITEM_TYPE_DEFECT, defectId);
         }
     }
 
@@ -769,12 +876,8 @@ public class FlowChainService {
     private void linkRelatedRefsForKnowledgeBase(Long workRequestId, FlowItemCreateRequest req, Long kbId) {
         if (PARENT_TYPE_WORK_REQUEST.equals(req.parentType())) {
             addWorkRequestRef(workRequestId, ITEM_TYPE_KNOWLEDGE_BASE, kbId);
-        } else if (PARENT_TYPE_TECH_TASK.equals(req.parentType())) {
-            addTechTaskRef(req.parentId(), ITEM_TYPE_KNOWLEDGE_BASE, kbId);
-            addWorkRequestRef(workRequestId, ITEM_TYPE_KNOWLEDGE_BASE, kbId);
-        } else if (PARENT_TYPE_TEST_SCENARIO.equals(req.parentType())) {
-            addTestScenarioRef(req.parentId(), ITEM_TYPE_KNOWLEDGE_BASE, kbId);
-            addWorkRequestRef(workRequestId, ITEM_TYPE_KNOWLEDGE_BASE, kbId);
+        } else if (PARENT_TYPE_DEPLOYMENT.equals(req.parentType())) {
+            addDeploymentRef(req.parentId(), ITEM_TYPE_KNOWLEDGE_BASE, kbId);
         }
         // KB → parent back-ref (for KB detail page's related docs)
         KnowledgeBaseRelatedRef backRef = new KnowledgeBaseRelatedRef();
@@ -808,6 +911,15 @@ public class FlowChainService {
         ref.setRefType(refType);
         ref.setRefId(refId);
         testScenarioRelatedRefRepository.save(ref);
+    }
+
+    private void addDeploymentRef(Long deploymentId, String refType, Long refId) {
+        DeploymentRelatedRef ref = new DeploymentRelatedRef();
+        ref.setDeploymentId(deploymentId);
+        ref.setRefType(refType);
+        ref.setRefId(refId);
+        ref.setSortOrder(0);
+        deploymentRelatedRefRepository.save(ref);
     }
 
     private void addChildRef(String childType, Long childId, String refType, Long refId) {
@@ -844,6 +956,567 @@ public class FlowChainService {
             }
             // DEFECT: relatedRefType/relatedRefId is set directly on the entity; no separate table
         }
+    }
+
+    private void validateParentBelongsToWorkRequest(WorkRequest workRequest, String parentType, Long parentId) {
+        switch (parentType) {
+            case PARENT_TYPE_WORK_REQUEST -> {
+                if (!workRequest.getId().equals(parentId)) {
+                    throw new ResponseStatusException(
+                            HttpStatus.BAD_REQUEST,
+                            "For WORK_REQUEST parentType, parentId must match path workRequestId"
+                    );
+                }
+            }
+            case PARENT_TYPE_TECH_TASK -> {
+                TechTask parentTechTask = techTaskRepository.findById(parentId)
+                        .orElseThrow(() -> new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "TechTask parent not found: " + parentId
+                        ));
+                TeamScopeUtil.ensureAccessible(parentTechTask.getTeamId());
+
+                if (!Objects.equals(parentTechTask.getTeamId(), workRequest.getTeamId())) {
+                    throw new ResponseStatusException(
+                            HttpStatus.BAD_REQUEST,
+                            "Parent tech task is not in the same team as target work request"
+                    );
+                }
+
+                boolean linkedToWorkRequest = isTechTaskConnectedToWorkRequest(workRequest.getId(), parentTechTask.getId());
+                if (!linkedToWorkRequest) {
+                    throw new ResponseStatusException(
+                            HttpStatus.BAD_REQUEST,
+                            "Parent tech task is not connected to target work request"
+                    );
+                }
+            }
+            case PARENT_TYPE_TEST_SCENARIO -> {
+                TestScenario parentTs = testScenarioRepository.findById(parentId)
+                        .orElseThrow(() -> new ResponseStatusException(
+                                HttpStatus.NOT_FOUND, "TestScenario parent not found: " + parentId));
+                TeamScopeUtil.ensureAccessible(parentTs.getTeamId());
+                if (!Objects.equals(parentTs.getTeamId(), workRequest.getTeamId())) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Parent test scenario is not in the same team as target work request");
+                }
+                if (!isTestScenarioConnectedToWorkRequest(workRequest.getId(), parentTs.getId())) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Parent test scenario is not connected to target work request");
+                }
+            }
+            case PARENT_TYPE_DEPLOYMENT -> {
+                Deployment parentDeployment = deploymentRepository.findById(parentId)
+                        .orElseThrow(() -> new ResponseStatusException(
+                                HttpStatus.NOT_FOUND, "Deployment parent not found: " + parentId));
+                TeamScopeUtil.ensureAccessible(parentDeployment.getTeamId());
+                if (!Objects.equals(parentDeployment.getTeamId(), workRequest.getTeamId())) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Parent deployment is not in the same team as target work request");
+                }
+                if (!isDeploymentConnectedToWorkRequest(workRequest.getId(), parentDeployment.getId())) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Parent deployment is not connected to target work request");
+                }
+            }
+            case PARENT_TYPE_DEFECT -> {
+                Defect parentDefect = defectRepository.findById(parentId)
+                        .orElseThrow(() -> new ResponseStatusException(
+                                HttpStatus.NOT_FOUND, "Defect parent not found: " + parentId));
+                TeamScopeUtil.ensureAccessible(parentDefect.getTeamId());
+                if (!Objects.equals(parentDefect.getTeamId(), workRequest.getTeamId())) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Parent defect is not in the same team as target work request");
+                }
+                if (!isDefectConnectedToWorkRequest(workRequest.getId(), parentDefect.getId())) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Parent defect is not connected to target work request");
+                }
+            }
+            default -> throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Unsupported parentType: " + parentType
+            );
+        }
+    }
+
+    private void ensureEntityAccessible(WorkRequest workRequest, String entityType, Long entityId) {
+        switch (entityType) {
+            case ITEM_TYPE_WORK_REQUEST -> {
+                if (!workRequest.getId().equals(entityId)) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "WORK_REQUEST 노드가 기준 업무요청과 다릅니다.");
+                }
+            }
+            case ITEM_TYPE_TECH_TASK -> {
+                TechTask entity = techTaskRepository.findById(entityId)
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TechTask not found: " + entityId));
+                TeamScopeUtil.ensureAccessible(entity.getTeamId());
+                if (!Objects.equals(entity.getTeamId(), workRequest.getTeamId())) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "기술과제가 기준 업무요청과 다른 팀입니다.");
+                }
+            }
+            case ITEM_TYPE_TEST_SCENARIO -> {
+                TestScenario entity = testScenarioRepository.findById(entityId)
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TestScenario not found: " + entityId));
+                TeamScopeUtil.ensureAccessible(entity.getTeamId());
+                if (!Objects.equals(entity.getTeamId(), workRequest.getTeamId())) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "테스트 시나리오가 기준 업무요청과 다른 팀입니다.");
+                }
+            }
+            case ITEM_TYPE_DEPLOYMENT -> {
+                Deployment entity = deploymentRepository.findById(entityId)
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Deployment not found: " + entityId));
+                TeamScopeUtil.ensureAccessible(entity.getTeamId());
+                if (!Objects.equals(entity.getTeamId(), workRequest.getTeamId())) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "배포 문서가 기준 업무요청과 다른 팀입니다.");
+                }
+            }
+            case ITEM_TYPE_DEFECT -> {
+                Defect entity = defectRepository.findById(entityId)
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Defect not found: " + entityId));
+                TeamScopeUtil.ensureAccessible(entity.getTeamId());
+                if (!Objects.equals(entity.getTeamId(), workRequest.getTeamId())) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "결함 문서가 기준 업무요청과 다른 팀입니다.");
+                }
+            }
+            case ITEM_TYPE_KNOWLEDGE_BASE -> {
+                KnowledgeBaseArticle entity = knowledgeBaseArticleRepository.findById(entityId)
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "KnowledgeBase not found: " + entityId));
+                TeamScopeUtil.ensureAccessible(entity.getTeamId());
+                if (!Objects.equals(entity.getTeamId(), workRequest.getTeamId())) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "지식베이스 문서가 기준 업무요청과 다른 팀입니다.");
+                }
+            }
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported node type: " + entityType);
+        }
+    }
+
+    private boolean isTechTaskConnectedToWorkRequest(Long workRequestId, Long techTaskId) {
+        return workRequestRelatedRefRepository.existsByWorkRequestIdAndRefTypeAndRefId(workRequestId, ITEM_TYPE_TECH_TASK, techTaskId)
+                || techTaskRelatedRefRepository.existsByTechTaskIdAndRefTypeAndRefId(techTaskId, ITEM_TYPE_WORK_REQUEST, workRequestId);
+    }
+
+    private boolean isTestScenarioConnectedToWorkRequest(Long workRequestId, Long testScenarioId) {
+        boolean linkedDirectlyToWr = workRequestRelatedRefRepository
+                .existsByWorkRequestIdAndRefTypeAndRefId(workRequestId, ITEM_TYPE_TEST_SCENARIO, testScenarioId);
+        if (linkedDirectlyToWr) {
+            return true;
+        }
+
+        List<Long> parentTechTaskIds = testScenarioRelatedRefRepository
+                .findByTestScenarioIdOrderByIdAsc(testScenarioId).stream()
+                .filter(ref -> ITEM_TYPE_TECH_TASK.equals(ref.getRefType()))
+                .map(TestScenarioRelatedRef::getRefId)
+                .toList();
+
+        return parentTechTaskIds.stream().anyMatch(techTaskId -> isTechTaskConnectedToWorkRequest(workRequestId, techTaskId));
+    }
+
+    private boolean isDeploymentConnectedToWorkRequest(Long workRequestId, Long deploymentId) {
+        boolean linkedDirectlyToWr = workRequestRelatedRefRepository
+                .existsByWorkRequestIdAndRefTypeAndRefId(workRequestId, ITEM_TYPE_DEPLOYMENT, deploymentId);
+        if (linkedDirectlyToWr) {
+            return true;
+        }
+
+        return techTaskRelatedRefRepository.findByRefTypeAndRefId(ITEM_TYPE_DEPLOYMENT, deploymentId).stream()
+                .map(TechTaskRelatedRef::getTechTaskId)
+                .anyMatch(techTaskId -> isTechTaskConnectedToWorkRequest(workRequestId, techTaskId));
+    }
+
+    private boolean isDefectConnectedToWorkRequest(Long workRequestId, Long defectId) {
+        boolean linkedDirectlyToWr = workRequestRelatedRefRepository
+                .existsByWorkRequestIdAndRefTypeAndRefId(workRequestId, ITEM_TYPE_DEFECT, defectId);
+        if (linkedDirectlyToWr) {
+            return true;
+        }
+
+        boolean linkedViaTechTask = techTaskRelatedRefRepository.findByRefTypeAndRefId(ITEM_TYPE_DEFECT, defectId).stream()
+                .map(TechTaskRelatedRef::getTechTaskId)
+                .anyMatch(techTaskId -> isTechTaskConnectedToWorkRequest(workRequestId, techTaskId));
+        if (linkedViaTechTask) {
+            return true;
+        }
+
+        boolean linkedViaTestScenario = testScenarioRelatedRefRepository.findByRefTypeAndRefId(ITEM_TYPE_DEFECT, defectId).stream()
+                .map(TestScenarioRelatedRef::getTestScenarioId)
+                .anyMatch(testScenarioId -> isTestScenarioConnectedToWorkRequest(workRequestId, testScenarioId));
+        if (linkedViaTestScenario) {
+            return true;
+        }
+
+        return defectRepository.findById(defectId)
+                .map(defect -> {
+                    if (defect.getRelatedRefType() == null || defect.getRelatedRefId() == null) {
+                        return false;
+                    }
+                    return switch (defect.getRelatedRefType()) {
+                        case ITEM_TYPE_WORK_REQUEST -> Objects.equals(defect.getRelatedRefId(), workRequestId);
+                        case ITEM_TYPE_TECH_TASK -> isTechTaskConnectedToWorkRequest(workRequestId, defect.getRelatedRefId());
+                        case ITEM_TYPE_TEST_SCENARIO -> isTestScenarioConnectedToWorkRequest(workRequestId, defect.getRelatedRefId());
+                        default -> false;
+                    };
+                })
+                .orElse(false);
+    }
+
+    private boolean isKnowledgeBaseConnectedToWorkRequest(Long workRequestId, Long articleId) {
+        boolean linkedDirectlyToWr = workRequestRelatedRefRepository
+                .existsByWorkRequestIdAndRefTypeAndRefId(workRequestId, ITEM_TYPE_KNOWLEDGE_BASE, articleId)
+                || knowledgeBaseRelatedRefRepository.existsByArticleIdAndRefTypeAndRefId(articleId, ITEM_TYPE_WORK_REQUEST, workRequestId);
+        if (linkedDirectlyToWr) {
+            return true;
+        }
+
+        boolean linkedViaTechTask = techTaskRelatedRefRepository.findByRefTypeAndRefId(ITEM_TYPE_KNOWLEDGE_BASE, articleId).stream()
+                .map(TechTaskRelatedRef::getTechTaskId)
+                .anyMatch(techTaskId -> isTechTaskConnectedToWorkRequest(workRequestId, techTaskId));
+        if (!linkedViaTechTask) {
+            linkedViaTechTask = knowledgeBaseRelatedRefRepository.findByArticleIdOrderBySortOrderAscIdAsc(articleId).stream()
+                    .filter(ref -> ITEM_TYPE_TECH_TASK.equals(ref.getRefType()))
+                    .map(KnowledgeBaseRelatedRef::getRefId)
+                    .anyMatch(techTaskId -> isTechTaskConnectedToWorkRequest(workRequestId, techTaskId));
+        }
+        if (linkedViaTechTask) {
+            return true;
+        }
+
+        boolean linkedViaTestScenario = testScenarioRelatedRefRepository.findByRefTypeAndRefId(ITEM_TYPE_KNOWLEDGE_BASE, articleId).stream()
+                .map(TestScenarioRelatedRef::getTestScenarioId)
+                .anyMatch(testScenarioId -> isTestScenarioConnectedToWorkRequest(workRequestId, testScenarioId));
+        if (!linkedViaTestScenario) {
+            linkedViaTestScenario = knowledgeBaseRelatedRefRepository.findByArticleIdOrderBySortOrderAscIdAsc(articleId).stream()
+                    .filter(ref -> ITEM_TYPE_TEST_SCENARIO.equals(ref.getRefType()))
+                    .map(KnowledgeBaseRelatedRef::getRefId)
+                    .anyMatch(testScenarioId -> isTestScenarioConnectedToWorkRequest(workRequestId, testScenarioId));
+        }
+        if (linkedViaTestScenario) {
+            return true;
+        }
+
+        boolean linkedViaDeployment = deploymentRelatedRefRepository.findByRefTypeAndRefId(ITEM_TYPE_KNOWLEDGE_BASE, articleId).stream()
+                .map(DeploymentRelatedRef::getDeploymentId)
+                .anyMatch(deploymentId -> isDeploymentConnectedToWorkRequest(workRequestId, deploymentId));
+        if (!linkedViaDeployment) {
+            linkedViaDeployment = knowledgeBaseRelatedRefRepository.findByArticleIdOrderBySortOrderAscIdAsc(articleId).stream()
+                    .filter(ref -> PARENT_TYPE_DEPLOYMENT.equals(ref.getRefType()))
+                    .map(KnowledgeBaseRelatedRef::getRefId)
+                    .anyMatch(deploymentId -> isDeploymentConnectedToWorkRequest(workRequestId, deploymentId));
+        }
+        if (linkedViaDeployment) {
+            return true;
+        }
+
+        return knowledgeBaseRelatedRefRepository.findByArticleIdOrderBySortOrderAscIdAsc(articleId).stream()
+                .filter(ref -> PARENT_TYPE_DEFECT.equals(ref.getRefType()))
+                .map(KnowledgeBaseRelatedRef::getRefId)
+                .anyMatch(defectId -> isDefectConnectedToWorkRequest(workRequestId, defectId));
+    }
+
+    private boolean isNodeConnectedToWorkRequest(Long workRequestId, String nodeType, Long entityId) {
+        return switch (nodeType) {
+            case ITEM_TYPE_TECH_TASK -> isTechTaskConnectedToWorkRequest(workRequestId, entityId);
+            case ITEM_TYPE_TEST_SCENARIO -> isTestScenarioConnectedToWorkRequest(workRequestId, entityId);
+            case ITEM_TYPE_DEPLOYMENT -> isDeploymentConnectedToWorkRequest(workRequestId, entityId);
+            case ITEM_TYPE_DEFECT -> isDefectConnectedToWorkRequest(workRequestId, entityId);
+            case ITEM_TYPE_KNOWLEDGE_BASE -> isKnowledgeBaseConnectedToWorkRequest(workRequestId, entityId);
+            case ITEM_TYPE_WORK_REQUEST -> Objects.equals(workRequestId, entityId);
+            default -> false;
+        };
+    }
+
+    private boolean removeParentChildRelation(
+            Long workRequestId,
+            String parentType,
+            Long parentId,
+            String childType,
+            Long childId
+    ) {
+        return switch (parentType) {
+            case PARENT_TYPE_WORK_REQUEST -> {
+                boolean exists = workRequestRelatedRefRepository
+                        .existsByWorkRequestIdAndRefTypeAndRefId(workRequestId, childType, childId);
+                if (exists) {
+                    workRequestRelatedRefRepository.deleteByWorkRequestIdAndRefTypeAndRefId(workRequestId, childType, childId);
+                }
+                yield exists;
+            }
+            case PARENT_TYPE_TECH_TASK -> {
+                if (ITEM_TYPE_KNOWLEDGE_BASE.equals(childType)) {
+                    boolean exists = knowledgeBaseRelatedRefRepository
+                            .existsByArticleIdAndRefTypeAndRefId(childId, PARENT_TYPE_TECH_TASK, parentId);
+                    if (exists) {
+                        knowledgeBaseRelatedRefRepository
+                                .deleteByArticleIdAndRefTypeAndRefId(childId, PARENT_TYPE_TECH_TASK, parentId);
+                    }
+                    yield exists;
+                }
+                boolean exists = techTaskRelatedRefRepository
+                        .existsByTechTaskIdAndRefTypeAndRefId(parentId, childType, childId);
+                if (exists) {
+                    techTaskRelatedRefRepository.deleteByTechTaskIdAndRefTypeAndRefId(parentId, childType, childId);
+                }
+                yield exists;
+            }
+            case PARENT_TYPE_TEST_SCENARIO -> {
+                if (ITEM_TYPE_KNOWLEDGE_BASE.equals(childType)) {
+                    boolean exists = knowledgeBaseRelatedRefRepository
+                            .existsByArticleIdAndRefTypeAndRefId(childId, PARENT_TYPE_TEST_SCENARIO, parentId);
+                    if (exists) {
+                        knowledgeBaseRelatedRefRepository
+                                .deleteByArticleIdAndRefTypeAndRefId(childId, PARENT_TYPE_TEST_SCENARIO, parentId);
+                    }
+                    yield exists;
+                }
+                boolean exists = testScenarioRelatedRefRepository
+                        .existsByTestScenarioIdAndRefTypeAndRefId(parentId, childType, childId);
+                if (exists) {
+                    testScenarioRelatedRefRepository.deleteByTestScenarioIdAndRefTypeAndRefId(parentId, childType, childId);
+                }
+                yield exists;
+            }
+            case PARENT_TYPE_DEPLOYMENT -> {
+                if (!ITEM_TYPE_KNOWLEDGE_BASE.equals(childType)) {
+                    yield false;
+                }
+                boolean existsViaDeploymentRef = deploymentRelatedRefRepository
+                        .existsByDeploymentIdAndRefTypeAndRefId(parentId, ITEM_TYPE_KNOWLEDGE_BASE, childId);
+                if (existsViaDeploymentRef) {
+                    deploymentRelatedRefRepository.deleteByDeploymentIdAndRefTypeAndRefId(parentId, ITEM_TYPE_KNOWLEDGE_BASE, childId);
+                }
+                boolean existsViaKbBackRef = knowledgeBaseRelatedRefRepository
+                        .existsByArticleIdAndRefTypeAndRefId(childId, PARENT_TYPE_DEPLOYMENT, parentId);
+                if (existsViaKbBackRef) {
+                    knowledgeBaseRelatedRefRepository
+                            .deleteByArticleIdAndRefTypeAndRefId(childId, PARENT_TYPE_DEPLOYMENT, parentId);
+                }
+                yield existsViaDeploymentRef || existsViaKbBackRef;
+            }
+            case PARENT_TYPE_DEFECT -> {
+                if (!ITEM_TYPE_KNOWLEDGE_BASE.equals(childType)) {
+                    yield false;
+                }
+                boolean exists = knowledgeBaseRelatedRefRepository
+                        .existsByArticleIdAndRefTypeAndRefId(childId, PARENT_TYPE_DEFECT, parentId);
+                if (exists) {
+                    knowledgeBaseRelatedRefRepository
+                            .deleteByArticleIdAndRefTypeAndRefId(childId, PARENT_TYPE_DEFECT, parentId);
+                }
+                yield exists;
+            }
+            default -> false;
+        };
+    }
+
+    private void removeReverseReference(
+            Long workRequestId,
+            String parentType,
+            Long parentId,
+            String childType,
+            Long childId
+    ) {
+        switch (childType) {
+            case ITEM_TYPE_TECH_TASK -> {
+                if (PARENT_TYPE_WORK_REQUEST.equals(parentType)) {
+                    techTaskRelatedRefRepository.deleteByTechTaskIdAndRefTypeAndRefId(childId, ITEM_TYPE_WORK_REQUEST, workRequestId);
+                }
+            }
+            case ITEM_TYPE_TEST_SCENARIO -> {
+                if (PARENT_TYPE_WORK_REQUEST.equals(parentType)) {
+                    testScenarioRelatedRefRepository.deleteByTestScenarioIdAndRefTypeAndRefId(childId, ITEM_TYPE_WORK_REQUEST, workRequestId);
+                } else if (PARENT_TYPE_TECH_TASK.equals(parentType)) {
+                    testScenarioRelatedRefRepository.deleteByTestScenarioIdAndRefTypeAndRefId(childId, ITEM_TYPE_TECH_TASK, parentId);
+                }
+            }
+            case ITEM_TYPE_DEPLOYMENT -> {
+                if (PARENT_TYPE_WORK_REQUEST.equals(parentType)) {
+                    deploymentRelatedRefRepository.deleteByDeploymentIdAndRefTypeAndRefId(childId, ITEM_TYPE_WORK_REQUEST, workRequestId);
+                } else if (PARENT_TYPE_TECH_TASK.equals(parentType)) {
+                    deploymentRelatedRefRepository.deleteByDeploymentIdAndRefTypeAndRefId(childId, ITEM_TYPE_TECH_TASK, parentId);
+                }
+            }
+            case ITEM_TYPE_DEFECT -> defectRepository.findById(childId).ifPresent(defect -> {
+                if (Objects.equals(defect.getRelatedRefType(), parentType)
+                        && Objects.equals(defect.getRelatedRefId(), parentId)) {
+                    defect.setRelatedRefType(null);
+                    defect.setRelatedRefId(null);
+                }
+            });
+            case ITEM_TYPE_KNOWLEDGE_BASE -> knowledgeBaseRelatedRefRepository
+                    .deleteByArticleIdAndRefTypeAndRefId(childId, parentType, parentId);
+            default -> {
+            }
+        }
+    }
+
+    private void deleteNodeDocument(WorkRequest workRequest, String nodeType, Long entityId) {
+        switch (nodeType) {
+            case ITEM_TYPE_TECH_TASK -> {
+                TechTask entity = techTaskRepository.findById(entityId)
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TechTask not found: " + entityId));
+                TeamScopeUtil.ensureAccessible(entity.getTeamId());
+                if (!Objects.equals(entity.getTeamId(), workRequest.getTeamId())) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "기술과제가 기준 업무요청과 다른 팀입니다.");
+                }
+                techTaskRepository.delete(entity);
+            }
+            case ITEM_TYPE_TEST_SCENARIO -> {
+                TestScenario entity = testScenarioRepository.findById(entityId)
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TestScenario not found: " + entityId));
+                TeamScopeUtil.ensureAccessible(entity.getTeamId());
+                if (!Objects.equals(entity.getTeamId(), workRequest.getTeamId())) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "테스트 시나리오가 기준 업무요청과 다른 팀입니다.");
+                }
+                testScenarioRepository.delete(entity);
+            }
+            case ITEM_TYPE_DEPLOYMENT -> {
+                Deployment entity = deploymentRepository.findById(entityId)
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Deployment not found: " + entityId));
+                TeamScopeUtil.ensureAccessible(entity.getTeamId());
+                if (!Objects.equals(entity.getTeamId(), workRequest.getTeamId())) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "배포 문서가 기준 업무요청과 다른 팀입니다.");
+                }
+                deploymentRepository.delete(entity);
+            }
+            case ITEM_TYPE_DEFECT -> {
+                Defect entity = defectRepository.findById(entityId)
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Defect not found: " + entityId));
+                TeamScopeUtil.ensureAccessible(entity.getTeamId());
+                if (!Objects.equals(entity.getTeamId(), workRequest.getTeamId())) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "결함 문서가 기준 업무요청과 다른 팀입니다.");
+                }
+                defectRepository.delete(entity);
+            }
+            case ITEM_TYPE_KNOWLEDGE_BASE -> {
+                KnowledgeBaseArticle entity = knowledgeBaseArticleRepository.findById(entityId)
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "KnowledgeBase not found: " + entityId));
+                TeamScopeUtil.ensureAccessible(entity.getTeamId());
+                if (!Objects.equals(entity.getTeamId(), workRequest.getTeamId())) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "지식베이스 문서가 기준 업무요청과 다른 팀입니다.");
+                }
+                knowledgeBaseArticleRepository.delete(entity);
+            }
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported node type: " + nodeType);
+        }
+    }
+
+    private void deleteNodeReferences(String nodeType, Long entityId) {
+        workRequestRelatedRefRepository.deleteByRefTypeAndRefId(nodeType, entityId);
+        techTaskRelatedRefRepository.deleteByRefTypeAndRefId(nodeType, entityId);
+        testScenarioRelatedRefRepository.deleteByRefTypeAndRefId(nodeType, entityId);
+        deploymentRelatedRefRepository.deleteByRefTypeAndRefId(nodeType, entityId);
+        knowledgeBaseRelatedRefRepository.deleteByRefTypeAndRefId(nodeType, entityId);
+        clearDefectParentReference(nodeType, entityId);
+
+        switch (nodeType) {
+            case ITEM_TYPE_TECH_TASK -> techTaskRelatedRefRepository.deleteByTechTaskId(entityId);
+            case ITEM_TYPE_TEST_SCENARIO -> testScenarioRelatedRefRepository.deleteByTestScenarioId(entityId);
+            case ITEM_TYPE_DEPLOYMENT -> deploymentRelatedRefRepository.deleteByDeploymentId(entityId);
+            case ITEM_TYPE_KNOWLEDGE_BASE -> knowledgeBaseRelatedRefRepository.deleteByArticleId(entityId);
+            default -> {
+            }
+        }
+    }
+
+    private void clearDefectParentReference(String parentType, Long parentId) {
+        defectRepository.findByRelatedRefTypeAndRelatedRefId(parentType, parentId).forEach(defect -> {
+            defect.setRelatedRefType(null);
+            defect.setRelatedRefId(null);
+        });
+    }
+
+    private void pruneEdgeFromFlowUiStates(Long workRequestId, String sourceNodeId, String targetNodeId) {
+        List<FlowUiState> states = Optional.ofNullable(flowUiStateRepository.findByWorkRequestId(workRequestId)).orElse(List.of());
+        for (FlowUiState state : states) {
+            FlowUiStateResponse parsed = deserializeFlowUiState(state.getStateJson());
+            List<FlowUiStateResponse.FlowUiEdge> prunedEdges = parsed.edges().stream()
+                    .filter(edge -> !(Objects.equals(edge.source(), sourceNodeId) && Objects.equals(edge.target(), targetNodeId)))
+                    .toList();
+            if (prunedEdges.size() == parsed.edges().size()) {
+                continue;
+            }
+            savePrunedFlowUiState(state, parsed.positions(), prunedEdges, parsed.customNodes());
+        }
+    }
+
+    private void pruneNodeFromFlowUiStates(Long workRequestId, String nodeId) {
+        List<FlowUiState> states = Optional.ofNullable(flowUiStateRepository.findByWorkRequestId(workRequestId)).orElse(List.of());
+        for (FlowUiState state : states) {
+            FlowUiStateResponse parsed = deserializeFlowUiState(state.getStateJson());
+
+            Map<String, FlowUiStateResponse.FlowUiPosition> prunedPositions = new LinkedHashMap<>(parsed.positions());
+            boolean changed = prunedPositions.remove(nodeId) != null;
+
+            List<FlowUiStateResponse.FlowUiEdge> prunedEdges = parsed.edges().stream()
+                    .filter(edge -> !Objects.equals(edge.source(), nodeId) && !Objects.equals(edge.target(), nodeId))
+                    .toList();
+            if (prunedEdges.size() != parsed.edges().size()) {
+                changed = true;
+            }
+
+            List<FlowUiStateResponse.FlowUiCustomNode> prunedCustomNodes = parsed.customNodes().stream()
+                    .filter(customNode -> !Objects.equals(customNode.id(), nodeId))
+                    .toList();
+            if (prunedCustomNodes.size() != parsed.customNodes().size()) {
+                changed = true;
+            }
+
+            if (!changed) {
+                continue;
+            }
+
+            savePrunedFlowUiState(state, prunedPositions, prunedEdges, prunedCustomNodes);
+        }
+    }
+
+    private void savePrunedFlowUiState(
+            FlowUiState state,
+            Map<String, FlowUiStateResponse.FlowUiPosition> positions,
+            List<FlowUiStateResponse.FlowUiEdge> edges,
+            List<FlowUiStateResponse.FlowUiCustomNode> customNodes
+    ) {
+        state.setStateJson(serializeFlowUiState(new FlowUiStateResponse(0L, positions, edges, customNodes)));
+        state.setVersion(sanitizeVersion(state.getVersion()) + 1);
+        flowUiStateRepository.save(state);
+    }
+
+    private NodeRef parseNodeRef(String rawNodeId) {
+        String nodeId = normalizeRequiredText(rawNodeId, 120);
+        if (nodeId == null) {
+            return null;
+        }
+        int separator = nodeId.indexOf('-');
+        if (separator <= 0 || separator == nodeId.length() - 1) {
+            return null;
+        }
+        String prefix = nodeId.substring(0, separator).toUpperCase(Locale.ROOT);
+        String rawId = nodeId.substring(separator + 1).trim();
+        long entityId;
+        try {
+            entityId = Long.parseLong(rawId);
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+        if (entityId <= 0) {
+            return null;
+        }
+
+        String nodeType = switch (prefix) {
+            case "WR" -> ITEM_TYPE_WORK_REQUEST;
+            case "TT" -> ITEM_TYPE_TECH_TASK;
+            case "TS" -> ITEM_TYPE_TEST_SCENARIO;
+            case "DP" -> ITEM_TYPE_DEPLOYMENT;
+            case "DF" -> ITEM_TYPE_DEFECT;
+            case "KB" -> ITEM_TYPE_KNOWLEDGE_BASE;
+            default -> null;
+        };
+        if (nodeType == null) {
+            return null;
+        }
+        return new NodeRef(prefix + "-" + entityId, nodeType, entityId);
+    }
+
+    private record NodeRef(String nodeId, String type, Long id) {
     }
 
     private WorkRequest getAccessibleWorkRequest(Long workRequestId) {
@@ -1035,7 +1708,9 @@ public class FlowChainService {
         String normalized = rawParentType.trim().toUpperCase(Locale.ROOT);
         if (PARENT_TYPE_WORK_REQUEST.equals(normalized)
                 || PARENT_TYPE_TECH_TASK.equals(normalized)
-                || PARENT_TYPE_TEST_SCENARIO.equals(normalized)) {
+                || PARENT_TYPE_TEST_SCENARIO.equals(normalized)
+                || PARENT_TYPE_DEPLOYMENT.equals(normalized)
+                || PARENT_TYPE_DEFECT.equals(normalized)) {
             return normalized;
         }
         return null;
@@ -1069,6 +1744,12 @@ public class FlowChainService {
                 || ITEM_TYPE_KNOWLEDGE_BASE.equals(itemType))) {
             return;
         }
+        if (PARENT_TYPE_DEPLOYMENT.equals(parentType) && ITEM_TYPE_KNOWLEDGE_BASE.equals(itemType)) {
+            return;
+        }
+        if (PARENT_TYPE_DEFECT.equals(parentType) && ITEM_TYPE_KNOWLEDGE_BASE.equals(itemType)) {
+            return;
+        }
         throw new ResponseStatusException(
                 HttpStatus.BAD_REQUEST,
                 "Unsupported parent-child rule: " + parentType + " -> " + itemType
@@ -1087,6 +1768,8 @@ public class FlowChainService {
             case PARENT_TYPE_WORK_REQUEST  -> "WR-" + req.parentId();
             case PARENT_TYPE_TECH_TASK     -> "TT-" + req.parentId();
             case PARENT_TYPE_TEST_SCENARIO -> "TS-" + req.parentId();
+            case PARENT_TYPE_DEPLOYMENT    -> "DP-" + req.parentId();
+            case PARENT_TYPE_DEFECT        -> "DF-" + req.parentId();
             default -> "WR-" + req.parentId();
         };
     }

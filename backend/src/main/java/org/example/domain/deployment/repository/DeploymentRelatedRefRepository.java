@@ -10,5 +10,11 @@ public interface DeploymentRelatedRefRepository extends JpaRepository<Deployment
 
     List<DeploymentRelatedRef> findByRefTypeAndRefId(String refType, Long refId);
 
+    boolean existsByDeploymentIdAndRefTypeAndRefId(Long deploymentId, String refType, Long refId);
+
+    void deleteByDeploymentIdAndRefTypeAndRefId(Long deploymentId, String refType, Long refId);
+
+    void deleteByRefTypeAndRefId(String refType, Long refId);
+
     void deleteByDeploymentId(Long deploymentId);
 }

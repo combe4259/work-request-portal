@@ -7,9 +7,12 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
+import java.util.List;
 
 public interface FlowUiStateRepository extends JpaRepository<FlowUiState, Long> {
     Optional<FlowUiState> findByWorkRequestIdAndUserId(Long workRequestId, Long userId);
+
+    List<FlowUiState> findByWorkRequestId(Long workRequestId);
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("""

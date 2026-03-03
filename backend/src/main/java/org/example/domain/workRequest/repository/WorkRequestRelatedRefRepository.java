@@ -10,5 +10,9 @@ public interface WorkRequestRelatedRefRepository extends JpaRepository<WorkReque
 
     boolean existsByWorkRequestIdAndRefTypeAndRefId(Long workRequestId, String refType, Long refId);
 
+    void deleteByWorkRequestIdAndRefTypeAndRefId(Long workRequestId, String refType, Long refId);
+
+    void deleteByRefTypeAndRefId(String refType, Long refId);
+
     void deleteByWorkRequestId(Long workRequestId);
 }

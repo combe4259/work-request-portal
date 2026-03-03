@@ -73,8 +73,17 @@ Auth/Team 응답 필드:
 |---|---|---|---|---|
 | GET | `/work-requests/{workRequestId}/flow-chain` | - | `FlowChainResponse` | [x] |
 | POST | `/work-requests/{workRequestId}/flow-items` | `FlowItemCreateRequest` | `FlowItemCreateResponse` | [x] |
+| DELETE | `/work-requests/{workRequestId}/flow-edges` | `FlowEdgeDeleteRequest` | `204` | [x] |
+| DELETE | `/work-requests/{workRequestId}/flow-items/{nodeId}` | - | `204` | [x] |
 | GET | `/work-requests/{workRequestId}/flow-ui` | - | `FlowUiStateResponse(version 포함)` | [x] |
 | PUT | `/work-requests/{workRequestId}/flow-ui` | `FlowUiStateRequest(expectedVersion 필수)` | `204` | [x] |
+
+Workflow 카드 생성 규칙(`POST /flow-items`):
+- `itemType=KNOWLEDGE_BASE` 부모 허용: `WORK_REQUEST`, `TECH_TASK`, `TEST_SCENARIO`, `DEFECT`, `DEPLOYMENT`
+- `itemType=DEFECT` 부모 허용: `WORK_REQUEST`, `TECH_TASK`, `TEST_SCENARIO`
+- `itemType=DEPLOYMENT` 부모 허용: `WORK_REQUEST`, `TECH_TASK`
+- `itemType=TEST_SCENARIO` 부모 허용: `WORK_REQUEST`, `TECH_TASK`
+- `itemType=TECH_TASK` 부모 허용: `WORK_REQUEST`
 
 Workflow 실시간 동기화(STOMP):
 - `SUBSCRIBE /topic/work-requests/{workRequestId}/flow-ui`

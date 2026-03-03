@@ -13,6 +13,8 @@ import org.example.domain.flow.dto.FlowUiStateRequest;
 import org.example.domain.flow.entity.FlowUiState;
 import org.example.domain.flow.realtime.FlowUiRealtimeService;
 import org.example.domain.flow.repository.FlowUiStateRepository;
+import org.example.domain.knowledgeBase.entity.KnowledgeBaseArticle;
+import org.example.domain.knowledgeBase.entity.KnowledgeBaseRelatedRef;
 import org.example.domain.knowledgeBase.repository.KnowledgeBaseArticleRepository;
 import org.example.domain.knowledgeBase.repository.KnowledgeBaseRelatedRefRepository;
 import org.example.domain.techTask.entity.TechTask;
@@ -176,6 +178,7 @@ class FlowChainServiceTest {
         assertThat(response.nodeType()).isEqualTo("TEST_SCENARIO");
         assertThat(response.docNo()).isEqualTo("TS-001");
         assertThat(response.edgeSource()).isEqualTo("TT-22");
+        verify(workRequestRelatedRefRepository, never()).save(any(WorkRequestRelatedRef.class));
     }
 
     @Test
@@ -285,8 +288,129 @@ class FlowChainServiceTest {
     }
 
     @Test
-    @DisplayName("직접 연결된 결함은 기존 노드가 있어도 WR 엣지가 포함된다")
-    void getFlowChainIncludesDirectDefectEdgeEvenWhenNodeAlreadyExists() {
+    @DisplayName("실선 삭제 시 부모/자식 연관관계와 자식의 역참조를 함께 제거한다")
+    void deleteFlowEdgeRemovesRelationAndBackReference() {
+        when(workRequestRepository.findById(15L)).thenReturn(Optional.of(sampleWorkRequest(15L)));
+
+        TechTask parentTask = new TechTask();
+        parentTask.setId(22L);
+        parentTask.setTeamId(10L);
+        when(techTaskRepository.findById(22L)).thenReturn(Optional.of(parentTask));
+        when(workRequestRelatedRefRepository.existsByWorkRequestIdAndRefTypeAndRefId(15L, "TECH_TASK", 22L))
+                .thenReturn(true);
+
+        TestScenario childScenario = new TestScenario();
+        childScenario.setId(41L);
+        childScenario.setTeamId(10L);
+        when(testScenarioRepository.findById(41L)).thenReturn(Optional.of(childScenario));
+        when(techTaskRelatedRefRepository.existsByTechTaskIdAndRefTypeAndRefId(22L, "TEST_SCENARIO", 41L))
+                .thenReturn(true);
+
+        flowChainService.deleteFlowEdge(
+                15L,
+                new org.example.domain.flow.dto.FlowEdgeDeleteRequest("TT-22", "TS-41")
+        );
+
+        verify(techTaskRelatedRefRepository).deleteByTechTaskIdAndRefTypeAndRefId(22L, "TEST_SCENARIO", 41L);
+        verify(testScenarioRelatedRefRepository).deleteByTestScenarioIdAndRefTypeAndRefId(41L, "TECH_TASK", 22L);
+    }
+
+    @Test
+    @DisplayName("카드 삭제 시 문서와 모든 연관 참조를 정리한다")
+    void deleteFlowItemRemovesDocumentAndRelatedReferences() {
+        when(workRequestRepository.findById(15L)).thenReturn(Optional.of(sampleWorkRequest(15L)));
+        when(workRequestRelatedRefRepository.existsByWorkRequestIdAndRefTypeAndRefId(15L, "DEFECT", 101L))
+                .thenReturn(true);
+
+        Defect defect = new Defect();
+        defect.setId(101L);
+        defect.setTeamId(10L);
+        when(defectRepository.findById(101L)).thenReturn(Optional.of(defect));
+        when(defectRepository.findByRelatedRefTypeAndRelatedRefId("DEFECT", 101L)).thenReturn(List.of());
+
+        flowChainService.deleteFlowItem(15L, "DF-101");
+
+        verify(defectRepository).delete(defect);
+        verify(workRequestRelatedRefRepository).deleteByRefTypeAndRefId("DEFECT", 101L);
+        verify(techTaskRelatedRefRepository).deleteByRefTypeAndRefId("DEFECT", 101L);
+        verify(testScenarioRelatedRefRepository).deleteByRefTypeAndRefId("DEFECT", 101L);
+        verify(deploymentRelatedRefRepository).deleteByRefTypeAndRefId("DEFECT", 101L);
+    }
+
+    @Test
+    @DisplayName("배포-지식베이스 실선 삭제 시 KB 부모 연관관계를 제거한다")
+    void deleteFlowEdgeRemovesKnowledgeBaseRelationUnderDeployment() {
+        when(workRequestRepository.findById(15L)).thenReturn(Optional.of(sampleWorkRequest(15L)));
+        when(workRequestRelatedRefRepository.existsByWorkRequestIdAndRefTypeAndRefId(15L, "DEPLOYMENT", 81L))
+                .thenReturn(true);
+
+        Deployment deployment = new Deployment();
+        deployment.setId(81L);
+        deployment.setTeamId(10L);
+        when(deploymentRepository.findById(81L)).thenReturn(Optional.of(deployment));
+
+        KnowledgeBaseArticle kb = new KnowledgeBaseArticle();
+        kb.setId(501L);
+        kb.setTeamId(10L);
+        when(knowledgeBaseArticleRepository.findById(501L)).thenReturn(Optional.of(kb));
+        when(deploymentRelatedRefRepository.existsByDeploymentIdAndRefTypeAndRefId(81L, "KNOWLEDGE_BASE", 501L))
+                .thenReturn(false);
+        when(knowledgeBaseRelatedRefRepository.existsByArticleIdAndRefTypeAndRefId(501L, "DEPLOYMENT", 81L))
+                .thenReturn(true);
+
+        flowChainService.deleteFlowEdge(
+                15L,
+                new org.example.domain.flow.dto.FlowEdgeDeleteRequest("DP-81", "KB-501")
+        );
+
+        verify(knowledgeBaseRelatedRefRepository).deleteByArticleIdAndRefTypeAndRefId(501L, "DEPLOYMENT", 81L);
+    }
+
+    @Test
+    @DisplayName("결함-지식베이스 실선 삭제 시 KB 부모 연관관계를 제거한다")
+    void deleteFlowEdgeRemovesKnowledgeBaseRelationUnderDefect() {
+        when(workRequestRepository.findById(15L)).thenReturn(Optional.of(sampleWorkRequest(15L)));
+        when(workRequestRelatedRefRepository.existsByWorkRequestIdAndRefTypeAndRefId(15L, "DEFECT", 91L))
+                .thenReturn(true);
+
+        Defect defect = new Defect();
+        defect.setId(91L);
+        defect.setTeamId(10L);
+        defect.setRelatedRefType("WORK_REQUEST");
+        defect.setRelatedRefId(15L);
+        when(defectRepository.findById(91L)).thenReturn(Optional.of(defect));
+
+        KnowledgeBaseArticle kb = new KnowledgeBaseArticle();
+        kb.setId(502L);
+        kb.setTeamId(10L);
+        when(knowledgeBaseArticleRepository.findById(502L)).thenReturn(Optional.of(kb));
+        when(knowledgeBaseRelatedRefRepository.existsByArticleIdAndRefTypeAndRefId(502L, "DEFECT", 91L))
+                .thenReturn(true);
+
+        flowChainService.deleteFlowEdge(
+                15L,
+                new org.example.domain.flow.dto.FlowEdgeDeleteRequest("DF-91", "KB-502")
+        );
+
+        verify(knowledgeBaseRelatedRefRepository).deleteByArticleIdAndRefTypeAndRefId(502L, "DEFECT", 91L);
+    }
+
+    @Test
+    @DisplayName("기준 업무요청 카드는 삭제할 수 없다")
+    void deleteFlowItemRejectsWorkRequestRoot() {
+        when(workRequestRepository.findById(15L)).thenReturn(Optional.of(sampleWorkRequest(15L)));
+
+        assertThatThrownBy(() -> flowChainService.deleteFlowItem(15L, "WR-15"))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(ex -> {
+                    ResponseStatusException statusEx = (ResponseStatusException) ex;
+                    assertThat(statusEx.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                });
+    }
+
+    @Test
+    @DisplayName("직접 연결된 결함이더라도 상위 부모 경로가 있으면 WR 직결 엣지를 숨긴다")
+    void getFlowChainOmitsDirectDefectEdgeWhenParentPathExists() {
         WorkRequest workRequest = sampleWorkRequest(15L);
         workRequest.setRequestNo("WR-015");
         workRequest.setTitle("로그인 개선 요청");
@@ -340,7 +464,162 @@ class FlowChainServiceTest {
 
         assertThat(response.edges())
                 .extracting(edge -> edge.source() + "->" + edge.target())
-                .contains("TS-1->DF-101", "WR-15->DF-101");
+                .contains("TS-1->DF-101")
+                .doesNotContain("WR-15->DF-101");
+    }
+
+    @Test
+    @DisplayName("부모 테스트 시나리오가 WR에 직접 연결되지 않아도 TT 경유로 연결되면 허용한다")
+    void createFlowItemAllowsParentTestScenarioLinkedViaTechTask() {
+        when(workRequestRepository.findById(15L)).thenReturn(Optional.of(sampleWorkRequest(15L)));
+
+        TestScenario parentScenario = new TestScenario();
+        parentScenario.setId(71L);
+        parentScenario.setTeamId(10L);
+        when(testScenarioRepository.findById(71L)).thenReturn(Optional.of(parentScenario));
+        when(workRequestRelatedRefRepository.existsByWorkRequestIdAndRefTypeAndRefId(15L, "TEST_SCENARIO", 71L))
+                .thenReturn(false);
+
+        TestScenarioRelatedRef parentTechTaskRef = new TestScenarioRelatedRef();
+        parentTechTaskRef.setTestScenarioId(71L);
+        parentTechTaskRef.setRefType("TECH_TASK");
+        parentTechTaskRef.setRefId(22L);
+        when(testScenarioRelatedRefRepository.findByTestScenarioIdOrderByIdAsc(71L))
+                .thenReturn(List.of(parentTechTaskRef));
+
+        when(workRequestRelatedRefRepository.existsByWorkRequestIdAndRefTypeAndRefId(15L, "TECH_TASK", 22L))
+                .thenReturn(true);
+        when(documentNoGenerator.next("DF")).thenReturn("DF-001");
+        when(defectRepository.save(any(Defect.class))).thenAnswer(invocation -> {
+            Defect defect = invocation.getArgument(0);
+            defect.setId(91L);
+            return defect;
+        });
+
+        FlowItemCreateResponse response = flowChainService.createFlowItem(
+                15L,
+                new FlowItemCreateRequest("TEST_SCENARIO", 71L, "DEFECT", "로그인 실패 결함")
+        );
+
+        assertThat(response.nodeType()).isEqualTo("DEFECT");
+        assertThat(response.edgeSource()).isEqualTo("TS-71");
+        verify(workRequestRelatedRefRepository, never()).save(any(WorkRequestRelatedRef.class));
+    }
+
+    @Test
+    @DisplayName("부모 테스트 시나리오가 WR 트리와 연결되지 않으면 400")
+    void createFlowItemRejectsUnlinkedParentTestScenario() {
+        when(workRequestRepository.findById(15L)).thenReturn(Optional.of(sampleWorkRequest(15L)));
+
+        TestScenario parentScenario = new TestScenario();
+        parentScenario.setId(71L);
+        parentScenario.setTeamId(10L);
+        when(testScenarioRepository.findById(71L)).thenReturn(Optional.of(parentScenario));
+        when(workRequestRelatedRefRepository.existsByWorkRequestIdAndRefTypeAndRefId(15L, "TEST_SCENARIO", 71L))
+                .thenReturn(false);
+        when(testScenarioRelatedRefRepository.findByTestScenarioIdOrderByIdAsc(71L))
+                .thenReturn(List.of());
+
+        assertThatThrownBy(() -> flowChainService.createFlowItem(
+                15L,
+                new FlowItemCreateRequest("TEST_SCENARIO", 71L, "DEFECT", "연결 확인")
+        ))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(ex -> {
+                    ResponseStatusException statusEx = (ResponseStatusException) ex;
+                    assertThat(statusEx.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                });
+    }
+
+    @Test
+    @DisplayName("테스트 시나리오 하위 지식베이스 생성 시 TS 연관테이블에 KB를 저장하지 않는다")
+    void createKnowledgeBaseUnderTestScenarioUsesKnowledgeBaseBackRefOnly() {
+        when(workRequestRepository.findById(15L)).thenReturn(Optional.of(sampleWorkRequest(15L)));
+
+        TestScenario parentScenario = new TestScenario();
+        parentScenario.setId(71L);
+        parentScenario.setTeamId(10L);
+        when(testScenarioRepository.findById(71L)).thenReturn(Optional.of(parentScenario));
+        when(workRequestRelatedRefRepository.existsByWorkRequestIdAndRefTypeAndRefId(15L, "TEST_SCENARIO", 71L))
+                .thenReturn(true);
+
+        when(documentNoGenerator.next("KB")).thenReturn("KB-001");
+        when(knowledgeBaseArticleRepository.save(any(KnowledgeBaseArticle.class))).thenAnswer(invocation -> {
+            KnowledgeBaseArticle article = invocation.getArgument(0);
+            article.setId(501L);
+            return article;
+        });
+
+        FlowItemCreateResponse response = flowChainService.createFlowItem(
+                15L,
+                new FlowItemCreateRequest("TEST_SCENARIO", 71L, "KNOWLEDGE_BASE", "로그인 FAQ")
+        );
+
+        assertThat(response.nodeType()).isEqualTo("KNOWLEDGE_BASE");
+        assertThat(response.edgeSource()).isEqualTo("TS-71");
+        verify(testScenarioRelatedRefRepository, never()).save(any(TestScenarioRelatedRef.class));
+        verify(knowledgeBaseRelatedRefRepository).save(any(KnowledgeBaseRelatedRef.class));
+    }
+
+    @Test
+    @DisplayName("배포 하위 지식베이스 생성을 허용하고 배포 연관문서+KB 백참조를 저장한다")
+    void createKnowledgeBaseUnderDeploymentIsAllowed() {
+        when(workRequestRepository.findById(15L)).thenReturn(Optional.of(sampleWorkRequest(15L)));
+
+        Deployment parentDeployment = new Deployment();
+        parentDeployment.setId(81L);
+        parentDeployment.setTeamId(10L);
+        when(deploymentRepository.findById(81L)).thenReturn(Optional.of(parentDeployment));
+        when(workRequestRelatedRefRepository.existsByWorkRequestIdAndRefTypeAndRefId(15L, "DEPLOYMENT", 81L))
+                .thenReturn(true);
+
+        when(documentNoGenerator.next("KB")).thenReturn("KB-002");
+        when(knowledgeBaseArticleRepository.save(any(KnowledgeBaseArticle.class))).thenAnswer(invocation -> {
+            KnowledgeBaseArticle article = invocation.getArgument(0);
+            article.setId(502L);
+            return article;
+        });
+
+        FlowItemCreateResponse response = flowChainService.createFlowItem(
+                15L,
+                new FlowItemCreateRequest("DEPLOYMENT", 81L, "KNOWLEDGE_BASE", "배포 체크리스트")
+        );
+
+        assertThat(response.nodeType()).isEqualTo("KNOWLEDGE_BASE");
+        assertThat(response.edgeSource()).isEqualTo("DP-81");
+        verify(deploymentRelatedRefRepository).save(any());
+        verify(knowledgeBaseRelatedRefRepository).save(any(KnowledgeBaseRelatedRef.class));
+    }
+
+    @Test
+    @DisplayName("결함 하위 지식베이스 생성을 허용하고 KB 백참조를 저장한다")
+    void createKnowledgeBaseUnderDefectIsAllowed() {
+        when(workRequestRepository.findById(15L)).thenReturn(Optional.of(sampleWorkRequest(15L)));
+
+        Defect parentDefect = new Defect();
+        parentDefect.setId(91L);
+        parentDefect.setTeamId(10L);
+        parentDefect.setRelatedRefType("WORK_REQUEST");
+        parentDefect.setRelatedRefId(15L);
+        when(defectRepository.findById(91L)).thenReturn(Optional.of(parentDefect));
+        when(workRequestRelatedRefRepository.existsByWorkRequestIdAndRefTypeAndRefId(15L, "DEFECT", 91L))
+                .thenReturn(true);
+
+        when(documentNoGenerator.next("KB")).thenReturn("KB-003");
+        when(knowledgeBaseArticleRepository.save(any(KnowledgeBaseArticle.class))).thenAnswer(invocation -> {
+            KnowledgeBaseArticle article = invocation.getArgument(0);
+            article.setId(503L);
+            return article;
+        });
+
+        FlowItemCreateResponse response = flowChainService.createFlowItem(
+                15L,
+                new FlowItemCreateRequest("DEFECT", 91L, "KNOWLEDGE_BASE", "재현 원인 분석")
+        );
+
+        assertThat(response.nodeType()).isEqualTo("KNOWLEDGE_BASE");
+        assertThat(response.edgeSource()).isEqualTo("DF-91");
+        verify(knowledgeBaseRelatedRefRepository).save(any(KnowledgeBaseRelatedRef.class));
     }
 
     @Test

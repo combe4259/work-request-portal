@@ -12,5 +12,9 @@ public interface TechTaskRelatedRefRepository extends JpaRepository<TechTaskRela
 
     boolean existsByTechTaskIdAndRefTypeAndRefId(Long techTaskId, String refType, Long refId);
 
+    void deleteByTechTaskIdAndRefTypeAndRefId(Long techTaskId, String refType, Long refId);
+
+    void deleteByRefTypeAndRefId(String refType, Long refId);
+
     void deleteByTechTaskId(Long techTaskId);
 }

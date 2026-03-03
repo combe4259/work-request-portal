@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent as ReactMouseEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { useBlocker, useLocation, useNavigate } from 'react-router-dom'
 import { Client } from '@stomp/stompjs'
 import {
@@ -7,13 +7,10 @@ import {
   Controls,
   MiniMap,
   MarkerType,
-  addEdge,
-  reconnectEdge,
   useNodesState,
   useEdgesState,
   type Node,
   type Edge,
-  type Connection,
   type ReactFlowInstance,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
@@ -40,7 +37,7 @@ import { TestTypeBadge, TestStatusBadge } from '@/components/test-scenario/Badge
 import { DefectTypeBadge, SeverityBadge, DefectStatusBadge } from '@/components/defect/Badges'
 import { DeployTypeBadge, DeployEnvBadge, DeployStatusBadge } from '@/components/deployment/Badges'
 import { listAttachments } from '@/features/attachment/service'
-import { getFlowChain, getFlowUiState, createFlowItem, saveFlowUiState } from '@/features/flow/service'
+import { getFlowChain, getFlowUiState, createFlowItem, saveFlowUiState, deleteFlowEdge, deleteFlowItem } from '@/features/flow/service'
 import { getDefect } from '@/features/defect/service'
 import { getKnowledgeBaseArticle } from '@/features/knowledge-base/service'
 import { getWorkRequest, listWorkRequestRelatedRefs } from '@/features/work-request/service'
@@ -258,6 +255,25 @@ function detailPath(nodeType: FlowNodeType, entityId: number): string {
   }
 }
 
+function editPath(nodeType: FlowNodeType, entityId: number): string {
+  switch (nodeType) {
+    case 'WORK_REQUEST':
+      return `/work-requests/${entityId}/edit`
+    case 'TECH_TASK':
+      return `/tech-tasks/${entityId}/edit`
+    case 'TEST_SCENARIO':
+      return `/test-scenarios/${entityId}/edit`
+    case 'DEPLOYMENT':
+      return `/deployments/${entityId}/edit`
+    case 'DEFECT':
+      return `/defects/${entityId}/edit`
+    case 'KNOWLEDGE_BASE':
+      return `/knowledge-base/${entityId}/edit`
+    default:
+      return '/work-requests'
+  }
+}
+
 function refRoute(refType: string, refId: number): string | null {
   switch (refType) {
     case 'WORK_REQUEST':
@@ -281,22 +297,32 @@ function refRoute(refType: string, refId: number): string | null {
   }
 }
 
-function edgeStrokeStyle(selected: boolean): { stroke: string; strokeWidth: number } {
+function edgeColor(selected: boolean): string {
+  return selected ? '#2563EB' : '#94A3B8'
+}
+
+function edgeStrokeStyle(selected: boolean): CSSProperties {
   return {
-    stroke: selected ? '#2563EB' : '#CBD5E1',
+    stroke: edgeColor(selected),
     strokeWidth: selected ? 2.8 : 1.5,
   }
 }
 
-function toFlowEdge(id: string, source: string, target: string, selected = false): Edge {
+function toFlowEdge(
+  id: string,
+  source: string,
+  target: string,
+  selected = false,
+): Edge {
+  const color = edgeColor(selected)
   return {
     id,
     source,
     target,
     type: 'smoothstep',
-    reconnectable: true,
+    reconnectable: false,
     selected,
-    markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color: '#94A3B8' },
+    markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color },
     style: edgeStrokeStyle(selected),
   }
 }
@@ -316,6 +342,9 @@ function canLinkNode(sourceType: FlowNodeType, targetType: FlowNodeType): boolea
   if (sourceType === 'TEST_SCENARIO') {
     return targetType === 'DEFECT' || targetType === 'KNOWLEDGE_BASE'
   }
+  if (sourceType === 'DEPLOYMENT' || sourceType === 'DEFECT') {
+    return targetType === 'KNOWLEDGE_BASE'
+  }
   return false
 }
 
@@ -324,7 +353,7 @@ const PREFERRED_PARENT: Record<PaletteNodeType, FlowNodeType[]> = {
   TEST_SCENARIO:  ['TECH_TASK', 'WORK_REQUEST'],
   DEFECT:         ['TEST_SCENARIO', 'TECH_TASK', 'WORK_REQUEST'],
   DEPLOYMENT:     ['TECH_TASK', 'WORK_REQUEST'],
-  KNOWLEDGE_BASE: ['TEST_SCENARIO', 'TECH_TASK', 'WORK_REQUEST'],
+  KNOWLEDGE_BASE: ['DEFECT', 'DEPLOYMENT', 'TEST_SCENARIO', 'TECH_TASK', 'WORK_REQUEST'],
 }
 
 
@@ -438,20 +467,6 @@ function getNodeData(node: Node | undefined): FlowNodeCardData | null {
   return data as FlowNodeCardData
 }
 
-function toNodePayload(data: FlowNodeCardData): FlowUiCustomNode {
-  return {
-    id: data.id,
-    entityId: data.entityId,
-    nodeType: data.nodeType as FlowUiCustomNode['nodeType'],
-    docNo: data.docNo,
-    title: data.title,
-    status: data.status,
-    priority: data.priority,
-    assigneeName: data.assigneeName,
-    version: data.version,
-  }
-}
-
 type WorkRequestDrawerDetailPayload = {
   kind: 'WORK_REQUEST'
   data: Awaited<ReturnType<typeof getWorkRequest>>
@@ -500,6 +515,10 @@ type DrawerDetailPayload =
   | DefectDrawerDetailPayload
   | DeploymentDrawerDetailPayload
   | KnowledgeBaseDrawerDetailPayload
+
+type PendingDeleteAction =
+  | { kind: 'edge'; edgeId: string }
+  | { kind: 'node'; nodeId: string }
 
 const KB_CATEGORY_STYLES: Record<KBCategory, string> = {
   '개발 가이드': 'bg-blue-50 text-blue-600',
@@ -594,6 +613,8 @@ export default function WorkRequestFlowPage() {
   const [isFlowUiSavePending, setIsFlowUiSavePending] = useState(false)
   const [isFlowUiSaving, setIsFlowUiSaving] = useState(false)
   const [isLeaveConfirmOpen, setIsLeaveConfirmOpen] = useState(false)
+  const [pendingDeleteAction, setPendingDeleteAction] = useState<PendingDeleteAction | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const positionsRef = useRef<Record<string, { x: number; y: number }>>({})
   const nodesRef = useRef<Node[]>([])
@@ -621,6 +642,10 @@ export default function WorkRequestFlowPage() {
 
   const handleOpenDocument = useCallback((node: FlowNode) => {
     navigate(detailPath(node.nodeType, node.entityId))
+  }, [navigate])
+
+  const handleEditDocument = useCallback((node: FlowNode) => {
+    navigate(editPath(node.nodeType, node.entityId))
   }, [navigate])
 
   const scheduleDrawerOpen = useCallback(() => {
@@ -697,6 +722,11 @@ export default function WorkRequestFlowPage() {
     }))
   }, [setNodes])
 
+  const applyEdgeSelection = useCallback((edgeId: string | null) => {
+    setSelectedEdgeId(edgeId)
+    setEdges((prev) => prev.map((edge) => toFlowEdge(edge.id, edge.source, edge.target, edge.id === edgeId)))
+  }, [setEdges])
+
   const buildCardData = useCallback((flowNode: FlowNode, selectedId: string | null): FlowNodeCardData => ({
     ...flowNode,
     workRequestId: selectedWorkRequestId ?? 0,
@@ -730,34 +760,8 @@ export default function WorkRequestFlowPage() {
         position: persisted.positions[node.id] ?? node.position,
       }))
 
-      const existingIds = new Set(mergedNodes.map((node) => node.id))
-      persisted.customNodes.forEach((custom) => {
-        if (existingIds.has(custom.id)) {
-          return
-        }
-
-        const customNode: FlowNode = {
-          id: custom.id,
-          entityId: custom.entityId,
-          nodeType: custom.nodeType,
-          docNo: custom.docNo,
-          title: custom.title,
-          status: custom.status,
-          priority: custom.priority,
-          assigneeName: custom.assigneeName,
-          version: custom.version,
-        }
-
-        mergedNodes.push(
-          toReactFlowNode(customNode, persisted.positions[custom.id] ?? { x: 200, y: 200 }, selectedId)
-        )
-        existingIds.add(custom.id)
-      })
-
-      const nodeIdSet = new Set(mergedNodes.map((node) => node.id))
-      mergedEdges = persisted.edges
-        .filter((edge) => nodeIdSet.has(edge.source) && nodeIdSet.has(edge.target))
-        .map((edge) => toFlowEdge(edge.id, edge.source, edge.target))
+      // 보조선(flow-ui edges)은 더 이상 렌더링하지 않는다.
+      mergedEdges = baseEdges
     }
 
     positionsRef.current = mergedNodes.reduce<Record<string, { x: number; y: number }>>((acc, node) => {
@@ -934,6 +938,7 @@ export default function WorkRequestFlowPage() {
               return
             }
             setFlowFromApiData(data, selectedNodeIdRef.current, flowUiData)
+            setSelectedEdgeId(null)
             closeDrawer()
             setNotice('다른 사용자의 변경사항을 반영했습니다.')
           }).catch(() => {
@@ -962,15 +967,6 @@ export default function WorkRequestFlowPage() {
   }, [accessToken, closeDrawer, currentTeam?.id, currentUser, selectedWorkRequestId, setFlowFromApiData])
 
   useEffect(() => {
-    if (!selectedEdgeId) {
-      return
-    }
-    if (!edges.some((edge) => edge.id === selectedEdgeId)) {
-      setSelectedEdgeId(null)
-    }
-  }, [edges, selectedEdgeId])
-
-  useEffect(() => {
     setNodes((prev) => prev.map((node) => ({
       ...node,
       data: {
@@ -979,14 +975,6 @@ export default function WorkRequestFlowPage() {
       },
     })))
   }, [selectedNodeId, setNodes])
-
-  useEffect(() => {
-    setEdges((prev) => prev.map((edge) => ({
-      ...edge,
-      selected: edge.id === selectedEdgeId,
-      style: edgeStrokeStyle(edge.id === selectedEdgeId),
-    })))
-  }, [selectedEdgeId, setEdges])
 
   const hasUnsavedDraft = useMemo(
     () => nodes.some((node) => Boolean((node.data as FlowNodeCardData | undefined)?.isDraft)),
@@ -1050,29 +1038,31 @@ export default function WorkRequestFlowPage() {
     nodesRef.current = nodes
   }, [nodes])
 
+  useEffect(() => {
+    if (!selectedEdgeId) {
+      return
+    }
+    if (edges.some((edge) => edge.id === selectedEdgeId)) {
+      return
+    }
+    setSelectedEdgeId(null)
+  }, [edges, selectedEdgeId])
+
   const buildFlowUiPayload = useCallback((): FlowUiStateSaveRequest => {
     const positions = nodes.reduce<Record<string, { x: number; y: number }>>((acc, node) => {
       acc[node.id] = { x: node.position.x, y: node.position.y }
       return acc
     }, {})
 
-    const persistedEdges = edges
-      .filter((edge) => !!edge.source && !!edge.target)
-      .map((edge) => ({ id: edge.id, source: edge.source, target: edge.target }))
-
-    const customNodes = nodes
-      .map((node) => getNodeData(node))
-      .filter((data): data is FlowNodeCardData => data !== null)
-      .filter((data) => !data.isDraft && (data.nodeType === 'DEFECT' || data.nodeType === 'KNOWLEDGE_BASE'))
-      .map((data) => toNodePayload(data))
+    const customNodes: FlowUiCustomNode[] = []
 
     return {
       expectedVersion: flowUiVersionRef.current,
       positions,
-      edges: persistedEdges,
+      edges: [],
       customNodes,
     }
-  }, [edges, nodes])
+  }, [nodes])
 
   useEffect(() => {
     if (!isFlowHydrated || !selectedWorkRequestId) {
@@ -1124,97 +1114,7 @@ export default function WorkRequestFlowPage() {
         flowUiSaveTimerRef.current = null
       }
     }
-  }, [buildFlowUiPayload, isFlowHydrated, nodes, edges, selectedWorkRequestId, setFlowFromApiData])
-
-  const isValidConnection = useCallback((connection: Connection | Edge) => {
-    if (!connection.source || !connection.target || connection.source === connection.target) {
-      return false
-    }
-
-    const sourceNode = nodeDataById.get(connection.source)
-    const targetNode = nodeDataById.get(connection.target)
-    if (!sourceNode || !targetNode) {
-      return false
-    }
-
-    return canLinkNode(sourceNode.nodeType, targetNode.nodeType)
-  }, [nodeDataById])
-
-  const handleConnect = useCallback((connection: Connection) => {
-    if (!connection.source || !connection.target) {
-      return
-    }
-
-    if (!isValidConnection(connection)) {
-      setNotice('허용되지 않는 연결입니다. (업무요청/기술과제에서만 하위 연결 가능)')
-      return
-    }
-
-    if (edges.some((edge) => edge.source === connection.source && edge.target === connection.target)) {
-      setNotice('이미 같은 카드 연결선이 있습니다.')
-      return
-    }
-
-    const id = `edge-local-${connection.source}-${connection.target}-${Date.now()}`
-    setEdges((prev) => addEdge(toFlowEdge(id, connection.source as string, connection.target as string), prev))
-    setSelectedEdgeId(id)
-    setSelectedNodeId(null)
-    closeDrawer()
-    setNotice('연결선을 추가했습니다.')
-  }, [closeDrawer, edges, isValidConnection, setEdges])
-
-  const handleReconnect = useCallback((oldEdge: Edge, connection: Connection) => {
-    if (!connection.source || !connection.target) {
-      return
-    }
-
-    if (!isValidConnection(connection)) {
-      setNotice('허용되지 않는 연결으로는 이동할 수 없습니다.')
-      return
-    }
-
-    setEdges((prev) => reconnectEdge(oldEdge, connection, prev))
-    setSelectedEdgeId(oldEdge.id)
-    setSelectedNodeId(null)
-    closeDrawer()
-    setNotice('연결선을 이동했습니다.')
-  }, [closeDrawer, isValidConnection, setEdges])
-
-  const removeSelectedEdge = useCallback(() => {
-    if (!selectedEdgeId) {
-      return
-    }
-
-    setEdges((prev) => prev.filter((edge) => edge.id !== selectedEdgeId))
-    setSelectedEdgeId(null)
-    setNotice('연결선을 삭제했습니다.')
-  }, [selectedEdgeId, setEdges])
-
-  useEffect(() => {
-    if (!selectedEdgeId) {
-      return
-    }
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Delete' && event.key !== 'Backspace') {
-        return
-      }
-
-      const target = event.target as HTMLElement | null
-      if (target) {
-        const tag = target.tagName
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable) {
-          return
-        }
-      }
-
-      event.preventDefault()
-      removeSelectedEdge()
-    }
-
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [removeSelectedEdge, selectedEdgeId])
+  }, [buildFlowUiPayload, isFlowHydrated, nodes, selectedWorkRequestId, setFlowFromApiData])
 
   const createDraftNode = useCallback((paletteType: PaletteNodeType, position?: { x: number; y: number }) => {
     if (!selectedWorkRequestId) {
@@ -1224,20 +1124,71 @@ export default function WorkRequestFlowPage() {
     const rootId = `WR-${selectedWorkRequestId}`
     const id = `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 
-    // 선택된 노드가 이 타입의 적합한 부모면 그 아래에, 아니면 루트(업무요청) 아래에 연결
     const selectedData = selectedNodeId ? nodeDataById.get(selectedNodeId) : null
     const preferredParents = PREFERRED_PARENT[paletteType]
-    const useSelectedAsParent = Boolean(
-      selectedData
-      && selectedNodeId !== rootId
-      && preferredParents[0] !== 'WORK_REQUEST'  // WR preferred → skip selected shortcut
-      && canLinkNode(selectedData.nodeType, paletteType)
+    const selectableParents = Array.from(nodeDataById.values()).filter(
+      (node) =>
+        !node.isDraft
+        && preferredParents.includes(node.nodeType)
+        && canLinkNode(node.nodeType, paletteType)
     )
-    const parentId = useSelectedAsParent ? selectedNodeId! : rootId
-    const parentNodeType = useSelectedAsParent ? selectedData!.nodeType : 'WORK_REQUEST'
-    const parentEntityId: number = useSelectedAsParent
-      ? (selectedData!.entityId ?? selectedWorkRequestId)
-      : selectedWorkRequestId
+
+    const pickCandidateByType = (parentType: FlowNodeType): FlowNodeCardData | null => {
+      const candidates = selectableParents.filter((node) => node.nodeType === parentType)
+      if (candidates.length === 0) {
+        return null
+      }
+      if (!position) {
+        return candidates[0]
+      }
+      let nearest = candidates[0]
+      let nearestDistance = Number.POSITIVE_INFINITY
+      candidates.forEach((candidate) => {
+        const candidatePos = positionsRef.current[candidate.id]
+        if (!candidatePos) {
+          return
+        }
+        const dx = candidatePos.x - position.x
+        const dy = candidatePos.y - position.y
+        const distance = dx * dx + dy * dy
+        if (distance < nearestDistance) {
+          nearestDistance = distance
+          nearest = candidate
+        }
+      })
+      return nearest
+    }
+
+    let parentData: FlowNodeCardData | null = null
+    if (position) {
+      for (const parentType of preferredParents) {
+        const candidate = pickCandidateByType(parentType)
+        if (candidate) {
+          parentData = candidate
+          break
+        }
+      }
+    } else if (selectedData && preferredParents.includes(selectedData.nodeType) && canLinkNode(selectedData.nodeType, paletteType)) {
+      parentData = selectedData
+    }
+    if (!parentData) {
+      for (const parentType of preferredParents) {
+        const candidate = pickCandidateByType(parentType)
+        if (candidate) {
+          parentData = candidate
+          break
+        }
+      }
+    }
+
+    const rootData = nodeDataById.get(rootId) ?? null
+    if (!parentData && rootData && canLinkNode(rootData.nodeType, paletteType)) {
+      parentData = rootData
+    }
+
+    const parentId = parentData?.id ?? rootId
+    const parentNodeType = parentData?.nodeType ?? 'WORK_REQUEST'
+    const parentEntityId: number = parentData?.entityId ?? selectedWorkRequestId
     const parentPos = positionsRef.current[parentId] ?? { x: 0, y: 0 }
 
     const nextPosition = position ?? {
@@ -1287,14 +1238,14 @@ export default function WorkRequestFlowPage() {
 
     positionsRef.current[id] = nextPosition
     setSelectedNodeId(id)
-    setSelectedEdgeId(null)
+    applyEdgeSelection(null)
     closeDrawer()
 
-    const parentLabel = useSelectedAsParent
-      ? (selectedData?.title || selectedData?.docNo || '선택된 카드')
+    const parentLabel = parentData
+      ? (parentData.title || parentData.docNo || '선택된 카드')
       : '업무요청'
     setNotice(`"${parentLabel}" 아래에 카드가 추가됐습니다. 제목을 입력해 저장하세요.`)
-  }, [buildCardData, closeDrawer, handleDraftTitleChange, nodeDataById, selectedNodeId, selectedWorkRequestId, setEdges, setNodes])
+  }, [applyEdgeSelection, buildCardData, closeDrawer, handleDraftTitleChange, nodeDataById, selectedNodeId, selectedWorkRequestId, setEdges, setNodes])
 
   const handleDraftTitleCommit = useCallback(async (draftNodeId: string) => {
     if (!selectedWorkRequestId) {
@@ -1366,20 +1317,38 @@ export default function WorkRequestFlowPage() {
         ]
       })
 
-      setEdges((prev) => prev
-        .map((edge) => ({
-          ...edge,
-          source: edge.source === draftNodeId ? createdNodeId : edge.source,
-          target: edge.target === draftNodeId ? createdNodeId : edge.target,
-        }))
-        .filter((edge) => edge.source !== edge.target)
-      )
+      setEdges((prev) => {
+        const usedEdgeIds = new Set(prev.map((edge) => edge.id))
+        return prev
+          .map((edge) => {
+            const sourceUpdated = edge.source === draftNodeId
+            const targetUpdated = edge.target === draftNodeId
+            if (!sourceUpdated && !targetUpdated) {
+              return edge
+            }
+
+            const source = sourceUpdated ? createdNodeId : edge.source
+            const target = targetUpdated ? createdNodeId : edge.target
+
+            if (edge.id.startsWith('edge-draft-')) {
+              let nextId = result.edgeId
+              if (usedEdgeIds.has(nextId) && nextId !== edge.id) {
+                nextId = `${result.edgeId}-${Date.now()}`
+              }
+              usedEdgeIds.add(nextId)
+              return toFlowEdge(nextId, source, target)
+            }
+
+            return { ...edge, source, target }
+          })
+          .filter((edge) => edge.source !== edge.target)
+      })
 
       delete positionsRef.current[draftNodeId]
       positionsRef.current[createdNodeId] = createdPosition
 
       setSelectedNodeId(createdNodeId)
-      setSelectedEdgeId(null)
+      applyEdgeSelection(null)
       closeDrawer()
       setNotice('문서가 생성되었습니다.')
     } catch (error) {
@@ -1391,7 +1360,7 @@ export default function WorkRequestFlowPage() {
       )))
       setNotice(message)
     }
-  }, [buildCardData, closeDrawer, selectedWorkRequestId, setEdges, setNodes])
+  }, [applyEdgeSelection, buildCardData, closeDrawer, selectedWorkRequestId, setEdges, setNodes])
 
   useEffect(() => {
     draftCommitHandlerRef.current = (draftNodeId: string) => {
@@ -1613,7 +1582,7 @@ export default function WorkRequestFlowPage() {
 
   const handleNodeClick = useCallback((_: unknown, node: Node) => {
     setSelectedNodeId(node.id)
-    setSelectedEdgeId(null)
+    applyEdgeSelection(null)
 
     const data = getNodeData(node)
     if (!data || data.isDraft) {
@@ -1622,7 +1591,15 @@ export default function WorkRequestFlowPage() {
     }
 
     openDrawer(data)
-  }, [closeDrawer, openDrawer])
+  }, [applyEdgeSelection, closeDrawer, openDrawer])
+
+  const handleEdgeClick = useCallback((event: ReactMouseEvent<Element>, edge: Edge) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setSelectedNodeId(null)
+    applyEdgeSelection(edge.id)
+    closeDrawer()
+  }, [applyEdgeSelection, closeDrawer])
 
   const handleDrawerResizeStart = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
     if (!drawerNode) {
@@ -1648,10 +1625,162 @@ export default function WorkRequestFlowPage() {
       getFlowUiState(selectedWorkRequestId).catch(() => null),
     ]).then(([data, flowUiData]) => {
       setFlowFromApiData(data, selectedNodeId, flowUiData)
+      setSelectedEdgeId(null)
       closeDrawer()
       setNotice('플로우를 다시 불러왔습니다.')
     })
   }, [closeDrawer, hasUnsavedDraft, selectedNodeId, selectedWorkRequestId, setFlowFromApiData])
+
+  const selectedNodeData = useMemo(
+    () => (selectedNodeId ? nodeDataById.get(selectedNodeId) ?? null : null),
+    [nodeDataById, selectedNodeId]
+  )
+  const canDeleteSelectedEdge = Boolean(selectedEdgeId)
+  const canDeleteSelectedNode = Boolean(
+    selectedNodeData
+    && !selectedNodeData.isDraft
+    && selectedNodeData.nodeType !== 'WORK_REQUEST'
+  )
+  const deleteDialogTitle = pendingDeleteAction?.kind === 'edge'
+    ? '선택한 연결선을 삭제할까요?'
+    : '선택한 문서를 삭제할까요?'
+  const deleteDialogDescription = pendingDeleteAction?.kind === 'edge'
+    ? '삭제하면 부모-자식 연관관계도 함께 제거됩니다.'
+    : '문서를 삭제하면 이 카드와 연결선, 연관관계가 함께 삭제됩니다.'
+
+  const requestDeleteSelectedEdge = useCallback(() => {
+    if (!selectedWorkRequestId || !selectedEdgeId) {
+      return
+    }
+    if (hasUnsavedDraft) {
+      setNotice('저장되지 않은 초안 카드가 있어 삭제를 진행할 수 없습니다.')
+      return
+    }
+    setPendingDeleteAction({ kind: 'edge', edgeId: selectedEdgeId })
+  }, [hasUnsavedDraft, selectedEdgeId, selectedWorkRequestId])
+
+  const requestDeleteSelectedNode = useCallback(() => {
+    if (!selectedWorkRequestId || !selectedNodeData) {
+      return
+    }
+    if (selectedNodeData.isDraft) {
+      setNotice('초안 카드는 제목 입력 후 저장하거나, 캔버스에서 직접 제거해 주세요.')
+      return
+    }
+    if (selectedNodeData.nodeType === 'WORK_REQUEST') {
+      setNotice('기준 업무요청 카드는 삭제할 수 없습니다.')
+      return
+    }
+    if (hasUnsavedDraft) {
+      setNotice('저장되지 않은 초안 카드가 있어 삭제를 진행할 수 없습니다.')
+      return
+    }
+    setPendingDeleteAction({ kind: 'node', nodeId: selectedNodeData.id })
+  }, [hasUnsavedDraft, selectedNodeData, selectedWorkRequestId])
+
+  const requestDeleteDrawerNode = useCallback(() => {
+    if (!drawerNode || !selectedWorkRequestId) {
+      return
+    }
+    if (drawerNode.isDraft) {
+      setNotice('초안 카드는 제목 입력 후 저장하거나, 캔버스에서 직접 제거해 주세요.')
+      return
+    }
+    if (drawerNode.nodeType === 'WORK_REQUEST') {
+      setNotice('기준 업무요청 카드는 삭제할 수 없습니다.')
+      return
+    }
+    if (hasUnsavedDraft) {
+      setNotice('저장되지 않은 초안 카드가 있어 삭제를 진행할 수 없습니다.')
+      return
+    }
+    setSelectedNodeId(drawerNode.id)
+    setPendingDeleteAction({ kind: 'node', nodeId: drawerNode.id })
+  }, [drawerNode, hasUnsavedDraft, selectedWorkRequestId])
+
+  const canEditDrawerNode = Boolean(drawerNode && !drawerNode.isDraft)
+  const canDeleteDrawerNode = Boolean(
+    drawerNode
+    && !drawerNode.isDraft
+    && drawerNode.nodeType !== 'WORK_REQUEST'
+  )
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!pendingDeleteAction || !selectedWorkRequestId) {
+      return
+    }
+    setIsDeleting(true)
+    try {
+      if (pendingDeleteAction.kind === 'edge') {
+        const edge = edges.find((item) => item.id === pendingDeleteAction.edgeId)
+        if (!edge) {
+          setNotice('삭제할 선을 찾지 못했습니다.')
+          setPendingDeleteAction(null)
+          return
+        }
+        await deleteFlowEdge(selectedWorkRequestId, {
+          sourceNodeId: edge.source,
+          targetNodeId: edge.target,
+        })
+      } else {
+        await deleteFlowItem(selectedWorkRequestId, pendingDeleteAction.nodeId)
+      }
+
+      const [flowData, flowUiData] = await Promise.all([
+        getFlowChain(selectedWorkRequestId),
+        getFlowUiState(selectedWorkRequestId).catch(() => null),
+      ])
+
+      const preservedNodeId = pendingDeleteAction.kind === 'edge' ? selectedNodeIdRef.current : null
+      const nextSelectedNodeId = preservedNodeId && flowData.nodes.some((node) => node.id === preservedNodeId)
+        ? preservedNodeId
+        : flowData.nodes.find((node) => node.nodeType === 'WORK_REQUEST')?.id ?? null
+
+      setFlowFromApiData(flowData, nextSelectedNodeId, flowUiData)
+      setSelectedNodeId(nextSelectedNodeId)
+      setSelectedEdgeId(null)
+      closeDrawer()
+      setNotice(pendingDeleteAction.kind === 'edge' ? '연결선을 삭제했습니다.' : '문서를 삭제했습니다.')
+      setPendingDeleteAction(null)
+    } catch (error) {
+      setNotice(extractApiErrorMessage(error, '삭제에 실패했습니다.'))
+    } finally {
+      setIsDeleting(false)
+    }
+  }, [closeDrawer, edges, pendingDeleteAction, selectedWorkRequestId, setFlowFromApiData])
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Delete' && event.key !== 'Backspace') {
+        return
+      }
+      const target = event.target as HTMLElement | null
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return
+      }
+      if (pendingDeleteAction || isDeleting) {
+        return
+      }
+      if (canDeleteSelectedEdge) {
+        event.preventDefault()
+        requestDeleteSelectedEdge()
+        return
+      }
+      if (canDeleteSelectedNode) {
+        event.preventDefault()
+        requestDeleteSelectedNode()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [
+    canDeleteSelectedEdge,
+    canDeleteSelectedNode,
+    isDeleting,
+    pendingDeleteAction,
+    requestDeleteSelectedEdge,
+    requestDeleteSelectedNode,
+  ])
 
   return (
     <div className="p-5 space-y-4">
@@ -1674,14 +1803,13 @@ export default function WorkRequestFlowPage() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={removeSelectedEdge}
-            disabled={!selectedEdgeId}
+            onClick={requestDeleteSelectedEdge}
+            disabled={!canDeleteSelectedEdge || isDeleting}
             className={`h-8 px-3 rounded-lg border text-[12px] font-medium transition-colors ${
-              selectedEdgeId
-                ? 'border-red-200 text-red-600 hover:bg-red-50'
-                : 'border-gray-200 text-gray-300 cursor-not-allowed'
+              !canDeleteSelectedEdge || isDeleting
+                ? 'border-gray-100 text-gray-300 cursor-not-allowed'
+                : 'border-amber-200 text-amber-700 hover:bg-amber-50'
             }`}
-            title="선을 선택한 뒤 삭제하세요. Delete/Backspace 키도 지원됩니다."
           >
             선 삭제
           </button>
@@ -1755,32 +1883,23 @@ export default function WorkRequestFlowPage() {
               onInit={setReactFlowInstance}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
-              onConnect={handleConnect}
-              onReconnect={handleReconnect}
               onNodeClick={handleNodeClick}
-              onEdgeClick={(_, edge) => {
-                setSelectedEdgeId(edge.id)
-                setSelectedNodeId(null)
-                closeDrawer()
-              }}
+              onEdgeClick={handleEdgeClick}
               onPaneClick={() => {
                 setSelectedNodeId(null)
-                setSelectedEdgeId(null)
+                applyEdgeSelection(null)
                 closeDrawer()
               }}
               onDrop={handleFlowDrop}
               onDragOver={handleFlowDragOver}
-              isValidConnection={isValidConnection}
-              edgesReconnectable
               snapToGrid
               snapGrid={[20, 20]}
               defaultEdgeOptions={{
                 type: 'smoothstep',
-                reconnectable: true,
+                reconnectable: false,
                 markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color: '#94A3B8' },
                 style: { stroke: '#CBD5E1', strokeWidth: 1.5 },
               }}
-              connectionLineStyle={{ stroke: '#93C5FD', strokeWidth: 2 }}
               fitView
               fitViewOptions={{ padding: 0.2 }}
               minZoom={0.25}
@@ -1941,6 +2060,36 @@ export default function WorkRequestFlowPage() {
               </button>
               <button
                 type="button"
+                disabled={!canEditDrawerNode}
+                onClick={() => {
+                  if (!drawerNode || !canEditDrawerNode) {
+                    return
+                  }
+                  handleEditDocument(drawerNode)
+                  closeDrawer()
+                }}
+                className={`h-8 px-4 text-[12px] font-semibold rounded-lg transition-colors ${
+                  canEditDrawerNode
+                    ? 'text-blue-700 bg-blue-50 hover:bg-blue-100'
+                    : 'text-gray-300 bg-gray-100 cursor-not-allowed'
+                }`}
+              >
+                수정
+              </button>
+              <button
+                type="button"
+                disabled={!canDeleteDrawerNode || isDeleting}
+                onClick={requestDeleteDrawerNode}
+                className={`h-8 px-4 text-[12px] font-semibold rounded-lg transition-colors ${
+                  !canDeleteDrawerNode || isDeleting
+                    ? 'text-gray-300 bg-gray-100 cursor-not-allowed'
+                    : 'text-red-700 bg-red-50 hover:bg-red-100'
+                }`}
+              >
+                삭제
+              </button>
+              <button
+                type="button"
                 onClick={() => {
                   handleOpenDocument(drawerNode)
                   closeDrawer()
@@ -1980,6 +2129,29 @@ export default function WorkRequestFlowPage() {
         cancelText="계속 편집하기"
         destructive
         onConfirm={handleLeavePage}
+      />
+
+      <ConfirmDialog
+        open={pendingDeleteAction != null}
+        onOpenChange={(open) => {
+          if (!open) {
+            if (isDeleting) {
+              return
+            }
+            setPendingDeleteAction(null)
+          }
+        }}
+        title={deleteDialogTitle}
+        description={deleteDialogDescription}
+        confirmText={isDeleting ? '삭제 중...' : '삭제'}
+        cancelText="취소"
+        destructive
+        onConfirm={() => {
+          if (isDeleting) {
+            return
+          }
+          void handleConfirmDelete()
+        }}
       />
     </div>
   )

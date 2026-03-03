@@ -1,12 +1,14 @@
 package org.example.domain.flow.controller;
 
 import org.example.domain.flow.dto.FlowChainResponse;
+import org.example.domain.flow.dto.FlowEdgeDeleteRequest;
 import org.example.domain.flow.dto.FlowItemCreateRequest;
 import org.example.domain.flow.dto.FlowItemCreateResponse;
 import org.example.domain.flow.dto.FlowUiStateRequest;
 import org.example.domain.flow.dto.FlowUiStateResponse;
 import org.example.domain.flow.service.FlowChainService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -36,6 +38,24 @@ public class FlowChainController {
             @RequestBody FlowItemCreateRequest request
     ) {
         return ResponseEntity.ok(flowChainService.createFlowItem(workRequestId, request));
+    }
+
+    @DeleteMapping("/flow-edges")
+    public ResponseEntity<Void> deleteFlowEdge(
+            @PathVariable Long workRequestId,
+            @RequestBody FlowEdgeDeleteRequest request
+    ) {
+        flowChainService.deleteFlowEdge(workRequestId, request);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/flow-items/{nodeId}")
+    public ResponseEntity<Void> deleteFlowItem(
+            @PathVariable Long workRequestId,
+            @PathVariable String nodeId
+    ) {
+        flowChainService.deleteFlowItem(workRequestId, nodeId);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/flow-ui")

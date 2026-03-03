@@ -1,6 +1,7 @@
 import api from '@/lib/api'
 import type {
   FlowChainData,
+  FlowEdgeDeleteRequest,
   FlowItemCreateRequest,
   FlowItemCreateResponse,
   FlowUiState,
@@ -30,4 +31,12 @@ export async function getFlowUiState(workRequestId: number): Promise<FlowUiState
 
 export async function saveFlowUiState(workRequestId: number, payload: FlowUiStateSaveRequest): Promise<void> {
   await api.put(`/work-requests/${workRequestId}/flow-ui`, payload)
+}
+
+export async function deleteFlowEdge(workRequestId: number, payload: FlowEdgeDeleteRequest): Promise<void> {
+  await api.delete(`/work-requests/${workRequestId}/flow-edges`, { data: payload })
+}
+
+export async function deleteFlowItem(workRequestId: number, nodeId: string): Promise<void> {
+  await api.delete(`/work-requests/${workRequestId}/flow-items/${encodeURIComponent(nodeId)}`)
 }
