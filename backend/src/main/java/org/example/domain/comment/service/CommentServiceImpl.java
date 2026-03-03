@@ -9,6 +9,8 @@ import org.example.domain.comment.entity.Comment;
 import org.example.domain.comment.mapper.CommentMapper;
 import org.example.domain.comment.repository.CommentRepository;
 import org.example.domain.notification.service.NotificationEventService;
+import org.example.domain.user.entity.PortalUser;
+import org.example.domain.user.repository.PortalUserRepository;
 import org.example.global.team.TeamScopeUtil;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -47,15 +49,18 @@ public class CommentServiceImpl implements CommentService {
     private final CommentRepository commentRepository;
     private final DocumentIndexRepository documentIndexRepository;
     private final NotificationEventService notificationEventService;
+    private final PortalUserRepository portalUserRepository;
 
     public CommentServiceImpl(
             CommentRepository commentRepository,
             @Nullable DocumentIndexRepository documentIndexRepository,
-            NotificationEventService notificationEventService
+            NotificationEventService notificationEventService,
+            PortalUserRepository portalUserRepository
     ) {
         this.commentRepository = commentRepository;
         this.documentIndexRepository = documentIndexRepository;
         this.notificationEventService = notificationEventService;
+        this.portalUserRepository = portalUserRepository;
     }
 
     @Override
@@ -120,7 +125,15 @@ public class CommentServiceImpl implements CommentService {
 
     private void fireMentionNotifications(Comment comment) {
         List<Long> mentionedUserIds = parseMentionedUserIds(comment.getContent());
+        if (mentionedUserIds.isEmpty()) {
+            return;
+        }
         String displayContent = stripMentionMarkup(comment.getContent());
+        String authorName = portalUserRepository.findById(comment.getAuthorId())
+                .map(PortalUser::getName)
+                .orElse("누군가");
+        String title = authorName + " 님이 댓글에서 회원님을 언급했습니다.";
+
         for (Long mentionedUserId : mentionedUserIds) {
             if (mentionedUserId.equals(comment.getAuthorId())) {
                 continue; // 자기 자신 멘션은 알림 생략
@@ -128,7 +141,7 @@ public class CommentServiceImpl implements CommentService {
             notificationEventService.create(
                     mentionedUserId,
                     "멘션",
-                    "댓글에서 멘션되었습니다.",
+                    title,
                     displayContent,
                     comment.getRefType(),
                     comment.getRefId()

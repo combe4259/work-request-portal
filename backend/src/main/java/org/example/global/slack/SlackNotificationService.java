@@ -62,8 +62,15 @@ public class SlackNotificationService {
         // 유형 라벨 (상단 작은 텍스트)
         attachment.put("author_name", type);
 
-        // 본문 — message 우선, 없으면 title fallback
-        String body = (message != null && !message.isBlank()) ? message : title;
+        // 본문 — title이 있으면 굵게 표시 후 message를 본문으로, 없으면 message 단독
+        String body;
+        if (title != null && !title.isBlank() && message != null && !message.isBlank()) {
+            body = "*" + title + "*\n" + message;
+        } else if (message != null && !message.isBlank()) {
+            body = message;
+        } else {
+            body = title != null ? title : "";
+        }
         attachment.put("text", body);
 
         // 하단 컨텍스트 + 발생 시각
