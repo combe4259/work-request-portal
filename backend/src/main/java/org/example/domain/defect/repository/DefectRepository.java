@@ -10,10 +10,13 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 public interface DefectRepository extends JpaRepository<Defect, Long>, JpaSpecificationExecutor<Defect> {
 
     Page<Defect> findByTeamId(Long teamId, Pageable pageable);
+
+    Optional<Defect> findByDefectNo(String defectNo);
 
     List<Defect> findByRelatedRefTypeAndRelatedRefId(String relatedRefType, Long relatedRefId);
 

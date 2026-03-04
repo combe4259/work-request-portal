@@ -10,4 +10,8 @@ public interface TechTaskPrLinkRepository extends JpaRepository<TechTaskPrLink, 
     List<TechTaskPrLink> findByTechTaskIdOrderByIdAsc(Long techTaskId);
 
     Optional<TechTaskPrLink> findByIdAndTechTaskId(Long id, Long techTaskId);
+
+    Optional<TechTaskPrLink> findByTechTaskIdAndPrNo(Long techTaskId, String prNo);
+
+    Optional<TechTaskPrLink> findByTechTaskIdAndPrUrl(Long techTaskId, String prUrl);
 }

@@ -13,7 +13,7 @@
 
 ## 2. 공통 규약
 - Base URL: `/api`
-- 예외 엔드포인트: Slack 인터랙션 수신은 `/slack/interactions` (Base URL `/api` 미적용)
+- 예외 엔드포인트: Slack/GitHub 웹훅 수신은 `/slack/interactions`, `/webhook/github` (Base URL `/api` 미적용)
 - 인증: `Authorization: Bearer <accessToken>` (`/auth/signup`, `/auth/login`, `/auth/refresh`, `/auth/logout` 제외)
 - 팀 스코프: 팀 데이터는 `teamId` 기준으로 검증/조회
 - 페이징: `page`(0-base), `size`
@@ -31,6 +31,7 @@
 
 ## 3. 구현 상태 요약 (2026-02-25)
 - 구현됨: `Auth`, `Team(핵심)`, `WorkRequest`, `Flow`, `TechTask`, `TestScenario`, `Defect`, `Deployment`, `MeetingNote`, `Idea`, `KnowledgeBase`, `Resource`, `Comment`, `Attachment`, `Notification`, `Dashboard`, `Statistics`, `DocumentIndex`, `ActivityLog`
+- 구현됨(외부 연동): `Slack 인터랙션`, `GitHub Webhook(PR opened/merged)`
 - 부분 구현:
   - 일부 목록 API는 서버에서 `page/size` 중심으로 동작하며, 상세 검색/정렬/필터는 프론트 보정 포함
 
@@ -243,10 +244,48 @@ Workflow 동시편집 규약(낙관적 락):
 | GET | `/users/me/preferences` | Header: Bearer | `{notification:{...},display:{landing,rowCount}}` | [x] |
 | PATCH | `/users/me/preferences` | Header: Bearer + `{notification:{...},display:{landing,rowCount}}` | same | [x] |
 
-### 4.13 External Integration (Slack)
+### 4.13 External Integration (Slack + GitHub)
 | Method | Path | Request | Response | 구현 |
 |---|---|---|---|---|
 | POST | `/slack/interactions` | `application/x-www-form-urlencoded`, `payload=<json>` | `200` | [x] |
+| POST | `/webhook/github` | Header: `X-GitHub-Delivery`, `X-GitHub-Event`, `X-Hub-Signature-256` + raw JSON | `200/400/401` | [x] |
+
+GitHub Webhook 상세 규칙:
+- 필수 보안:
+  - `X-Hub-Signature-256` HMAC-SHA256 검증 필수
+  - 검증 실패 시 `401 Unauthorized`
+  - Secret 설정: `app.github.webhook-secret` (`GITHUB_WEBHOOK_SECRET`)
+  - `X-GitHub-Delivery` 누락 시 `400 Bad Request`
+- 멱등/재처리:
+  - `delivery_id` 기준 DB 멱등 처리 (`github_webhook_deliveries`)
+  - 동일 delivery 재수신 시 중복 처리하지 않음
+  - 처리 실패 시 `FAILED`로 적재 후 backoff 재시도
+  - 최대 시도 초과 시 `DEAD_LETTER`로 전환
+  - 스케줄러 주기/재시도 정책:
+    - `app.github.retry.fixed-delay-ms`
+    - `app.github.retry.max-attempts`
+    - `app.github.retry.base-seconds`
+    - `app.github.retry.max-seconds`
+- 지원 이벤트:
+  - `X-GitHub-Event: pull_request`
+  - 그 외 이벤트는 무시(200)
+- 저장소 팀 격리:
+  - `github_repo_team_mappings(repository_full_name -> team_id)` 매핑 필수
+  - 매핑이 없으면 이벤트는 성공 응답하되 도메인 변경 없이 건너뜀
+  - 매핑 team과 문서 team이 다르면 상태 변경/PR 링크 자동연결을 수행하지 않음
+- `pull_request` + `action=opened`:
+  - 브랜치명/PR 제목/본문에서 문서번호(`TT|TK-숫자`) 파싱
+  - 대상 기술과제의 `tech_task_pr_links` 자동 생성
+  - 동일 `prNo` 또는 `prUrl`가 이미 연결되어 있으면 중복 생성하지 않음
+  - 처리 이력(`ActivityLog`)에 `PR_LINKED` 기록
+- `pull_request` + `action=closed` + `merged=true`:
+  - PR 제목/본문에서 `closes|fixes|resolves DOCNO` 패턴 파싱
+  - 지원 문서번호: `WR`, `TK/TT`, `DF`, `DP`
+  - 해당 문서 상태를 `완료`로 자동 전환
+  - 상태 전환 시 기존 도메인 로직을 그대로 사용하므로 알림/슬랙/처리이력 정책이 함께 적용됨
+- 상태 전환 제외:
+  - 키워드 없는 문서번호 (`refs TK-001` 등)는 상태 전환하지 않음
+  - 이미 `완료` 상태인 문서는 재전환하지 않음
 
 ## 5. 스키마-프론트 갭 및 보완 필요
 - 서버 목록 API의 검색/정렬/필터 기능이 도메인별로 완전 일치하지 않음(현재 프론트 보정 포함)

@@ -10,10 +10,13 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 public interface DeploymentRepository extends JpaRepository<Deployment, Long>, JpaSpecificationExecutor<Deployment> {
 
     Page<Deployment> findByTeamId(Long teamId, Pageable pageable);
+
+    Optional<Deployment> findByDeployNo(String deployNo);
 
     @Query("SELECT e FROM Deployment e WHERE e.scheduledAt = :date AND e.status NOT IN :excluded")
     List<Deployment> findActiveByScheduledAt(@Param("date") LocalDate date, @Param("excluded") List<String> excluded);

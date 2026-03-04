@@ -1342,8 +1342,13 @@ public class FlowChainService {
                     defect.setRelatedRefId(null);
                 }
             });
-            case ITEM_TYPE_KNOWLEDGE_BASE -> knowledgeBaseRelatedRefRepository
-                    .deleteByArticleIdAndRefTypeAndRefId(childId, parentType, parentId);
+            case ITEM_TYPE_KNOWLEDGE_BASE -> {
+                // DEPLOYMENT/DEFECT -> KB 관계는 부모 쪽 제거 로직에서 이미 처리한다.
+                if (PARENT_TYPE_DEPLOYMENT.equals(parentType) || PARENT_TYPE_DEFECT.equals(parentType)) {
+                    return;
+                }
+                knowledgeBaseRelatedRefRepository.deleteByArticleIdAndRefTypeAndRefId(childId, parentType, parentId);
+            }
             default -> {
             }
         }

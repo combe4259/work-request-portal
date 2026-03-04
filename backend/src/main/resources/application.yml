@@ -32,6 +32,14 @@ springdoc:
 app:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174}
+  github:
+    webhook-secret: ${GITHUB_WEBHOOK_SECRET:}
+    retry:
+      fixed-delay-ms: ${GITHUB_WEBHOOK_RETRY_FIXED_DELAY_MS:60000}
+      max-attempts: ${GITHUB_WEBHOOK_RETRY_MAX_ATTEMPTS:5}
+      batch-size: ${GITHUB_WEBHOOK_RETRY_BATCH_SIZE:20}
+      base-seconds: ${GITHUB_WEBHOOK_RETRY_BASE_SECONDS:30}
+      max-seconds: ${GITHUB_WEBHOOK_RETRY_MAX_SECONDS:1800}
   jwt:
     secret: ${JWT_SECRET:change-this-to-a-long-local-dev-secret-key-2026-work-request-portal}
     access-token-expire-seconds: ${JWT_ACCESS_TOKEN_EXPIRE_SECONDS:1800}

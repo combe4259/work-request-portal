@@ -10,10 +10,13 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 public interface WorkRequestRepository extends JpaRepository<WorkRequest, Long>, JpaSpecificationExecutor<WorkRequest> {
 
     Page<WorkRequest> findByTeamId(Long teamId, Pageable pageable);
+
+    Optional<WorkRequest> findByRequestNo(String requestNo);
 
     @Query("SELECT e FROM WorkRequest e WHERE e.deadline = :date AND e.status NOT IN :excluded AND e.assigneeId IS NOT NULL")
     List<WorkRequest> findActiveByDeadline(@Param("date") LocalDate date, @Param("excluded") List<String> excluded);

@@ -702,4 +702,44 @@ INSERT INTO document_sequences (prefix, last_seq) VALUES
     ('ID', 0),
     ('KB', 0);
 
+-- =====================================================
+-- 22. GitHub 저장소-팀 매핑 (Repo Team Mapping)
+-- =====================================================
+CREATE TABLE github_repo_team_mappings (
+    id                    BIGINT AUTO_INCREMENT PRIMARY KEY,
+    repository_full_name  VARCHAR(200) NOT NULL UNIQUE,
+    team_id               BIGINT NOT NULL,
+    is_active             TINYINT(1) NOT NULL DEFAULT 1,
+    created_at            DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at            DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_grtm_team FOREIGN KEY (team_id) REFERENCES teams(id),
+
+    INDEX idx_grtm_team (team_id),
+    INDEX idx_grtm_active (is_active)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
+-- =====================================================
+-- 23. GitHub Webhook Delivery 큐 (멱등/재시도/데드레터)
+-- =====================================================
+CREATE TABLE github_webhook_deliveries (
+    id                    BIGINT AUTO_INCREMENT PRIMARY KEY,
+    delivery_id           VARCHAR(120) NOT NULL UNIQUE,
+    event_type            VARCHAR(50) NOT NULL,
+    action_type           VARCHAR(50),
+    repository_full_name  VARCHAR(200),
+    payload_hash          CHAR(64) NOT NULL,
+    payload_json          LONGTEXT NOT NULL,
+    status                ENUM('RECEIVED', 'PROCESSING', 'SUCCESS', 'FAILED', 'DEAD_LETTER') NOT NULL DEFAULT 'RECEIVED',
+    attempt_count         INT NOT NULL DEFAULT 0,
+    last_error            VARCHAR(1000),
+    next_retry_at         DATETIME,
+    processed_at          DATETIME,
+    created_at            DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at            DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    INDEX idx_ghwd_status_retry (status, next_retry_at),
+    INDEX idx_ghwd_repository (repository_full_name)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
 SET FOREIGN_KEY_CHECKS = 1;
